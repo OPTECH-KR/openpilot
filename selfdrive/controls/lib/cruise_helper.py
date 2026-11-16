@@ -18,6 +18,8 @@ from cereal import log
 
 from selfdrive.road_speed_limiter import road_speed_limiter_get_max_speed, road_speed_limiter_get_active, \
   get_road_speed_limiter
+from selfdrive.carrot.curve_speed import VisionCurveSpeed, NO_LIMIT_KPH, curve_speed as carrot_curve_speed
+import time
 #import common.loger as trace1
 
 CREEP_SPEED = 2.3
@@ -33,6 +35,10 @@ AliveIndex = 0
 WaitIndex = 0
 
 MIN_CURVE_SPEED = 20. * CV.KPH_TO_MS
+
+# AutoCurveSpeedCtrlUse: 0=off, 1(and 3)=apilot road-design table, 2=carrot vision curve speed
+CURVE_CTRL_CARROT = 2
+CARROT_CURVE_LOWER_LIMIT_KPH = 30.  # carrot-wip AutoCurveSpeedLowerLimit default
 
 EventName = car.CarEvent.EventName
 
@@ -103,6 +109,8 @@ class CruiseHelper:
 
     self.update_params_count = 0
     self.curvatureFilter = StreamingMovingAverage(20)
+    self.vision_curve_speed = VisionCurveSpeed()
+    self.carrot_curve_kph = NO_LIMIT_KPH
 
     self.longCruiseGap = clip(int(Params().get("PrevCruiseGap")), 1, 4)
     self.cruiseSpeedMin = int(Params().get("CruiseSpeedMin"))
@@ -479,6 +487,24 @@ class CruiseHelper:
     controls.debugText2 = 'CURVE={:5.1f},curvature={:5.4f},mode={:3.1f}'.format(self.turnSpeed_prev, curvature, self.drivingModeIndex)
     return turnSpeed
 
+  def carrot_curve(self, CS, controls):
+    """carrot-wip vision curve speed (kph, cluster convention).
+
+    controlsd runs at 100Hz but modelV2 at 20Hz, so the path is evaluated only on
+    a new model frame; otherwise the last ceiling is reused. A dead/invalid model
+    is reported as missing geometry, which holds the ceiling and then releases slowly.
+    """
+    sm = controls.sm
+    now = time.monotonic()
+    if not (sm.alive['modelV2'] and sm.valid['modelV2']):
+      self.carrot_curve_kph = abs(self.vision_curve_speed.update(None, now))
+    elif sm.updated['modelV2']:
+      result = carrot_curve_speed(sm['modelV2'], CS.vEgo, self.autoCurveSpeedFactor, CARROT_CURVE_LOWER_LIMIT_KPH,
+                                  speed_ratio=CS.vCluRatio, a_ego=CS.aEgo)
+      self.carrot_curve_kph = abs(self.vision_curve_speed.update(result, now, model_time=sm.logMonoTime['modelV2']))
+    controls.debugText2 = 'CURVE(carrot)={:5.1f}'.format(self.carrot_curve_kph)
+    return self.carrot_curve_kph
+
   def apilot_curve_old(self, CS, controls):
     curvatures = controls.sm['lateralPlan'].curvatures
     turnSpeed = 300
@@ -805,7 +831,9 @@ class CruiseHelper:
     
     self.curveSpeed = 255
     self.apilot_driving_mode(CS, controls)
-    if self.autoCurveSpeedCtrlUse > 0:
+    if self.autoCurveSpeedCtrlUse == CURVE_CTRL_CARROT:
+      self.curveSpeed = self.carrot_curve(CS, controls)
+    elif self.autoCurveSpeedCtrlUse > 0:
       self.curveSpeed = self.apilot_curve(CS, controls)
 
     self.v_ego_kph = int(CS.vEgoCluster * CV.MS_TO_KPH + 0.5)
