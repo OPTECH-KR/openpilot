@@ -78,6 +78,7 @@ def manager_init() -> None:
     ("OpkrHotspotOnBoot", "0"),
     ("OPKRTimeZone", "Asia/Seoul"),    
     ("AutoCurveSpeedCtrlUse", "1"),
+    ("CarrotTurnAccel", "0"),
     ("AutoCurveSpeedFactor", "100"),
     ("AutoCurveSpeedFactorIn", "10"),
     ("AutoTurnControl", "0"),

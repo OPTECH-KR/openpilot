@@ -14,8 +14,10 @@ from selfdrive.controls.lib.longitudinal_mpc_lib.long_mpc import T_IDXS as T_IDX
 from selfdrive.controls.lib.drive_helpers import V_CRUISE_MAX, CONTROL_N, get_speed_error
 from selfdrive.swaglog import cloudlog
 from common.params import Params
+from selfdrive.controls.lib.turn_accel import get_future_curvature, limit_accel_in_turns as carrot_limit_accel_in_turns
 
 LON_MPC_STEP = 0.2  # first step is 0.2s
+CARROT_TURN_A_LAT_MAX = 3.0  # carrot-wip planner value; limited further by its 0.70 safety ratio
 A_CRUISE_MIN = -1.2
 #A_CRUISE_MAX_VALS = [1.6, 1.2, 0.8, 0.6]
 #A_CRUISE_MAX_VALS = [2.0, 1.2, 0.8, 0.6]
@@ -93,8 +95,16 @@ class LongitudinalPlanner:
     self.cruiseMaxVals5 = float(int(Params().get("CruiseMaxVals5", encoding="utf8"))) / 100.
     self.cruiseMaxVals6 = float(int(Params().get("CruiseMaxVals6", encoding="utf8"))) / 100.
     self.autoTurnControl = int(Params().get("AutoTurnControl", encoding="utf8"))
+    self.carrotTurnAccel = self.read_int_param("CarrotTurnAccel", 0)
 
-    
+  @staticmethod
+  def read_int_param(key, default):
+    # A key missing from an older params build or an empty value must fall back, not crash plannerd.
+    try:
+      return int(Params().get(key, encoding="utf8") or default)
+    except Exception:
+      return default
+
   def get_max_accel(self, v_ego):
     cruiseMaxVals = [self.cruiseMaxVals1, self.cruiseMaxVals2, self.cruiseMaxVals3, self.cruiseMaxVals4, self.cruiseMaxVals5, self.cruiseMaxVals6]
     return interp(v_ego, A_CRUISE_MAX_BP, cruiseMaxVals)
@@ -164,7 +174,14 @@ class LongitudinalPlanner:
       else:
         myMaxAccel = self.get_max_accel(v_ego)
       accel_limits = [A_CRUISE_MIN, myMaxAccel]
-      accel_limits_turns = limit_accel_in_turns(v_ego, sm['carState'].steeringAngleDeg, accel_limits, self.CP)
+      if self.carrotTurnAccel == 1:
+        # carrot: cap acceleration using model path curvature up to 3 s / reachable distance ahead
+        curvature_future = get_future_curvature(sm['modelV2'], sm['controlsState'].curvature)
+        accel_limits_turns = carrot_limit_accel_in_turns(v_ego, curvature_future, accel_limits, CARROT_TURN_A_LAT_MAX,
+                                                         model_msg=sm['modelV2'], v_cruise=v_cruise,
+                                                         current_curvature=sm['controlsState'].curvature)
+      else:
+        accel_limits_turns = limit_accel_in_turns(v_ego, sm['carState'].steeringAngleDeg, accel_limits, self.CP)
     else:
       accel_limits = [MIN_ACCEL, MAX_ACCEL]
       accel_limits_turns = [MIN_ACCEL, MAX_ACCEL]
