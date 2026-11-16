@@ -477,9 +477,9 @@ SettingsWindow::SettingsWindow(QWidget *parent) : QFrame(parent) {
   QPushButton *close_btn = new QPushButton("×");
   close_btn->setStyleSheet(R"(
     QPushButton {
-      font-size: 140px;
-      padding-bottom: 20px;
-      border-radius: 100px;
+      font-size: 110px;
+      padding-bottom: 16px;
+      border-radius: 80px;
       background-color: #292929;
       font-weight: 400;
     }
@@ -487,8 +487,8 @@ SettingsWindow::SettingsWindow(QWidget *parent) : QFrame(parent) {
       background-color: #3B3B3B;
     }
   )");
-  close_btn->setFixedSize(200, 200);
-  sidebar_layout->addSpacing(45);
+  close_btn->setFixedSize(160, 160);
+  sidebar_layout->addSpacing(30);
   sidebar_layout->addWidget(close_btn, 0, Qt::AlignCenter);
   QObject::connect(close_btn, &QPushButton::clicked, this, &SettingsWindow::closeSettings);
 
@@ -529,7 +529,7 @@ SettingsWindow::SettingsWindow(QWidget *parent) : QFrame(parent) {
         color: grey;
         border: none;
         background: none;
-        font-size: 65px;
+        font-size: 58px;
         font-weight: 500;
       }
       QPushButton:checked {
@@ -543,7 +543,8 @@ SettingsWindow::SettingsWindow(QWidget *parent) : QFrame(parent) {
     nav_btns->addButton(btn);
     sidebar_layout->addWidget(btn, 0, Qt::AlignRight);
 
-    const int lr_margin = name != tr("Network") ? 50 : 0;  // Network panel handles its own margins
+    // Network panel handles its own margins; the carrot panel is wide, so keep its sides tight
+    const int lr_margin = name == tr("Network") ? 0 : (name == "당근파일럿" ? 15 : 50);
     panel->setContentsMargins(lr_margin, 25, lr_margin, 25);
 
     ScrollView *panel_frame = new ScrollView(panel, this);
@@ -554,12 +555,12 @@ SettingsWindow::SettingsWindow(QWidget *parent) : QFrame(parent) {
       panel_widget->setCurrentWidget(w);
     });
   }
-  sidebar_layout->setContentsMargins(50, 50, 100, 50);
+  sidebar_layout->setContentsMargins(20, 40, 40, 40);
 
   // main settings layout, sidebar + main panel
   QHBoxLayout *main_layout = new QHBoxLayout(this);
 
-  sidebar_widget->setFixedWidth(500);
+  sidebar_widget->setFixedWidth(360);
   main_layout->addWidget(sidebar_widget);
   main_layout->addWidget(panel_widget);
 
@@ -593,7 +594,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   main_layout = new QStackedLayout(this);
   homeScreen = new QWidget(this);
   carrotLayout = new QVBoxLayout(homeScreen);
-  carrotLayout->setMargin(10);
+  carrotLayout->setMargin(0);
 
   QHBoxLayout* select_layout = new QHBoxLayout();
   select_layout->setSpacing(10);
@@ -859,8 +860,8 @@ CValueControl::CValueControl(const QString& params, const QString& title, const 
     color: #E4E4E4;
     background-color: #393939;
   )");
-    btnminus.setFixedSize(150, 100);
-    btnplus.setFixedSize(150, 100);
+    btnminus.setFixedSize(110, 100);
+    btnplus.setFixedSize(110, 100);
     hlayout->addWidget(&btnminus);
     hlayout->addWidget(&btnplus);
 

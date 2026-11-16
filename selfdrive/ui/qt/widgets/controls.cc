@@ -38,6 +38,10 @@ AbstractControl::AbstractControl(const QString &title, const QString &desc, cons
   title_label = new QPushButton(title);
   title_label->setFixedHeight(120);
   title_label->setStyleSheet("font-size: 50px; font-weight: 400; text-align: left");
+  // a long title must not widen the row past the panel (C2 screen is narrower than C3X);
+  // it takes the remaining space and is clipped instead
+  title_label->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+  title_label->setMinimumWidth(1);
   hlayout->addWidget(title_label, 1);
 
   // value next to control button
