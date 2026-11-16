@@ -7,7 +7,7 @@ import cereal.messaging as messaging
 from cereal import car
 from common.numpy_fast import interp
 from common.params import Params
-from common.realtime import Ratekeeper, Priority, config_realtime_process
+from common.realtime import Ratekeeper, Priority, config_realtime_process, sec_since_boot
 from selfdrive.controls.lib.radar_helpers import Cluster, Track, RADAR_TO_CAMERA
 from selfdrive.swaglog import cloudlog
 from third_party.cluster.fastcluster_py import cluster_points_centroid
@@ -273,6 +273,23 @@ class RadarD():
     return dat
 
 
+def make_carrot_radard(CP, RI):
+  """carrot dPath lead selection when CarrotRadar=1 on a Hyundai/Kia; otherwise None (apilot RadarD)."""
+  try:
+    enabled = int(Params().get("CarrotRadar", encoding="utf8") or 0) == 1
+  except Exception:
+    enabled = False
+  if not enabled:
+    return None
+  if CP.carName != "hyundai":
+    cloudlog.warning("CarrotRadar needs the Hyundai radar interface; using apilot radard for %s", CP.carName)
+    return None
+  from selfdrive.carrot.radar.radard_carrot import CarrotRadarD
+  new_radar = bool(getattr(RI, "new_radar", False))
+  cloudlog.info("radard: carrot dPath lead selection (%s)", "front radar tracks" if new_radar else "SCC object")
+  return CarrotRadarD(CP, new_radar)
+
+
 # fuses camera and radar data for best lead detection
 def radard_thread(sm=None, pm=None, can_sock=None):
   config_realtime_process(5 if TICI else 2, Priority.CTRL_LOW)
@@ -289,18 +306,23 @@ def radard_thread(sm=None, pm=None, can_sock=None):
   # *** setup messaging
   if can_sock is None:
     can_sock = messaging.sub_sock('can')
+  RI = RadarInterface(CP)
+  CRD = make_carrot_radard(CP, RI)
+
   if sm is None:
-    sm = messaging.SubMaster(['modelV2', 'carState', 'lateralPlan'], ignore_avg_freq=['modelV2', 'carState', 'lateralPlan'])  # Can't check average frequency, since radar determines timing
+    services = ['modelV2', 'carState', 'lateralPlan']
+    # carrot lead selection also wants yaw rate; subscribe only then so apilot's all_checks() is unchanged
+    extra = ['liveLocationKalman'] if CRD is not None else []
+    sm = messaging.SubMaster(services + extra, ignore_alive=extra, ignore_avg_freq=services + extra)  # Can't check average frequency, since radar determines timing
   if pm is None:
     pm = messaging.PubMaster(['radarState', 'liveTracks'])
-
-  RI = RadarInterface(CP)
 
   rk = Ratekeeper(1.0 / CP.radarTimeStep, print_delay_threshold=None)
   RD = RadarD(CP.radarTimeStep, RI.delay)
 
   while 1:
     can_strings = messaging.drain_sock_raw(can_sock, wait_for_one=True)
+    radar_time_s = sec_since_boot()
     rr = RI.update(can_strings)
 
     if rr is None:
@@ -308,13 +330,22 @@ def radard_thread(sm=None, pm=None, can_sock=None):
 
     sm.update(0)
 
-    dat = RD.update(sm, rr)
+    if CRD is not None:
+      dat = messaging.new_message('radarState')
+      dat.valid = sm.all_checks(['modelV2', 'carState']) and len(rr.errors) == 0
+      radarState = dat.radarState
+      radarState.mdMonoTime = sm.logMonoTime['modelV2']
+      radarState.radarErrors = list(rr.errors)
+      radarState.carStateMonoTime = sm.logMonoTime['carState']
+      CRD.update(sm, rr, radar_time_s, radarState)
+    else:
+      dat = RD.update(sm, rr)
     dat.radarState.cumLagMs = -rk.remaining*1000.
 
     pm.send('radarState', dat)
 
     # *** publish tracks for UI debugging (keep last) ***
-    tracks = RD.tracks
+    tracks = CRD.tracks if CRD is not None else RD.tracks
     dat = messaging.new_message('liveTracks', len(tracks))
 
     for cnt, ids in enumerate(sorted(tracks.keys())):

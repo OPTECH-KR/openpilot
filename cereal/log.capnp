@@ -511,6 +511,14 @@ struct RadarState @0x9a185389d6fdd05f {
   leadsCenter @14 : List(LeadData);
   leadsRight @15 : List(LeadData);
 
+  # carrot dPath RadarD outputs (radard with CarrotRadar=1). C2 ordinals; carrot-wip numbers differ.
+  leadLeft @16 :LeadData;
+  leadRight @17 :LeadData;
+  leadsLeft2 @18 : List(LeadData);
+  leadsRight2 @19 : List(LeadData);
+  leadsCutIn @20 : List(LeadData);
+  leadCutInRisk @21 :LeadData;
+
   struct LeadData {
     dRel @0 :Float32;
     yRel @1 :Float32;
