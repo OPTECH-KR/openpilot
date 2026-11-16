@@ -764,8 +764,136 @@ void ui_draw_radar_info(const UIState* s) {
 float filter_x = 0.0;
 float filter_y = 0.0;
 
+// ---- carrot(C3X) style lower-left HUD box (ShowHudMode=6) ----
+// Layout follows carrot-wip selfdrive/ui/onroad/hud_renderer.py (_draw_set_speed_carrot),
+// anchored at (bx, by) = speed text position (140, fb_h - 230).
+static int carrot_blink = 0;  // 0..15, "on" half when <= 8
+
+static void carrot_round_box(const UIState* s, float x, float y, float w, float h, NVGcolor fill, NVGcolor line, float radius, float line_width) {
+    nvgBeginPath(s->vg);
+    nvgRoundedRect(s->vg, x, y, w, h, radius);
+    nvgFillColor(s->vg, fill);
+    nvgFill(s->vg);
+    if (line_width > 0.0f) {
+        nvgStrokeColor(s->vg, line);
+        nvgStrokeWidth(s->vg, line_width);
+        nvgStroke(s->vg);
+    }
+}
+
+static const char* carrot_gear_text(cereal::CarState::GearShifter gear) {
+    switch (gear) {
+    case cereal::CarState::GearShifter::PARK: return "P";
+    case cereal::CarState::GearShifter::DRIVE: return "D";
+    case cereal::CarState::GearShifter::NEUTRAL: return "N";
+    case cereal::CarState::GearShifter::REVERSE: return "R";
+    case cereal::CarState::GearShifter::SPORT: return "S";
+    case cereal::CarState::GearShifter::LOW: return "L";
+    case cereal::CarState::GearShifter::BRAKE: return "B";
+    case cereal::CarState::GearShifter::ECO: return "E";
+    case cereal::CarState::GearShifter::UNKNOWN: return "U";
+    default: return "M";
+    }
+}
+
+// background box + CPU/MEM/DISK tiles (drawn before the speed text)
+static void carrot_hud_background(const UIState* s, int bx, int by, bool cam_detected) {
+    const SubMaster& sm = *(s->sm);
+    nvgTextAlign(s->vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+    carrot_blink = (carrot_blink + 1) % 16;
+    const bool show_dev = s->show_device_stat;
+    NVGcolor bg = (cam_detected && carrot_blink > 8) ? nvgRGBA(255, 0, 0, 180) : nvgRGBA(0, 0, 0, 90);
+    if (show_dev) carrot_round_box(s, bx - 120, by - 270, 475, 495, bg, COLOR_WHITE, 15, 2);
+    else          carrot_round_box(s, bx - 120, by - 130, 475, 355, bg, COLOR_WHITE, 15, 2);
+    if (!show_dev) return;
+
+    auto deviceState = sm["deviceState"].getDeviceState();
+    const auto cpuTempC = deviceState.getCpuTempC();
+    float cpuTemp = 0.f;
+    if (std::size(cpuTempC) > 0) {
+        for (int i = 0; i < std::size(cpuTempC); i++) cpuTemp += cpuTempC[i];
+        cpuTemp /= (float)std::size(cpuTempC);
+    }
+    const int mem = deviceState.getMemoryUsagePercent();
+    const float disk = 100.f - deviceState.getFreeSpacePercent();
+    const NVGcolor tile_ok = nvgRGBA(0, 255, 0, 190);
+    const NVGcolor tile_hot = nvgRGBA(255, 0, 0, 255);
+    const bool blink_on = carrot_blink <= 8;
+    char str[32];
+
+    const int dx = bx - 35, dy = by - 200;
+    const int xs[3] = {dx, dx + 150, dx + 300};
+    const char* labels[3] = {"CPU", "MEM", "DISK"};
+    NVGcolor fills[3] = {(cpuTemp > 80 && blink_on) ? tile_hot : tile_ok, (mem > 85 && blink_on) ? tile_hot : tile_ok, tile_ok};
+    for (int i = 0; i < 3; i++) {
+        carrot_round_box(s, xs[i] - 65, dy - 38, 130, 90, fills[i], COLOR_WHITE, 7, 2);
+        if (i == 0) snprintf(str, sizeof(str), "%.0f°C", cpuTemp);
+        else if (i == 1) snprintf(str, sizeof(str), "%d%%", mem);
+        else snprintf(str, sizeof(str), "%.0f%%", disk);
+        ui_draw_text(s, xs[i], dy - 5, labels[i], 25, COLOR_WHITE, BOLD, 1.0f, 4.0f);
+        ui_draw_text(s, xs[i], dy + 40, str, 40, COLOR_WHITE, BOLD, 1.0f, 4.0f);
+    }
+}
+
+// driving mode, gap number/bars, gear and speed-limit tile (drawn after the speed text)
+static void carrot_hud_lower(const UIState* s, int bx, int by, int my_driving_mode, int gap,
+                             int cam_limit, int road_limit, float cur_speed) {
+    SubMaster& sm = *(s->sm);
+    nvgTextAlign(s->vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+    const bool blink_on = carrot_blink <= 8;
+    char str[32];
+
+    // driving mode (+ GPS when fixed)
+    const char* mode_text = nullptr;
+    NVGcolor mode_color = nvgRGBA(255, 255, 255, 200);
+    switch (my_driving_mode) {
+    case 1: mode_text = "eco"; mode_color = nvgRGBA(0, 255, 0, 200); break;
+    case 2: mode_text = "safe"; mode_color = nvgRGBA(255, 165, 0, 200); break;
+    case 3: mode_text = "norm"; mode_color = nvgRGBA(255, 255, 255, 200); break;
+    case 4: mode_text = "high"; mode_color = nvgRGBA(255, 0, 0, 200); break;
+    }
+    if (mode_text) {
+        const int mx = bx - 50, my = by + 175;
+        carrot_round_box(s, mx - 55, my - 38, 110, 48, mode_color, COLOR_WHITE, 6, 2);
+        ui_draw_text(s, mx, my - 2, mode_text, 32, COLOR_WHITE, BOLD, 2.0f, 4.0f);
+        if (sm.alive("gpsLocationExternal") && (sm["gpsLocationExternal"].getGpsLocationExternal().getFlags() & 1)) {
+            ui_draw_text(s, mx, my - 45, "GPS", 30, nvgRGBA(0, 255, 0, 255), BOLD, 2.0f, 4.0f);
+        }
+    }
+
+    // gap number + bars
+    snprintf(str, sizeof(str), "%d", gap);
+    ui_draw_text(s, bx + 220, by + 77, str, 40, COLOR_WHITE, BOLD, 2.0f, 4.0f);
+    const float ddy = 80.0f / 4.0f;
+    for (int i = 0; i < std::clamp(gap, 0, 4); i++) {
+        carrot_round_box(s, bx + 270, by + 185 - ddy * (i + 1) + 2, 70, ddy - 2, nvgRGBA(0, 255, 0, 210), COLOR_WHITE, 1, 2);
+    }
+
+    // gear
+    const int gx = bx + 305, gy = by + 60;
+    carrot_round_box(s, gx - 35, gy - 70, 70, 80, nvgRGBA(0, 255, 0, 210), COLOR_WHITE, 7, 3);
+    ui_draw_text(s, gx, gy + 5, carrot_gear_text(sm["carState"].getCarState().getGearShifter()), 70, COLOR_WHITE, BOLD, 2.0f, 4.0f);
+
+    // speed limit: CAM (blinking red/yellow) or road LIMIT (red when over)
+    const int lx = bx + 75, ly = by + 175;
+    const char* label = "LIMIT";
+    int disp = (cam_limit > 0) ? cam_limit : road_limit;  // km/h
+    if (!s->scene.is_metric) disp = (int)(disp * KM_TO_MILE + 0.5);
+    // cur_speed is already in display units
+    NVGcolor lcolor = (disp > 0 && cur_speed > disp + 2) ? nvgRGBA(255, 0, 0, 210) : nvgRGBA(255, 255, 255, 210);
+    if (cam_limit > 0) {
+        label = "CAM";
+        lcolor = blink_on ? nvgRGBA(255, 0, 0, 210) : nvgRGBA(255, 255, 0, 210);
+    }
+    ui_draw_text(s, lx, ly - 45, label, 30, COLOR_WHITE, BOLD, 2.0f, 4.0f);
+    carrot_round_box(s, lx - 55, ly - 38, 110, 48, lcolor, COLOR_WHITE, 6, 2);
+    snprintf(str, sizeof(str), "%d", disp);
+    ui_draw_text(s, lx, ly, str, 40, COLOR_WHITE, BOLD, 2.0f, 4.0f);
+}
+
 void DrawApilot::drawLeadApilot(const UIState* s) {
     SubMaster& sm = *(s->sm);
+    const bool carrot_hud = s->show_mode == 6;
     const cereal::ModelDataV2::Reader& model = sm["modelV2"].getModelV2();
     const UIScene& scene = s->scene;
     auto leads = model.getLeadsV3();
@@ -1236,7 +1364,7 @@ void DrawApilot::drawLeadApilot(const UIState* s) {
     }
 
     int dxGap = -128 - 10 - 40;
-    if (s->show_gap_info >= 0) {
+    if (!carrot_hud && s->show_gap_info >= 0) {
         sprintf(str, "%.2f", tFollow);
         ui_draw_text(s, x + dxGap + 15 - 60, y + 120.0, str, 30, COLOR_WHITE, BOLD);
         sprintf(str, "%.0fM", tFollow * v_ego + 6.0);
@@ -1245,10 +1373,10 @@ void DrawApilot::drawLeadApilot(const UIState* s) {
         ui_draw_text(s, x + dxGap + 15, y + 120.0, strDrivingMode, 30, COLOR_WHITE, BOLD);
     }
     static int _myDrivingMode = 0;
-    if (_myDrivingMode != myDrivingMode) ui_draw_text_a(s, x + dxGap + 15, y + 120, strDrivingMode, 30, COLOR_WHITE, BOLD);
+    if (!carrot_hud && _myDrivingMode != myDrivingMode) ui_draw_text_a(s, x + dxGap + 15, y + 120, strDrivingMode, 30, COLOR_WHITE, BOLD);
     _myDrivingMode = myDrivingMode;
     dxGap -= 60;
-    if (s->show_gap_info > 0) {
+    if (!carrot_hud && s->show_gap_info > 0) {
 #ifdef __TEST
         static int _gap = 0;
         _gap += 10;
@@ -1274,11 +1402,11 @@ void DrawApilot::drawLeadApilot(const UIState* s) {
     }
     // 갭정보표시 중앙위
     sprintf(str, "%d", gap1);
-    if (s->show_gap_info >= 0) {        
+    if (!carrot_hud && s->show_gap_info >= 0) {
         ui_draw_text(s, x + dxGap + 15 + 60, y + 60, str, 50, COLOR_WHITE, BOLD);
     }
     static int _gap1 = 0;
-    if(_gap1 != gap1) ui_draw_text_a(s, x + dxGap + 15 + 60, y + 60, str, 50, COLOR_WHITE, BOLD);
+    if(!carrot_hud && _gap1 != gap1) ui_draw_text_a(s, x + dxGap + 15 + 60, y + 60, str, 50, COLOR_WHITE, BOLD);
     _gap1 = gap1;
     // 타겟하단: 롱컨상태표시
     if (true) {
@@ -1361,6 +1489,10 @@ void DrawApilot::drawLeadApilot(const UIState* s) {
     else if (s->show_mode == 5) {
         y = 620;
         x = 400;
+    }
+    else if (carrot_hud) {  // speed anchor (x, y + 270) = carrot (140, fb_h - 230)
+        x = 140;
+        y = s->fb_h - 230 - 270;
     }
 
     QString navText = "";
@@ -1489,6 +1621,10 @@ void DrawApilot::drawLeadApilot(const UIState* s) {
             else if (trafficMode == 2) ui_draw_image(s, { x - icon_size / 2, y - icon_size / 2 + 270, icon_size, icon_size }, "ic_traffic_green", 1.0f);
         }
 
+        const bool speed_bump = (xSignType == 124 || camType == 22);
+        const int carrot_cam_limit = (limit_speed > 0 && !speed_bump) ? limit_speed : 0;
+        if (carrot_hud) carrot_hud_background(s, bx, by, carrot_cam_limit > 0);
+
         char speed[128];
         sprintf(speed, "%.0f", cur_speed);
         ui_draw_text(s, bx, by + 50, speed, 120, COLOR_WHITE, BOLD, 3.0f, 8.0f);
@@ -1521,9 +1657,18 @@ void DrawApilot::drawLeadApilot(const UIState* s) {
             }
         }
 
+        if (carrot_hud) {
+            carrot_hud_lower(s, bx, by, myDrivingMode, gap1, carrot_cam_limit,
+                             (roadLimitSpeed > 0 && roadLimitSpeed < 200) ? roadLimitSpeed : 0, cur_speed);
+        }
+
         bx = x - 200;
         by = y + 250;
-        if (s->show_mode == 4) {
+        if (carrot_hud) {  // turn / bump signs go right of the carrot box
+            bx = 620;
+            by = s->fb_h - 300;
+        }
+        else if (s->show_mode == 4) {
             bx = 150;
             by = 380;
         }
@@ -1537,7 +1682,7 @@ void DrawApilot::drawLeadApilot(const UIState* s) {
             ui_draw_text(s, bx, by + 120, str, 40, COLOR_WHITE, BOLD);
         }
 
-        if (limit_speed > 0) {
+        if (limit_speed > 0 && !(carrot_hud && !speed_bump)) {  // carrot box shows the cam limit itself
             if (xSignType == 124 || camType == 22) {
                 ui_draw_image(s, { bx - 60, by - 50, 120, 150 }, "ic_speed_bump", 1.0f);
             }
@@ -1579,7 +1724,7 @@ void DrawApilot::drawLeadApilot(const UIState* s) {
                 break;
             }
         }
-        else if (roadLimitSpeed > 0 && roadLimitSpeed < 200) {
+        else if (!carrot_hud && roadLimitSpeed > 0 && roadLimitSpeed < 200) {
             ui_draw_image(s, { bx - 60, by - 50, 120, 150 }, "ic_road_speed", 1.0f);
             sprintf(str, "%d", roadLimitSpeed);
             ui_draw_text(s, bx, by + 75, str, 50, COLOR_BLACK, BOLD, 0.0f, 0.0f);
@@ -1587,6 +1732,10 @@ void DrawApilot::drawLeadApilot(const UIState* s) {
     }
     // Tpms...
     if (s->show_tpms) {
+        if (carrot_hud) {  // the carrot box owns the lower-left corner: draw tires at the lower right
+            nvgSave(s->vg);
+            nvgTranslate(s->vg, s->fb_w - 300, -60);
+        }
         int bx = (192 - 24) / 2 + (bdr_s * 2);
         int by = s->fb_h - 280 / 2;
         auto tpms = car_state.getTpms();
@@ -1634,7 +1783,7 @@ void DrawApilot::drawLeadApilot(const UIState* s) {
             ui_draw_text(s, bx - 90, by + 80, get_tpms_text(rl), 38, get_tpms_color(rl), BOLD);
             ui_draw_text(s, bx + 90, by + 80, get_tpms_text(rr), 38, get_tpms_color(rr), BOLD);
         }
-
+        if (carrot_hud) nvgRestore(s->vg);
     }
     // 시간표시
     if (s->show_datetime) {
