@@ -243,6 +243,7 @@ std::unordered_map<std::string, uint32_t> keys = {
     { "AutoCurveSpeedCtrlUse", PERSISTENT },
     { "CarrotTurnAccel", PERSISTENT },
     { "CarrotRadar", PERSISTENT },
+    { "CarrotCutInPredecel", PERSISTENT },
     { "AutoCurveSpeedFactor", PERSISTENT },
     { "AutoCurveSpeedFactorIn", PERSISTENT },
     { "AutoTurnControl", PERSISTENT },

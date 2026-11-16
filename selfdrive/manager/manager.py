@@ -80,6 +80,7 @@ def manager_init() -> None:
     ("AutoCurveSpeedCtrlUse", "1"),
     ("CarrotTurnAccel", "0"),
     ("CarrotRadar", "0"),
+    ("CarrotCutInPredecel", "0"),
     ("AutoCurveSpeedFactor", "100"),
     ("AutoCurveSpeedFactorIn", "10"),
     ("AutoTurnControl", "0"),

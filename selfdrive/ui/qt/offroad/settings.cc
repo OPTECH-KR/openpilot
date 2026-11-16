@@ -791,6 +791,7 @@ TuningPanel::TuningPanel(QWidget* parent) : QWidget(parent) {
     toggleLayout->addWidget(new CValueControl("AutoCurveSpeedCtrlUse", "TURN: Auto Control(1)", "곡선도로를 만나면 속도를 줄여줍니다. 0:사용안함,1:도로설계기준,2:carrot(비전 커브, 거리기반 사전감속)", "../assets/offroad/icon_road.png", 0, 3, 1));
     toggleLayout->addWidget(new CValueControl("CarrotTurnAccel", "TURN: carrot Accel Limit(0)", "커브에서 가속 제한 방식. 0:기존(조향각 기준),1:carrot(모델 경로 3초 앞 곡률 기준)", "../assets/offroad/icon_road.png", 0, 1, 1));
     toggleLayout->addWidget(new CValueControl("CarrotRadar", "RADAR: carrot Lead Select(0)", "앞차 선택 방식(현대/기아). 0:기존 apilot,1:carrot dPath(끼어들기 위험 감지 포함). 재시작 후 적용", "../assets/offroad/icon_road.png", 0, 1, 1));
+    toggleLayout->addWidget(new CValueControl("CarrotCutInPredecel", "RADAR: carrot CutIn Predecel(0)", "끼어들기 위험 시 미리 완만하게 감속(-0.25~-0.65m/s^2). RADAR: carrot Lead Select가 1일 때만 동작", "../assets/offroad/icon_road.png", 0, 1, 1));
     toggleLayout->addWidget(new CValueControl("AutoCurveSpeedFactor", "TURN: Auto Control ratio(100%)", "커브속도조절(커브속도 조절 3일때 170)", "../assets/offroad/icon_road.png", 50, 300, 1));
     toggleLayout->addWidget(new CValueControl("AutoCurveSpeedFactorIn", "TURN: Auto Control ratio In(10%)", "커브속도조절진입", "../assets/offroad/icon_road.png", 0, 300, 1));
     toggleLayout->addWidget(new CValueControl("AutoTurnControl", "NOO Helper(0)", "0:없음,1:외부네비 작동, 2:자동차로변경, 3:자동속도제어", "../assets/offroad/icon_road.png", 0, 3, 1));

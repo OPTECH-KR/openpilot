@@ -15,6 +15,7 @@ from selfdrive.controls.lib.drive_helpers import V_CRUISE_MAX, CONTROL_N, get_sp
 from selfdrive.swaglog import cloudlog
 from common.params import Params
 from selfdrive.controls.lib.turn_accel import get_future_curvature, limit_accel_in_turns as carrot_limit_accel_in_turns
+from selfdrive.controls.lib.cutin_predecel import apply_cutin_predecel_accel_limit, get_cutin_predecel_accel_limit
 
 LON_MPC_STEP = 0.2  # first step is 0.2s
 CARROT_TURN_A_LAT_MAX = 3.0  # carrot-wip planner value; limited further by its 0.70 safety ratio
@@ -96,6 +97,7 @@ class LongitudinalPlanner:
     self.cruiseMaxVals6 = float(int(Params().get("CruiseMaxVals6", encoding="utf8"))) / 100.
     self.autoTurnControl = int(Params().get("AutoTurnControl", encoding="utf8"))
     self.carrotTurnAccel = self.read_int_param("CarrotTurnAccel", 0)
+    self.carrotCutInPredecel = self.read_int_param("CarrotCutInPredecel", 0)
 
   @staticmethod
   def read_int_param(key, default):
@@ -202,7 +204,15 @@ class LongitudinalPlanner:
       v_cruise = 0.0
     # clip limits, cannot init MPC outside of bounds
     accel_limits_turns[0] = min(accel_limits_turns[0], self.a_desired + 0.05)
-    accel_limits_turns[1] = max(accel_limits_turns[1], self.a_desired - 0.05)
+    if self.carrotCutInPredecel == 1:
+      # carrot: a confirmed cut-in risk (radarState.leadCutInRisk, published with CarrotRadar=1) caps
+      # acceleration at -0.25..-0.65 m/s^2 by time-to-collision, lowered at most 0.15 per plan step.
+      # Without a risk this is the same a_desired - 0.05 floor as below.
+      cutin_limit = (get_cutin_predecel_accel_limit(sm['radarState'])
+                     if not reset_state and not sm['carState'].gasPressed else None)
+      accel_limits_turns[1] = apply_cutin_predecel_accel_limit(accel_limits_turns[1], self.a_desired, cutin_limit)
+    else:
+      accel_limits_turns[1] = max(accel_limits_turns[1], self.a_desired - 0.05)
 
     #self.mpc.set_weights(prev_accel_constraint)
     self.mpc.set_accel_limits(accel_limits_turns[0], accel_limits_turns[1])
