@@ -25,12 +25,15 @@ SoftwarePanel::SoftwarePanel(QWidget* parent) : ListWidget(parent) {
   onroadLbl->setStyleSheet("font-size: 50px; font-weight: 400; text-align: left; padding-top: 30px; padding-bottom: 30px;");
   addItem(onroadLbl);
 
-  // current version
-  versionLbl = new LabelControl(tr("Current Version"), "");
+  // version info rows (version / last update / check / branch / commit / OS / uninstall)
+  versionLbl = new LabelControl("버전", "");
   addItem(versionLbl);
 
+  lastUpdateLbl = new LabelControl("마지막 업데이트", "");
+  addItem(lastUpdateLbl);
+
   // download update btn
-  downloadBtn = new ButtonControl(tr("Download"), tr("CHECK"));
+  downloadBtn = new ButtonControl("최신 업데이트", tr("CHECK"));
   connect(downloadBtn, &ButtonControl::clicked, [=]() {
     downloadBtn->setEnabled(false);
     if (downloadBtn->text() == tr("CHECK")) {
@@ -40,6 +43,13 @@ SoftwarePanel::SoftwarePanel(QWidget* parent) : ListWidget(parent) {
     }
   });
   addItem(downloadBtn);
+
+  branchLbl = new LabelControl("브랜치 이름", "");
+  addItem(branchLbl);
+  commitLbl = new LabelControl("브랜치 커밋", "");
+  addItem(commitLbl);
+  osLbl = new LabelControl("운영체제 버전", QString::fromStdString(Hardware::get_os_version()).trimmed());
+  addItem(osLbl);
 
   // install update btn
   installBtn = new ButtonControl(tr("Install Update"), tr("INSTALL"));
@@ -75,7 +85,7 @@ SoftwarePanel::SoftwarePanel(QWidget* parent) : ListWidget(parent) {
   }
 
   // uninstall button
-  auto uninstallBtn = new ButtonControl(tr("Uninstall %1").arg(getBrand()), tr("UNINSTALL"));
+  auto uninstallBtn = new ButtonControl(getBrand() + " 삭제", tr("UNINSTALL"));
   connect(uninstallBtn, &ButtonControl::clicked, [&]() {
     if (ConfirmationDialog::confirm(tr("Are you sure you want to uninstall?"), tr("Uninstall"), this)) {
       params.putBool("DoUninstall", true);
@@ -144,9 +154,13 @@ void SoftwarePanel::updateLabels() {
   }
   targetBranchBtn->setValue(QString::fromStdString(params.get("UpdaterTargetBranch")));
 
-  // current + new versions
-  versionLbl->setText(QString::fromStdString(params.get("UpdaterCurrentDescription")));
+  // current version and git info (C2 updater often cannot reach the server, so show what is on the device)
+  versionLbl->setText(getBrand() + " v" + QString::fromStdString(params.get("Version")) + "-c2");
   versionLbl->setDescription(QString::fromStdString(params.get("UpdaterCurrentReleaseNotes")));
+  auto last_tm = params.get("LastUpdateTime");
+  lastUpdateLbl->setText(last_tm.empty() ? "없음" : timeAgo(QDateTime::fromString(QString::fromStdString(last_tm + "Z"), Qt::ISODate)));
+  branchLbl->setText(QString::fromStdString(params.get("GitBranch")));
+  commitLbl->setText(QString::fromStdString(params.get("GitCommit")).left(10));
 
   installBtn->setVisible(!is_onroad && params.getBool("UpdateAvailable"));
   installBtn->setValue(QString::fromStdString(params.get("UpdaterNewDescription")));
