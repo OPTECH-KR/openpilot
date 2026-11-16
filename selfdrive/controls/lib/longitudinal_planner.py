@@ -16,6 +16,7 @@ from selfdrive.swaglog import cloudlog
 from common.params import Params
 from selfdrive.controls.lib.turn_accel import get_future_curvature, limit_accel_in_turns as carrot_limit_accel_in_turns
 from selfdrive.controls.lib.cutin_predecel import apply_cutin_predecel_accel_limit, get_cutin_predecel_accel_limit
+from selfdrive.controls.lib.longitudinal_stopping_lead import StoppingLeadFilter
 
 LON_MPC_STEP = 0.2  # first step is 0.2s
 CARROT_TURN_A_LAT_MAX = 3.0  # carrot-wip planner value; limited further by its 0.70 safety ratio
@@ -81,6 +82,7 @@ class LongitudinalPlanner:
     self.autoTurnControl = int(Params().get("AutoTurnControl", encoding="utf8"))
 
     self.mpc.openpilotLongitudinalControl = CP.openpilotLongitudinalControl
+    self.stopping_lead_filter = StoppingLeadFilter()
 
   def read_param(self):
     #try:
@@ -98,6 +100,13 @@ class LongitudinalPlanner:
     self.autoTurnControl = int(Params().get("AutoTurnControl", encoding="utf8"))
     self.carrotTurnAccel = self.read_int_param("CarrotTurnAccel", 0)
     self.carrotCutInPredecel = self.read_int_param("CarrotCutInPredecel", 0)
+    self.carrotCutOutRelief = self.read_int_param("CarrotCutOutRelief", 0)
+    self.carrotStoppingLead = self.read_int_param("CarrotStoppingLead", 0)
+
+  @staticmethod
+  def service_ok(sm, name):
+    valid, alive = getattr(sm, 'valid', None), getattr(sm, 'alive', None)
+    return valid is None or alive is None or (valid.get(name, True) and alive.get(name, True))
 
   @staticmethod
   def read_int_param(key, default):
@@ -219,7 +228,24 @@ class LongitudinalPlanner:
     self.mpc.set_cur_state(self.v_desired_filter.x, self.a_desired)
     x, v, a, j, y = self.parse_model(sm['modelV2'], self.v_model_error, v_ego, self.autoTurnControl)
 
-    self.mpc.update(sm['carState'], sm['radarState'], sm['modelV2'], sm['controlsState'], v_cruise, x, v, a, j, y, prev_accel_constraint, reset_state)
+    radar_state = sm['radarState']
+    if self.carrotStoppingLead == 1:
+      # carrot: while stopped behind a stopped radar lead (carrot radard track ids), hand the MPC zero lead
+      # speed/accel until the range has really opened (0.15 m for 0.1 s); raw radarState is unchanged.
+      radar_state = self.stopping_lead_filter.update(
+        radar_state,
+        stopping=(self.CP.openpilotLongitudinalControl
+                  and sm['controlsState'].longControlState == LongCtrlState.stopping
+                  and not sm['controlsState'].experimentalMode and self.mpc.mode == 'acc'
+                  and not sm['carState'].gasPressed),
+        v_ego=v_ego,
+        mono_time_ns=int(getattr(sm, 'logMonoTime', {}).get('radarState', 0)),
+        valid=self.service_ok(sm, 'radarState') and self.service_ok(sm, 'carState'),
+      )
+    self.mpc.cutout_relief_enabled = (self.carrotCutOutRelief == 1 and not reset_state
+                                      and not sm['carState'].gasPressed and not force_slow_decel)
+
+    self.mpc.update(sm['carState'], radar_state, sm['modelV2'], sm['controlsState'], v_cruise, x, v, a, j, y, prev_accel_constraint, reset_state)
 
     self.v_desired_trajectory_full = np.interp(T_IDXS, T_IDXS_MPC, self.mpc.v_solution)
     self.a_desired_trajectory_full = np.interp(T_IDXS, T_IDXS_MPC, self.mpc.a_solution)

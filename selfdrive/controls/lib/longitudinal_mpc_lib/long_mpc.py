@@ -11,6 +11,7 @@ from common.conversions import Conversions as CV
 from common.params import Params
 from common.realtime import DT_MDL
 from common.filter_simple import StreamingMovingAverage
+from selfdrive.controls.lib.longitudinal_cutout import cutout_obstacle_relief
 from cereal import log, car
 EventName = car.CarEvent.EventName
 
@@ -268,6 +269,7 @@ class LongitudinalMpc:
     self.x_obstacle_min = 0.0
     self.openpilotLongitudinalControl = False
     self.experimentalMode = False
+    self.cutout_relief_enabled = False  # set every plan by LongitudinalPlanner (CarrotCutOutRelief)
 
   def reset(self):
     # self.solver = AcadosOcpSolverCython(MODEL_NAME, ACADOS_SOLVER_TYPE, N)
@@ -455,8 +457,14 @@ class LongitudinalMpc:
                                  v_upper)
 
       cruise_obstacle = np.cumsum(T_DIFFS * v_cruise_clipped) + get_safe_obstacle_distance(v_cruise_clipped, self.t_follow, self.comfort_brake, applyStopDistance + self.fakeCruiseDistance)
-      
-      x_obstacles = np.column_stack([lead_0_obstacle, lead_1_obstacle, cruise_obstacle, x2])
+
+      # carrot cut-out relief (CarrotCutOutRelief=1, set by the planner): once carrot radard predicts the
+      # lead clears our path (cutOutTime/cutOutConfidence), relax only the post-clearance follow obstacle.
+      lead_0_follow_obstacle = lead_0_obstacle
+      if self.cutout_relief_enabled and not reset_state:
+        lead_0_follow_obstacle = lead_0_obstacle + cutout_obstacle_relief(
+          radarstate.leadOne, v_ego, T_IDXS, self.t_follow, self.stopDistance)
+      x_obstacles = np.column_stack([lead_0_follow_obstacle, lead_1_obstacle, cruise_obstacle, x2])
 
       #self.debugLongText1 = 'A{:.2f},Y{:.1f},TR={:.2f},state={} {},L{:3.1f} C{:3.1f},{:3.1f},{:3.1f} X{:3.1f} S{:3.1f},V={:.1f}:{:.1f}:{:.1f}'.format(
       #  self.prev_a[0], y[-1], self.t_follow, self.xState, self.e2ePaused, lead_0_obstacle[0], cruise_obstacle[0], cruise_obstacle[1], cruise_obstacle[-1],model.position.x[-1], model_x, v_ego*3.6, v[0]*3.6, v[-1]*3.6)
