@@ -527,7 +527,13 @@ struct RadarState @0x9a185389d6fdd05f {
     modelProb @13 :Float32;
     radar @14 :Bool;
 
-    aLeadDEPRECATED @5 :Float32;
+    # carrot radar lead fields (same ordinals as carrot-wip; @5 was unused aLeadDEPRECATED)
+    aLead @5 :Float32;
+    radarTrackId @15 :Int32 = -1;
+    jLead @16 :Float32;
+    score @17 :Float32;
+    cutOutTime @18 :Float32;       # predicted body clearance, seconds; 0 = inactive
+    cutOutConfidence @19 :Float32; # confirmed/ramped future headway relief, 0..1
   }
 
   # deprecated
