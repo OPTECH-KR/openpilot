@@ -126,19 +126,19 @@ void SoftwarePanel::updateLabels() {
     downloadBtn->setValue(updater_state);
   } else {
     if (failed) {
-      downloadBtn->setText("CHECK");
-      downloadBtn->setValue("failed to check for update");
+      downloadBtn->setText(tr("CHECK"));
+      downloadBtn->setValue("업데이트 확인 실패");
     } else if (params.getBool("UpdaterFetchAvailable")) {
-      downloadBtn->setText("DOWNLOAD");
-      downloadBtn->setValue("update available");
+      downloadBtn->setText("다운로드");
+      downloadBtn->setValue("업데이트 있음");
     } else {
-      QString lastUpdate = "never";
+      QString lastUpdate = "없음";
       auto tm = params.get("LastUpdateTime");
       if (!tm.empty()) {
         lastUpdate = timeAgo(QDateTime::fromString(QString::fromStdString(tm + "Z"), Qt::ISODate));
       }
-      downloadBtn->setText("CHECK");
-      downloadBtn->setValue("up to date, last checked " + lastUpdate);
+      downloadBtn->setText(tr("CHECK"));
+      downloadBtn->setValue("최신 버전, 마지막 확인: " + lastUpdate);
     }
     downloadBtn->setEnabled(true);
   }

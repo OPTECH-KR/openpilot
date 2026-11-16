@@ -168,7 +168,7 @@ class CPrebuiltToggle : public ToggleControl {
     Q_OBJECT
 
 public:
-    CPrebuiltToggle() : ToggleControl("Prebuilt", "Prebuilt.", "../assets/offroad/icon_shell.png", Params().getBool("OpkrPrebuiltOn")) {
+    CPrebuiltToggle() : ToggleControl("프리빌트", "빌드된 파일을 사용해 부팅 시간을 줄입니다.", "../assets/offroad/icon_shell.png", Params().getBool("OpkrPrebuiltOn")) {
         QObject::connect(this, &CPrebuiltToggle::toggleFlipped, [=](int state) {
             Params().putBool("OpkrPrebuiltOn", (bool)state);
 
@@ -203,7 +203,7 @@ class UseBaseTorqueToggle : public ToggleControl {
   Q_OBJECT
 
 public:
-  UseBaseTorqueToggle() : ToggleControl(tr("Use Base Torque Values"), "", "../assets/offroad/icon_openpilot.png", Params().getBool("UseBaseTorqueValues")) {
+  UseBaseTorqueToggle() : ToggleControl(tr("기본 토크 값 사용"), "", "../assets/offroad/icon_openpilot.png", Params().getBool("UseBaseTorqueValues")) {
     QObject::connect(this, &UseBaseTorqueToggle::toggleFlipped, [=](int state) {
       bool status = state ? true : false;
       Params().putBool("UseBaseTorqueValues", status);
