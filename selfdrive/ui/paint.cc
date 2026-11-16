@@ -837,7 +837,10 @@ static void carrot_hud_background(const UIState* s, int bx, int by, bool cam_det
 
 // driving mode, gap number/bars, gear and speed-limit tile (drawn after the speed text)
 static void carrot_hud_lower(const UIState* s, int bx, int by, int my_driving_mode, int gap,
-                             int cam_limit, int road_limit, float cur_speed) {
+                             int cam_limit, int road_limit, float cur_speed, int active_nda) {
+    // last shown values: a change pops the new value from the screen center (ui_draw_text_a), like c3-wip
+    static int mode_last = -1, gap_last = -1;
+    static char gear_last[8] = "";
     SubMaster& sm = *(s->sm);
     nvgTextAlign(s->vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
     const bool blink_on = carrot_blink <= 8;
@@ -847,15 +850,16 @@ static void carrot_hud_lower(const UIState* s, int bx, int by, int my_driving_mo
     const char* mode_text = nullptr;
     NVGcolor mode_color = nvgRGBA(255, 255, 255, 200);
     switch (my_driving_mode) {
-    case 1: mode_text = "eco"; mode_color = nvgRGBA(0, 255, 0, 200); break;
-    case 2: mode_text = "safe"; mode_color = nvgRGBA(255, 165, 0, 200); break;
-    case 3: mode_text = "norm"; mode_color = nvgRGBA(255, 255, 255, 200); break;
-    case 4: mode_text = "high"; mode_color = nvgRGBA(255, 0, 0, 200); break;
+    case 1: mode_text = "연비"; mode_color = nvgRGBA(0, 255, 0, 200); break;
+    case 2: mode_text = "안전"; mode_color = nvgRGBA(255, 165, 0, 200); break;
+    case 3: mode_text = "일반"; mode_color = nvgRGBA(128, 128, 128, 210); break;
+    case 4: mode_text = "고속"; mode_color = nvgRGBA(255, 0, 0, 200); break;
     }
     if (mode_text) {
         const int mx = bx - 50, my = by + 175;
         carrot_round_box(s, mx - 55, my - 38, 110, 48, mode_color, COLOR_WHITE, 6, 2);
         ui_draw_text(s, mx, my - 2, mode_text, 32, COLOR_WHITE, BOLD, 2.0f, 4.0f);
+        if (mode_last != -1 && mode_last != my_driving_mode) ui_draw_text_a(s, mx, my, mode_text, 30, COLOR_WHITE, BOLD);
         if (sm.alive("gpsLocationExternal") && (sm["gpsLocationExternal"].getGpsLocationExternal().getFlags() & 1)) {
             ui_draw_text(s, mx, my - 45, "GPS", 30, nvgRGBA(0, 255, 0, 255), BOLD, 2.0f, 4.0f);
         }
@@ -864,6 +868,7 @@ static void carrot_hud_lower(const UIState* s, int bx, int by, int my_driving_mo
     // gap number + bars
     snprintf(str, sizeof(str), "%d", gap);
     ui_draw_text(s, bx + 220, by + 77, str, 40, COLOR_WHITE, BOLD, 2.0f, 4.0f);
+    if (gap_last != -1 && gap_last != gap) ui_draw_text_a(s, bx + 220, by + 77, str, 40, COLOR_WHITE, BOLD);
     const float ddy = 80.0f / 4.0f;
     for (int i = 0; i < std::clamp(gap, 0, 4); i++) {
         carrot_round_box(s, bx + 270, by + 185 - ddy * (i + 1) + 2, 70, ddy - 2, nvgRGBA(0, 255, 0, 210), COLOR_WHITE, 1, 2);
@@ -872,7 +877,23 @@ static void carrot_hud_lower(const UIState* s, int bx, int by, int my_driving_mo
     // gear
     const int gx = bx + 305, gy = by + 60;
     carrot_round_box(s, gx - 35, gy - 70, 70, 80, nvgRGBA(0, 255, 0, 210), COLOR_WHITE, 7, 3);
-    ui_draw_text(s, gx, gy + 5, carrot_gear_text(sm["carState"].getCarState().getGearShifter()), 70, COLOR_WHITE, BOLD, 2.0f, 4.0f);
+    const char* gear = carrot_gear_text(sm["carState"].getCarState().getGearShifter());
+    ui_draw_text(s, gx, gy + 5, gear, 70, COLOR_WHITE, BOLD, 2.0f, 4.0f);
+    if (gear_last[0] && strcmp(gear, gear_last)) ui_draw_text_a(s, gx, gy + 5, gear, 70, COLOR_WHITE, BOLD);
+    snprintf(gear_last, sizeof(gear_last), "%s", gear);
+    mode_last = my_driving_mode;
+    gap_last = gap;
+
+    // navigation link: APN (green) / APM (blue), between the limit tile and the gap bars
+    const int nx = bx + 200, ny = by + 175;
+    if (active_nda >= 200) {
+        carrot_round_box(s, nx - 55, ny - 38, 110, 48, nvgRGBA(0, 203, 0, 255), COLOR_WHITE, 6, 2);
+        ui_draw_text(s, nx, ny, "APN", 40, COLOR_WHITE, BOLD, 2.0f, 4.0f);
+    }
+    else if (active_nda >= 100) {
+        carrot_round_box(s, nx - 55, ny - 38, 110, 48, nvgRGBA(0, 120, 255, 210), COLOR_WHITE, 6, 2);
+        ui_draw_text(s, nx, ny, "APM", 40, COLOR_WHITE, BOLD, 2.0f, 4.0f);
+    }
 
     // speed limit: CAM (blinking red/yellow) or road LIMIT (red when over)
     const int lx = bx + 75, ly = by + 175;
@@ -1616,14 +1637,15 @@ void DrawApilot::drawLeadApilot(const UIState* s) {
         int bx = x;
         int by = y + 270;
 
-        if (s->show_mode == 4 || s->show_mode == 5) {
-            if (trafficMode == 1) ui_draw_image(s, { x - icon_size / 2, y - icon_size / 2 + 270, icon_size, icon_size }, "ic_traffic_red", 1.0f);
-            else if (trafficMode == 2) ui_draw_image(s, { x - icon_size / 2, y - icon_size / 2 + 270, icon_size, icon_size }, "ic_traffic_green", 1.0f);
-        }
-
+        // carrot box goes under everything else in the panel (traffic light, speed, ...)
         const bool speed_bump = (xSignType == 124 || camType == 22);
         const int carrot_cam_limit = (limit_speed > 0 && !speed_bump) ? limit_speed : 0;
         if (carrot_hud) carrot_hud_background(s, bx, by, carrot_cam_limit > 0);
+
+        if (s->show_mode == 4 || s->show_mode == 5 || carrot_hud) {
+            if (trafficMode == 1) ui_draw_image(s, { x - icon_size / 2, y - icon_size / 2 + 270, icon_size, icon_size }, "ic_traffic_red", 1.0f);
+            else if (trafficMode == 2) ui_draw_image(s, { x - icon_size / 2, y - icon_size / 2 + 270, icon_size, icon_size }, "ic_traffic_green", 1.0f);
+        }
 
         char speed[128];
         sprintf(speed, "%.0f", cur_speed);
@@ -1647,10 +1669,22 @@ void DrawApilot::drawLeadApilot(const UIState* s) {
         else strcpy(str,"--");
         ui_draw_text(s, bx + 170, by + 15, str, 60, COLOR_GREEN, BOLD, 1.0, 5.0, COLOR_BLACK, COLOR_BLACK);
         sprintf(str, "%d", (int)(applyMaxSpeed * (s->scene.is_metric ? 1.0 : KM_TO_MILE) + 0.5));
-        if (enabled && longActiveUser > 0 && applyMaxSpeed > 0 && applyMaxSpeed != cruiseMaxSpeed) {
+        const bool apply_differs = enabled && longActiveUser > 0 && applyMaxSpeed > 0 && applyMaxSpeed != cruiseMaxSpeed;
+        if (carrot_hud) {
+            // carrot: the speed actually applied, in ochre, with why it differs from the set speed
+            if (apply_differs) {
+                const char* source = (applyMaxSpeed > cruiseMaxSpeed) ? "eco" :
+                                     (carrot_cam_limit > 0) ? "cam" :
+                                     (speed_bump && limit_speed > 0) ? "bump" :
+                                     (speedCtrlActive) ? "curve" : "decel";
+                ui_draw_text(s, bx + 250, by - 50, str, 50, COLOR_OCHRE, BOLD, 1.0, 5.0, COLOR_BLACK, COLOR_BLACK);
+                ui_draw_text(s, bx + 250, by - 100, source, 30, COLOR_OCHRE, BOLD, 1.0, 5.0, COLOR_BLACK, COLOR_BLACK);
+            }
+        }
+        else if (apply_differs) {
             ui_draw_text(s, bx + 250, by - 50, str, 50, COLOR_GREEN, BOLD, 1.0, 5.0, COLOR_BLACK, COLOR_BLACK);
         }
-        if (true) {
+        if (!carrot_hud) {
             if (enabled && curveSpeed > 0 && curveSpeed < 150) {
                 sprintf(str, "%d", (int)(curveSpeed* (s->scene.is_metric ? 1.0 : KM_TO_MILE) + 0.5));
                 ui_draw_text(s, bx + 140, by + 110, str, 50, (speedCtrlActive)?COLOR_RED:COLOR_YELLOW, BOLD, 1.0, 5.0, COLOR_BLACK, COLOR_BLACK);
@@ -1659,7 +1693,7 @@ void DrawApilot::drawLeadApilot(const UIState* s) {
 
         if (carrot_hud) {
             carrot_hud_lower(s, bx, by, myDrivingMode, gap1, carrot_cam_limit,
-                             (roadLimitSpeed > 0 && roadLimitSpeed < 200) ? roadLimitSpeed : 0, cur_speed);
+                             (roadLimitSpeed > 0 && roadLimitSpeed < 200) ? roadLimitSpeed : 0, cur_speed, activeNDA);
         }
 
         bx = x - 200;
