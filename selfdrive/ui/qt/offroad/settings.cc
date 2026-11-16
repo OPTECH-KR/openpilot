@@ -590,6 +590,13 @@ SettingsWindow::SettingsWindow(QWidget *parent) : QFrame(parent) {
 static const char *ROAD_ICON = "";
 static const char *SHELL_ICON = "";
 
+// group title inside a tab list
+static QLabel *carrot_section(const QString &title) {
+  QLabel *label = new QLabel(title);
+  label->setStyleSheet("font-size: 42px; font-weight: 600; color: #33ab4c; padding-top: 25px; padding-left: 10px;");
+  return label;
+}
+
 CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   main_layout = new QStackedLayout(this);
   homeScreen = new QWidget(this);
@@ -711,24 +718,29 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
 
   // ---- Speed: curve, speed camera / bump, auto turn ----
   speedToggles = new ListWidget(this);
-  speedToggles->addItem(new CValueControl("AutoCurveSpeedCtrlUse", "커브: 자동 감속(1)", "커브를 만나면 미리 속도를 줄입니다. 0:사용 안 함, 1·3:도로 설계 기준(주행 경로의 휘어짐으로 계산), 2:당근 방식(카메라로 앞 커브를 보고 거리에 맞춰 미리 감속)", ROAD_ICON, 0, 3, 1));
-  speedToggles->addItem(new CValueControl("CarrotTurnAccel", "커브: 당근 가속 제한(0)", "커브에서 가속을 얼마나 제한할지 정하는 방식입니다. 0:기존(지금 조향각 기준), 1:당근(주행 경로 3초 앞의 휘어짐 기준, 커브 들어가기 전에 미리 가속을 줄임)", ROAD_ICON, 0, 1, 1));
-  speedToggles->addItem(new CValueControl("AutoCurveSpeedFactor", "커브: 자동 감속 비율(100%)", "커브 감속 정도입니다(%). 높이면 커브에서 더 빨리 달리고, 낮추면 더 많이 감속합니다.", ROAD_ICON, 50, 300, 1));
-  speedToggles->addItem(new CValueControl("AutoCurveSpeedFactorIn", "커브: 진입 비율(10%)", "커브에 들어가는 순간 감속을 얼마나 더할지 정합니다(%). 높이면 커브 입구에서 더 많이 줄입니다.", ROAD_ICON, 0, 300, 1));
-  speedToggles->addItem(new CValueControl("AutoNaviSpeedCtrl", "과속카메라: 감속 사용(2)", "과속카메라 앞에서 자동으로 감속합니다. 0:사용 안 함, 1:APM(내비 연동), 2:APM + 순정 내비게이션, 3:NDA", ROAD_ICON, 0, 3, 1));
-  speedToggles->addItem(new CValueControl("SpeedCamDB", "과속카메라: 내장 DB 사용(0)", "내비 앱 없이 C2 안에 넣어 둔 전국 고정식 단속카메라 목록(공공데이터, 과속·신호과속·구간단속 약 3만 1천 대)과 GPS로 앞쪽 카메라를 찾아 감속합니다. 내비 앱(APM)이 카메라 정보를 보내면 앱 정보를 우선하고, 앱이 회전 안내만 보낼 때(티맵 등)는 내장 DB로 카메라 감속을 합니다. 이동식 카메라와 새로 생긴 카메라는 없고, 반대 차로 카메라에서도 제한속도까지 줄일 수 있습니다. '과속카메라: 감속 사용'이 1 이상이어야 감속합니다. 0:끄기, 1:켜기. 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 1, 1));
-  speedToggles->addItem(new CValueControl("AutoNaviSpeedCtrlMode", "과속카메라: 감속 방식(1)", "과속카메라 감속을 계산하는 방식입니다. 0:기존 방식, 1:APILOT 방식", ROAD_ICON, 0, 1, 1));
-  speedToggles->addItem(new CValueControl("AutoNaviSpeedCtrlStart", "과속카메라: 감속 시작(22초)", "과속카메라 몇 초 전부터 감속을 시작할지 정합니다. 크면 더 멀리서부터 줄입니다.", ROAD_ICON, 10, 50, 1));
-  speedToggles->addItem(new CValueControl("AutoNaviSpeedCtrlEnd", "과속카메라: 감속 완료(6초)", "과속카메라 몇 초 전까지 감속을 끝낼지 정합니다. 크면 카메라보다 더 일찍 제한속도에 맞춥니다.", ROAD_ICON, 3, 20, 1));
-  speedToggles->addItem(new CValueControl("AutoNaviSpeedDecelRate", "과속카메라: 감속률 x0.01m/s^2(80)", "과속카메라 앞 감속 세기입니다(0.01m/s² 단위). 낮으면 더 멀리서부터 부드럽게 줄입니다.", ROAD_ICON, 10, 200, 10));
-  speedToggles->addItem(new CValueControl("AutoNaviSpeedSafetyFactor", "과속카메라: 안전 계수(105%)", "과속카메라 제한속도에 곱하는 비율(%)입니다. 105면 제한속도의 105%까지 허용하고, 낮추면 더 여유 있게 줄입니다.", ROAD_ICON, 80, 120, 1));
-  speedToggles->addItem(new CValueControl("AutoNaviSpeedBumpDist", "방지턱: 거리(10m)", "과속방지턱 몇 m 앞에서 아래 방지턱 속도까지 줄일지 정합니다.", ROAD_ICON, 1, 50, 1));
-  speedToggles->addItem(new CValueControl("AutoNaviSpeedBumpSpeed", "방지턱: 속도(35km/h)", "과속방지턱을 넘을 때의 속도(km/h)입니다.", ROAD_ICON, 10, 100, 5));
-  speedToggles->addItem(new CValueControl("HapticFeedbackWhenSpeedCamera", "과속카메라: 알림 방식", "과속카메라가 가까워질 때 알려 주는 방법입니다. 0:사용 안 함, 1:핸들 진동, 2:계기판 표시, 3:HUD 표시", ROAD_ICON, 0, 3, 1));
-  speedToggles->addItem(new CValueControl("AutoTurnControl", "자동 턴: NOO 도우미(0)", "내비 안내에 맞춰 차로 변경과 회전을 도와줍니다(NOO). 0:사용 안 함, 1:외부 내비 연동만, 2:자동 차로 변경, 3:자동 속도 조절", ROAD_ICON, 0, 3, 1));
-  speedToggles->addItem(new CValueControl("AutoTurnControlSpeedLaneChange", "자동 턴: 차로변경 속도(60)", "내비 안내로 자동 차로 변경을 할 수 있는 최소 속도(km/h)입니다. 0:사용 안 함", ROAD_ICON, 0, 100, 10));
-  speedToggles->addItem(new CValueControl("AutoTurnControlSpeedTurn", "자동 턴: 턴 속도(20)", "내비 안내로 회전(좌·우회전)할 때 줄일 속도(km/h)입니다. 0:사용 안 함", ROAD_ICON, 0, 100, 5));
-  speedToggles->addItem(new CValueControl("AutoTurnControlTurnEnd", "자동 턴: 턴 제어 거리시간(3)", "회전 지점 몇 초 전부터 회전 속도 제어를 할지 정합니다(거리 = 속도 x 시간).", ROAD_ICON, 0, 30, 1));
+  speedToggles->addItem(carrot_section("커브"));
+  speedToggles->addItem(new CValueControl("AutoCurveSpeedCtrlUse", "자동 감속(1)", "커브를 만나면 미리 속도를 줄입니다. 0:사용 안 함, 1·3:도로 설계 기준(주행 경로의 휘어짐으로 계산), 2:당근 방식(카메라로 앞 커브를 보고 거리에 맞춰 미리 감속)", ROAD_ICON, 0, 3, 1));
+  speedToggles->addItem(new CValueControl("CarrotTurnAccel", "당근 가속 제한(0)", "커브에서 가속을 얼마나 제한할지 정하는 방식입니다. 0:기존(지금 조향각 기준), 1:당근(주행 경로 3초 앞의 휘어짐 기준, 커브 들어가기 전에 미리 가속을 줄임)", ROAD_ICON, 0, 1, 1));
+  speedToggles->addItem(new CValueControl("AutoCurveSpeedFactor", "감속 비율(100%)", "커브 감속 정도입니다(%). 높이면 커브에서 더 빨리 달리고, 낮추면 더 많이 감속합니다.", ROAD_ICON, 50, 300, 1));
+  speedToggles->addItem(new CValueControl("AutoCurveSpeedFactorIn", "진입 비율(10%)", "커브에 들어가는 순간 감속을 얼마나 더할지 정합니다(%). 높이면 커브 입구에서 더 많이 줄입니다.", ROAD_ICON, 0, 300, 1));
+  speedToggles->addItem(carrot_section("과속카메라"));
+  speedToggles->addItem(new CValueControl("AutoNaviSpeedCtrl", "카메라 감속 사용(1)", "과속카메라 앞에서 자동으로 감속합니다. 0:사용 안 함, 1:APM(내비 연동), 2:APM + 순정 내비게이션, 3:NDA", ROAD_ICON, 0, 3, 1));
+  speedToggles->addItem(new CValueControl("SpeedCamDB", "내장 카메라 DB 사용(0)", "내비 앱 없이 C2 안에 넣어 둔 전국 고정식 단속카메라 목록(공공데이터, 과속·신호과속·구간단속 약 3만 1천 대)과 GPS로 앞쪽 카메라를 찾아 감속합니다. 내비 앱(APM)이 카메라 정보를 보내면 앱 정보를 우선하고, 앱이 회전 안내만 보낼 때(티맵 등)는 내장 DB로 카메라 감속을 합니다. 이동식 카메라와 새로 생긴 카메라는 없고, 반대 차로 카메라에서도 제한속도까지 줄일 수 있습니다. '카메라 감속 사용'이 1 이상이어야 감속합니다. 0:끄기, 1:켜기. 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 1, 1));
+  speedToggles->addItem(new CValueControl("HapticFeedbackWhenSpeedCamera", "카메라 알림 방식(0)", "과속카메라가 가까워질 때 알려 주는 방법입니다. 0:사용 안 함, 1:핸들 진동, 2:계기판 표시, 3:HUD 표시", ROAD_ICON, 0, 3, 1));
+  speedToggles->addItem(carrot_section("과속카메라 세부 조정 (보통 그대로 두세요)"));
+  speedToggles->addItem(new CValueControl("AutoNaviSpeedCtrlStart", "감속 시작(22초 전)", "과속카메라 몇 초 전부터 감속을 시작할지 정합니다. 크면 더 멀리서부터 줄입니다.", ROAD_ICON, 10, 50, 1));
+  speedToggles->addItem(new CValueControl("AutoNaviSpeedCtrlEnd", "감속 완료(6초 전)", "과속카메라 몇 초 전까지 감속을 끝낼지 정합니다. 크면 카메라보다 더 일찍 제한속도에 맞춥니다.", ROAD_ICON, 3, 20, 1));
+  speedToggles->addItem(new CValueControl("AutoNaviSpeedDecelRate", "감속 세기 x0.01m/s^2(80)", "과속카메라 앞 감속 세기입니다(0.01m/s² 단위). 낮으면 더 멀리서부터 부드럽게 줄입니다.", ROAD_ICON, 10, 200, 10));
+  speedToggles->addItem(new CValueControl("AutoNaviSpeedSafetyFactor", "제한속도 여유(105%)", "과속카메라 제한속도에 곱하는 비율(%)입니다. 105면 제한속도의 105%까지 허용하고, 낮추면 더 여유 있게 줄입니다.", ROAD_ICON, 80, 120, 1));
+  speedToggles->addItem(new CValueControl("AutoNaviSpeedCtrlMode", "감속 방식(0)", "과속카메라 감속을 계산하는 방식입니다. 0:기존 방식, 1:APILOT 방식", ROAD_ICON, 0, 1, 1));
+  speedToggles->addItem(carrot_section("과속방지턱"));
+  speedToggles->addItem(new CValueControl("AutoNaviSpeedBumpDist", "방지턱 감속 거리(10m)", "과속방지턱 몇 m 앞에서 아래 방지턱 속도까지 줄일지 정합니다.", ROAD_ICON, 1, 50, 1));
+  speedToggles->addItem(new CValueControl("AutoNaviSpeedBumpSpeed", "방지턱 통과 속도(35km/h)", "과속방지턱을 넘을 때의 속도(km/h)입니다.", ROAD_ICON, 10, 100, 5));
+  speedToggles->addItem(carrot_section("자동 턴 (내비 앱 연동)"));
+  speedToggles->addItem(new CValueControl("AutoTurnControl", "NOO 도우미(0)", "내비 안내에 맞춰 차로 변경과 회전을 도와줍니다(NOO). 0:사용 안 함, 1:외부 내비 연동만, 2:자동 차로 변경, 3:자동 속도 조절", ROAD_ICON, 0, 3, 1));
+  speedToggles->addItem(new CValueControl("AutoTurnControlSpeedLaneChange", "차로변경 속도(60)", "내비 안내로 자동 차로 변경을 할 수 있는 최소 속도(km/h)입니다. 0:사용 안 함", ROAD_ICON, 0, 100, 10));
+  speedToggles->addItem(new CValueControl("AutoTurnControlSpeedTurn", "회전 속도(20)", "내비 안내로 회전(좌·우회전)할 때 줄일 속도(km/h)입니다. 0:사용 안 함", ROAD_ICON, 0, 100, 5));
+  speedToggles->addItem(new CValueControl("AutoTurnControlTurnEnd", "회전 제어 거리시간(3)", "회전 지점 몇 초 전부터 회전 속도 제어를 할지 정합니다(거리 = 속도 x 시간).", ROAD_ICON, 0, 30, 1));
 
   // ---- Tuning: lateral, longitudinal, accel table ----
   latLongToggles = new ListWidget(this);
