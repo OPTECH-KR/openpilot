@@ -601,8 +601,9 @@ def main():
         dat.roadLimitSpeed.xSpdDist = int(xSpdDist) if xBumpDistance <= 0 else int(xBumpDistance)
         dat.roadLimitSpeed.xSpdLimit = int(xSpdLimit) if xBumpDistance <= 0 else 35 # 속도는 추후조절해야함. 일단 35
         dat.roadLimitSpeed.xSignType = int(xSignType) if xBumpDistance <= 0 else 22
-        # built-in camera DB fills the camera fields only when no navigation app is sending data
-        if speedcam is not None and sdi_valid_count <= 0 and apm_valid_count <= 0:
+        # built-in camera DB fills the camera fields whenever the navigation app (if any) gives no camera,
+        # e.g. APM connected with Tmap/Waze that only send turn-by-turn
+        if speedcam is not None and not (xSpdLimit > 0 and xSpdDist > 0):
           cam = None
           try:
             speedcam_sm.update(0)
