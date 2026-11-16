@@ -119,42 +119,30 @@ signals:
 
 };
 
-class CommunityPanel : public QWidget {
-    Q_OBJECT
+// carrot (C3X) style "CarrotPilot" panel: Start / Cruise / Speed / Tuning / Disp / Path tabs
+class CarrotPanel : public QWidget {
+  Q_OBJECT
 
 private:
-    QStackedLayout* main_layout = nullptr;
-    QWidget* homeScreen = nullptr;
-    SelectCar* selectCar = nullptr;
+  QStackedLayout* main_layout = nullptr;
+  QWidget* homeScreen = nullptr;
+  SelectCar* selectCar = nullptr;
+  int currentCarrotIndex = 0;
 
-    QWidget* homeWidget;
+  QVBoxLayout* carrotLayout;
 
-public:
-    explicit CommunityPanel(QWidget* parent = nullptr);
-};
-class TuningPanel : public QWidget {
-    Q_OBJECT
+  ListWidget* cruiseToggles;
+  ListWidget* latLongToggles;
+  ListWidget* pathToggles;
+  ListWidget* dispToggles;
+  ListWidget* startToggles;
+  ListWidget* speedToggles;
 
-private:
-    QStackedLayout* main_layout = nullptr;
-    QWidget* homeScreen = nullptr;
-
-    QWidget* homeWidget;
-
-public:
-    explicit TuningPanel(QWidget* parent = nullptr);
-};
-class CruisePanel : public QWidget {
-    Q_OBJECT
-
-private:
-    QStackedLayout* main_layout = nullptr;
-    QWidget* homeScreen = nullptr;
-
-    QWidget* homeWidget;
+  void togglesCarrot(int widgetIndex);
+  void updateButtonStyles();
 
 public:
-    explicit CruisePanel(QWidget* parent = nullptr);
+  explicit CarrotPanel(QWidget* parent = nullptr);
 };
 
 // ajouatom:
