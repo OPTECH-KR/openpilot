@@ -65,7 +65,7 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
     {
       "SccConnectedBus2",
       "SCC 모듈 BUS2 연결",
-      "",
+      "범퍼 레이더(SCC) 모듈을 하네스로 BUS2에 연결했을 때 켭니다. 켜면 openpilot이 가속과 브레이크를 직접 제어하는 롱컨 모드로 바뀝니다. 바꾼 뒤 재부팅해야 적용됩니다.",
       "../assets/offroad/icon_warning.png",
     },
     {
@@ -151,9 +151,9 @@ void TogglesPanel::updateToggles() {
                                           "<h4>%4</h4><br>"
                                           "%5")
                                   .arg(tr("openpilot은 기본적으로 <b>안정 모드</b>로 주행합니다. 실험 모드는 아직 안정 모드에 넣기 어려운 <b>알파 단계 기능</b>을 켭니다. 실험 기능은 다음과 같습니다:"))
-                                  .arg(tr("🌮 엔드투엔드 가감속 제어 🌮"))
-                                  .arg(tr("Let the driving model control the gas and brakes. openpilot will drive as it thinks a human would, including stopping for red lights and stop signs. "
-                                       "Since the driving model decides the speed to drive, the set speed will only act as an upper bound. This is an alpha quality feature; mistakes should be expected."))
+                                  .arg(tr("엔드투엔드 가감속 제어"))
+                                  .arg(tr("주행 모델이 가속과 브레이크를 직접 제어합니다. 빨간 신호와 정지 표지판에서 멈추는 것까지 사람이 운전하듯 판단합니다. "
+                                       "속도는 주행 모델이 정하기 때문에 크루즈 설정 속도는 최고 속도 제한으로만 쓰입니다. 알파 단계 기능이라 실수가 있을 수 있습니다."))
                                   .arg(tr("새 주행 화면"))
                                   .arg(tr("저속에서는 회전 구간을 더 잘 보여주기 위해 주행 화면이 광각 카메라로 바뀝니다. 오른쪽 위에 실험 모드 로고도 표시됩니다."));
 
