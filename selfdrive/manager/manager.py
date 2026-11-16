@@ -83,6 +83,7 @@ def manager_init() -> None:
     ("CarrotCutInPredecel", "0"),
     ("CarrotCutOutRelief", "0"),
     ("CarrotStoppingLead", "0"),
+    ("SpeedCamDB", "0"),
     ("AutoCurveSpeedFactor", "100"),
     ("AutoCurveSpeedFactorIn", "10"),
     ("AutoTurnControl", "0"),

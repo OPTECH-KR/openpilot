@@ -716,6 +716,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   speedToggles->addItem(new CValueControl("AutoCurveSpeedFactor", "커브: 자동 감속 비율(100%)", "커브 감속 정도입니다(%). 높이면 커브에서 더 빨리 달리고, 낮추면 더 많이 감속합니다.", ROAD_ICON, 50, 300, 1));
   speedToggles->addItem(new CValueControl("AutoCurveSpeedFactorIn", "커브: 진입 비율(10%)", "커브에 들어가는 순간 감속을 얼마나 더할지 정합니다(%). 높이면 커브 입구에서 더 많이 줄입니다.", ROAD_ICON, 0, 300, 1));
   speedToggles->addItem(new CValueControl("AutoNaviSpeedCtrl", "과속카메라: 감속 사용(2)", "과속카메라 앞에서 자동으로 감속합니다. 0:사용 안 함, 1:APM(내비 연동), 2:APM + 순정 내비게이션, 3:NDA", ROAD_ICON, 0, 3, 1));
+  speedToggles->addItem(new CValueControl("SpeedCamDB", "과속카메라: 내장 DB 사용(0)", "내비 앱 없이 C2 안에 넣어 둔 전국 고정식 단속카메라 목록(공공데이터, 과속·신호과속·구간단속 약 3만 1천 대)과 GPS로 앞쪽 카메라를 찾아 감속합니다. 내비 앱(APM)이 카메라 정보를 보내는 동안에는 앱 정보를 우선합니다. 이동식 카메라와 새로 생긴 카메라는 없고, 반대 차로 카메라에서도 제한속도까지 줄일 수 있습니다. '과속카메라: 감속 사용'이 1 이상이어야 감속합니다. 0:끄기, 1:켜기. 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 1, 1));
   speedToggles->addItem(new CValueControl("AutoNaviSpeedCtrlMode", "과속카메라: 감속 방식(1)", "과속카메라 감속을 계산하는 방식입니다. 0:기존 방식, 1:APILOT 방식", ROAD_ICON, 0, 1, 1));
   speedToggles->addItem(new CValueControl("AutoNaviSpeedCtrlStart", "과속카메라: 감속 시작(22초)", "과속카메라 몇 초 전부터 감속을 시작할지 정합니다. 크면 더 멀리서부터 줄입니다.", ROAD_ICON, 10, 50, 1));
   speedToggles->addItem(new CValueControl("AutoNaviSpeedCtrlEnd", "과속카메라: 감속 완료(6초)", "과속카메라 몇 초 전까지 감속을 끝낼지 정합니다. 크면 카메라보다 더 일찍 제한속도에 맞춥니다.", ROAD_ICON, 3, 20, 1));

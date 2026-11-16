@@ -315,6 +315,19 @@ def main():
   nTBTDist = -1
   nRoadLimitSpeed = -1
   
+  # built-in speed camera DB (used while no navigation app sends camera data)
+  speedcam = None
+  speedcam_sm = None
+  if Params().get_bool("SpeedCamDB"):
+    try:
+      from selfdrive.carrot.speedcam_db import SpeedCamFinder
+      speedcam = SpeedCamFinder()
+      speedcam_sm = messaging.SubMaster(['gpsLocationExternal'])
+      print("speedcam DB loaded:", len(speedcam.cams), "cameras")
+    except Exception as e:
+      print("speedcam DB load failed:", e)
+      speedcam = None
+
   prev_recvTime = sec_since_boot()
   autoNaviSpeedCtrl = int(Params().get("AutoNaviSpeedCtrl"))
   sockWaitTime = 1.0 if autoNaviSpeedCtrl == 3 else 0.2
@@ -588,6 +601,26 @@ def main():
         dat.roadLimitSpeed.xSpdDist = int(xSpdDist) if xBumpDistance <= 0 else int(xBumpDistance)
         dat.roadLimitSpeed.xSpdLimit = int(xSpdLimit) if xBumpDistance <= 0 else 35 # 속도는 추후조절해야함. 일단 35
         dat.roadLimitSpeed.xSignType = int(xSignType) if xBumpDistance <= 0 else 22
+        # built-in camera DB fills the camera fields only when no navigation app is sending data
+        if speedcam is not None and sdi_valid_count <= 0 and apm_valid_count <= 0:
+          cam = None
+          try:
+            speedcam_sm.update(0)
+            gps = speedcam_sm['gpsLocationExternal']
+            if speedcam_sm.alive['gpsLocationExternal'] and (gps.flags & 1) and 0 < gps.accuracy < 50:
+              cam = speedcam.update(gps.latitude, gps.longitude, gps.bearingDeg, gps.speed, now)
+            else:
+              speedcam.reset()
+          except Exception as e:
+            print("speedcam error:", e)
+            speedcam.reset()
+          if cam is not None and xBumpDistance <= 0:
+            dat.roadLimitSpeed.xSpdLimit = int(cam.limit)
+            dat.roadLimitSpeed.xSpdDist = int(cam.dist)
+            # section: camType 4 / xSignType 165 make the planners hold the limit instead of a point decel
+            dat.roadLimitSpeed.camType = 4 if cam.section else 1
+            dat.roadLimitSpeed.xSignType = 165 if cam.section else 1
+
         dat.roadLimitSpeed.xRoadSignType = int(xRoadSignType)
         dat.roadLimitSpeed.xRoadLimitSpeed = int(xRoadLimitSpeed)
         if xRoadLimitSpeed > 0:
