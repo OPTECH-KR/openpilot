@@ -697,10 +697,6 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   cruiseToggles->addItem(new CValueControl("TFollowGap4", "차간 4단계: 시간 간격 (160)x0.01초", "차간 4단계(가장 멂)의 앞차와 시간 간격입니다(0.01초 단위, 160=1.6초). 크면 더 멀리 따라갑니다.", ROAD_ICON, 90, 300, 5));
   cruiseToggles->addItem(new ParamControl("ApplyLongDynamicCost", "차간: 다이나믹 제어(0)", "켜 두면 앞차 속도 변화에 더 빨리 반응해서 차간 거리를 일정하게 유지하려고 합니다. 대신 가감속이 조금 더 잦을 수 있습니다.", ROAD_ICON, this));
   cruiseToggles->addItem(new CValueControl("TFollowSpeedRatio", "차간: 속도별 보정(110%)", "속도가 빠를수록 차간을 더 벌립니다. 100km/h에서 차간 시간 간격에 이 비율(%)을 곱합니다(110이면 10% 더 멀리). 100:속도와 관계없이 같음", ROAD_ICON, 100, 300, 5));
-  cruiseToggles->addItem(new CValueControl("TrafficStopMode", "정지: 신호 정지 모드(1)", "빨간 신호를 보고 정지선 앞에서 멈추는 기능입니다. 0:사용 안 함, 1:사용, 2:APilot 방식", ROAD_ICON, 0, 2, 1));
-  cruiseToggles->addItem(new CValueControl("TrafficStopAccel", "정지: 감속률(80%)", "신호를 보고 멈출 때 감속 세기(%)입니다. 낮을수록 더 일찍부터 천천히 줄입니다.", ROAD_ICON, 10, 120, 10));
-  cruiseToggles->addItem(new CValueControl("ApplyModelDistOrder", "정지: 감속 모델(30)", "신호에서 멈출 때 주행 모델이 예측한 정지 거리를 어느 시점 값으로 쓸지 정합니다. 숫자가 작을수록 미리 감속하고 부드럽게 멈춥니다.", ROAD_ICON, 1, 32, 1));
-  cruiseToggles->addItem(new CValueControl("TrafficStopDistanceAdjust", "정지: 정지선 거리 보정(200cm)", "신호에서 멈추는 위치를 앞뒤로 옮깁니다(cm). +값이면 정지선에 더 가까이, -값이면 더 멀리 멈춥니다.", ROAD_ICON, -1000, 1000, 10));
 
   // ---- Speed: curve, speed camera / bump, auto turn ----
   speedToggles = new ListWidget(this);
@@ -798,8 +794,6 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   advancedToggles->addItem(new CValueControl("LongitudinalTuningKpV", "가감속: P 게인(100)", "가감속 제어가 목표 속도와의 차이에 얼마나 세게 반응할지 정합니다. 시험용이니 잘 모르면 그대로 두세요.", ROAD_ICON, 50, 150, 1));
   advancedToggles->addItem(new CValueControl("LongitudinalTuningKiV", "가감속: I 게인(200)", "가감속 제어가 쌓인 오차를 얼마나 보정할지 정합니다. 시험용이니 잘 모르면 그대로 두세요.", ROAD_ICON, 0, 2000, 5));
   advancedToggles->addItem(new CValueControl("LongitudinalTuningKf", "가감속: 피드포워드 게인(200)", "목표 가속을 미리 반영하는 정도입니다. 시험용이니 잘 모르면 그대로 두세요.", ROAD_ICON, 0, 200, 1));
-  advancedToggles->addItem(carrot_section("정지"));
-  advancedToggles->addItem(new CValueControl("TrafficStopAdjustRatio", "정지: 정지선 보정 비율(90)", "주행 모델이 예측한 정지선 거리에 곱하는 보정 비율(%)입니다. 시험용이니 보통은 그대로 두세요.", ROAD_ICON, 0, 200, 1));
   advancedToggles->addItem(carrot_section("조향 비용 (전문가용)"));
   advancedToggles->addItem(new CValueControl("SteeringRateCost", "조향: 조향 속도 비용(700)", "핸들을 얼마나 천천히 돌리게 할지 정합니다. 높이면 부드럽지만 반응이 느리고, 낮추면 빠르지만 흔들릴 수 있습니다.", ROAD_ICON, 0, 2000, 10));
   advancedToggles->addItem(new CValueControl("PathCostApply", "조향: 경로 비용 적용(100)", "계획한 경로를 얼마나 정확히 따라갈지 정합니다(%). 높이면 경로에 더 딱 붙고, 낮추면 더 여유 있게 따라갑니다.", ROAD_ICON, 0, 200, 5));

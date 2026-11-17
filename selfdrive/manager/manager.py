@@ -114,7 +114,7 @@ def manager_init() -> None:
     ("AutoSpeedAdjustWithLeadCar", "0"),   
     ("TrafficStopAccel", "80"),     
     ("TrafficStopModelSpeed", "0"),         
-    ("TrafficStopMode", "2"),         
+    ("TrafficStopMode", "0"),         
     ("CruiseButtonMode", "0"),      
     ("CruiseSpeedUnit", "10"),      
     ("InitMyDrivingMode", "3"),      
@@ -188,7 +188,7 @@ def manager_init() -> None:
   # engage / disengage only by the driver's own button: automatic cruise ON/OFF from the gas pedal, brake
   # release, lead distance and auto engage are removed from the menu and forced off on every boot
   # KeepEngage too: leaving D (N / R) disengages, as in stock openpilot
-  for k in ("EnableAutoEngage", "CruiseOnDist", "AutoResumeFromGas", "AutoCancelFromGasMode", "KeepEngage"):
+  for k in ("EnableAutoEngage", "CruiseOnDist", "AutoResumeFromGas", "AutoCancelFromGasMode", "KeepEngage", "TrafficStopMode"):
     params.put(k, "0")
   # brake release resume (option AutoResumeFromBrakeRelease, kept in the menu) runs with fixed conditions:
   # stopped -> only behind a lead within 10 m; moving -> lead farther than 20 m, or no lead at 40 km/h or more,
