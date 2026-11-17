@@ -157,6 +157,11 @@ void TogglesPanel::updateToggles() {
                                   .arg(tr("새 주행 화면"))
                                   .arg(tr("저속에서는 회전 구간을 더 잘 보여주기 위해 주행 화면이 광각 카메라로 바뀝니다. 오른쪽 위에 실험 모드 로고도 표시됩니다."));
 
+  // experimental mode and openpilot longitudinal (alpha) are listed only with 고급 설정 보기 = 1
+  // (apilot switches acc / blended on its own; experimental mode would force blended all the time)
+  const bool show_advanced = params.get("ShowAdvancedSettings") == "1";
+  e2e_toggle->setVisible(show_advanced);
+
   auto cp_bytes = params.get("CarParamsPersistent");
   if (!cp_bytes.empty()) {
     AlignedBuffer aligned_buf;
@@ -166,7 +171,7 @@ void TogglesPanel::updateToggles() {
     if (!CP.getExperimentalLongitudinalAvailable()) {
       params.remove("ExperimentalLongitudinalEnabled");
     }
-    op_long_toggle->setVisible(CP.getExperimentalLongitudinalAvailable());
+    op_long_toggle->setVisible(show_advanced && CP.getExperimentalLongitudinalAvailable());
 
     const bool op_long = CP.getOpenpilotLongitudinalControl() && !CP.getExperimentalLongitudinalAvailable();
     const bool exp_long_enabled = CP.getExperimentalLongitudinalAvailable() && params.getBool("ExperimentalLongitudinalEnabled");
@@ -187,7 +192,7 @@ void TogglesPanel::updateToggles() {
     e2e_toggle->refresh();
   } else {
     e2e_toggle->setDescription(e2e_description);
-    op_long_toggle->setVisible(true);
+    op_long_toggle->setVisible(show_advanced);
   }
 }
 
@@ -646,7 +651,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     main_layout->setCurrentWidget(homeScreen);
   });
   startToggles->addItem(selectCarBtn);
-  startToggles->addItem(new CValueControl("ShowAdvancedSettings", "고급 설정 보기(0)", "시험용·개발용 항목(가감속 게인, 조향 비용, 최대 조향각 프레임, 정지선 보정 비율, 디버그 정보·그래프, 오류 로그)을 보여줍니다. 잘못 바꾸면 위험할 수 있으니 필요할 때만 켜세요. 숨겨도 이미 바꾼 값은 그대로 유지됩니다. 0:숨기기, 1:보이기", SHELL_ICON, 0, 1, 1));
+  startToggles->addItem(new CValueControl("ShowAdvancedSettings", "고급 설정 보기(0)", "시험용·개발용 항목(가감속 게인, 조향 비용, 최대 조향각 프레임, 정지선 보정 비율, 디버그 정보·그래프, 오류 로그, 그리고 토글 메뉴의 실험 모드·openpilot 가감속 제어(알파))을 보여줍니다. 잘못 바꾸면 위험할 수 있으니 필요할 때만 켜세요. 숨겨도 이미 바꾼 값은 그대로 유지됩니다. 0:숨기기, 1:보이기", SHELL_ICON, 0, 1, 1));
   startToggles->addItem(new CValueControl("EnableAutoEngage", "자동 인게이지", "시동 후 조건이 되면 openpilot을 자동으로 켭니다. 0:사용 안 함, 1:자동으로 켜지만 크루즈는 꺼진 상태, 2:자동으로 켜고 크루즈도 켬", SHELL_ICON, 0, 2, 1));
   startToggles->addItem(new ParamControl("KeepEngage", "인게이지 유지 모드", "켜 두면 기어를 D가 아닌 곳(P, N 등)으로 바꿔도 openpilot이 꺼지지 않고 유지됩니다.", SHELL_ICON, this));
   startToggles->addItem(new CValueControl("SoftHoldMode", "소프트홀드(1)", "정차 후 브레이크를 떼도 차를 멈춘 상태로 잡아 주는 기능입니다. 0:사용 안 함, 1:사용, 2:SCC와 함께 사용(일부 차량은 전자식 주차 브레이크가 걸릴 수 있음)", ROAD_ICON, 0, 2, 1));
