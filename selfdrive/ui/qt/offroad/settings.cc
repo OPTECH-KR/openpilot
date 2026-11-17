@@ -697,9 +697,6 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   cruiseToggles->addItem(new CValueControl("TFollowGap4", "차간 4단계: 시간 간격 (160)x0.01초", "차간 4단계(가장 멂)의 앞차와 시간 간격입니다(0.01초 단위, 160=1.6초). 크면 더 멀리 따라갑니다.", ROAD_ICON, 90, 300, 5));
   cruiseToggles->addItem(new ParamControl("ApplyLongDynamicCost", "차간: 다이나믹 제어(0)", "켜 두면 앞차 속도 변화에 더 빨리 반응해서 차간 거리를 일정하게 유지하려고 합니다. 대신 가감속이 조금 더 잦을 수 있습니다.", ROAD_ICON, this));
   cruiseToggles->addItem(new CValueControl("TFollowSpeedRatio", "차간: 속도별 보정(110%)", "속도가 빠를수록 차간을 더 벌립니다. 100km/h에서 차간 시간 간격에 이 비율(%)을 곱합니다(110이면 10% 더 멀리). 100:속도와 관계없이 같음", ROAD_ICON, 100, 300, 5));
-  cruiseToggles->addItem(new CValueControl("InitMyDrivingMode", "주행 모드: 부팅 시(3)", "기기를 켰을 때 시작하는 주행 모드입니다. 1:연비(부드러운 가속), 2:안전(넉넉한 차간), 3:일반, 4:고속(빠른 반응), 5:자동", ROAD_ICON, 1, 5, 1));
-  cruiseToggles->addItem(new CValueControl("MyEcoModeFactor", "주행 모드: 연비 가속 비율(80%)", "연비 모드에서 가속 세기를 일반 모드의 몇 %로 줄일지 정합니다. 낮을수록 더 부드럽게 가속합니다.", ROAD_ICON, 10, 95, 5));
-  cruiseToggles->addItem(new CValueControl("MySafeModeFactor", "주행 모드: 안전 비율(80%)", "안전 모드에서 가속, 정지 거리, 감속, 차간을 일반 모드 대비 얼마나 여유 있게 할지 정합니다(%). 낮을수록 더 조심스럽게 달립니다.", ROAD_ICON, 10, 90, 10));
   cruiseToggles->addItem(new CValueControl("TrafficStopMode", "정지: 신호 정지 모드(1)", "빨간 신호를 보고 정지선 앞에서 멈추는 기능입니다. 0:사용 안 함, 1:사용, 2:APilot 방식", ROAD_ICON, 0, 2, 1));
   cruiseToggles->addItem(new CValueControl("TrafficStopAccel", "정지: 감속률(80%)", "신호를 보고 멈출 때 감속 세기(%)입니다. 낮을수록 더 일찍부터 천천히 줄입니다.", ROAD_ICON, 10, 120, 10));
   cruiseToggles->addItem(new CValueControl("ApplyModelDistOrder", "정지: 감속 모델(30)", "신호에서 멈출 때 주행 모델이 예측한 정지 거리를 어느 시점 값으로 쓸지 정합니다. 숫자가 작을수록 미리 감속하고 부드럽게 멈춥니다.", ROAD_ICON, 1, 32, 1));

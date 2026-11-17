@@ -147,8 +147,9 @@ class CruiseHelper:
     self.cruiseButtonMode = int(Params().get("CruiseButtonMode"))
     self.cruiseSpeedUnit = int(Params().get("CruiseSpeedUnit"))
     self.autoResumeFromGasSpeedMode = int(Params().get("AutoResumeFromGasSpeedMode"))
-    self.initMyDrivingMode = int(Params().get("InitMyDrivingMode"))
-    self.myDrivingMode = self.initMyDrivingMode if self.initMyDrivingMode < 5 else 3
+    # C2 port: driving mode is fixed to 일반(3); no eco/safe/fast/auto switching
+    self.initMyDrivingMode = 3
+    self.myDrivingMode = 3
     mySafeModeFactor = float(int(Params().get("MySafeModeFactor", encoding="utf8"))) / 100.
     self.mySafeModeFactor = mySafeModeFactor if self.myDrivingMode == 2 else (1. + mySafeModeFactor) / 2. if self.myDrivingMode == 1 else 1.0
     self.liveSteerRatioApply  = float(int(Params().get("LiveSteerRatioApply", encoding="utf8"))) / 100.
@@ -718,10 +719,7 @@ class CruiseHelper:
       if button in [ButtonType.accelCruise, ButtonType.decelCruise]:
         v_cruise_kph = buttonSpeed
       elif button == ButtonType.gapAdjustCruise:  ##안먹네.... 나중에 보자~
-        #myDrivingMode = int(Params().get("MyDrivingMode"))
-        self.myDrivingMode = self.myDrivingMode + 1 if self.myDrivingMode < 4 else 1
-        self.drivingModeIndex = -100.0
-        #Params().put("MyDrivingMode", str(myDrivingMode))
+        pass  # driving mode is fixed to 일반; long-pressing the gap button no longer cycles modes
     else:
       self.cruiseButtons = button
       if button == ButtonType.accelCruise:   
