@@ -677,7 +677,6 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     }
   });
   startToggles->addItem(updateBtn);
-  startToggles->addItem(new CPrebuiltToggle());
   auto tmuxlog_btn = new ButtonControl("오류 로그 (Tmux)", "보기");
   QObject::connect(tmuxlog_btn, &ButtonControl::clicked, [=]() {
     const std::string txt = util::read_file("/data/tmux_error.log");

@@ -324,15 +324,11 @@ def manager_thread() -> None:
 
 
 def main() -> None:
-  preBuiltOn = Params().get_bool("OpkrPrebuiltOn")
+  # always fast boot: build.py just finished, so mark this commit as built.
+  # launch_chffrplus.sh drops the mark when the code changes (git pull / reinstall).
   preBuiltFile = '/data/openpilot/prebuilt'
-  if not os.path.isdir("/data/openpilot"):
-      pass
-  elif not os.path.isfile(preBuiltFile) and preBuiltOn:
-    # build.py just finished successfully; remember which commit was built
+  if os.path.isdir("/data/openpilot") and not os.path.isfile(preBuiltFile):
     os.system("cd /data/openpilot; git rev-parse HEAD > .prebuilt_commit && touch prebuilt")
-  elif os.path.isfile(preBuiltFile) and not preBuiltOn:
-    os.system("cd /data/openpilot; rm -f prebuilt")
 
   prepare_only = os.getenv("PREPAREONLY") is not None
 
