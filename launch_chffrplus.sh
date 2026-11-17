@@ -218,8 +218,13 @@ function launch {
   fi
 
   # start manager
+  # build.py does nothing when prebuilt exists, so skip its python start too
   cd selfdrive/manager
-  ./build.py && ./manager.py
+  if [ -f "$BASEDIR/prebuilt" ]; then
+    ./manager.py
+  else
+    ./build.py && ./manager.py
+  fi
 }
 
 launch

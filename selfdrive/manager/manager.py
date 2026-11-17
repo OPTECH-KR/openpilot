@@ -349,14 +349,19 @@ def main() -> None:
   # always fast boot: build.py just finished, so mark this commit as built.
   # launch_chffrplus.sh drops the mark when the code changes (git pull / reinstall).
   preBuiltFile = '/data/openpilot/prebuilt'
-  if os.path.isdir("/data/openpilot") and not os.path.isfile(preBuiltFile):
+  just_built = not os.path.isfile(preBuiltFile)
+  if os.path.isdir("/data/openpilot") and just_built:
     os.system("cd /data/openpilot; git rev-parse HEAD > .prebuilt_commit && touch prebuilt")
 
   prepare_only = os.getenv("PREPAREONLY") is not None
 
   manager_init()
-  os.system("python /data/openpilot/selfdrive/car/hyundai/values.py > /data/params/d/SupportedCars")
-  os.system("python /data/openpilot/selfdrive/car/gm/values.py > /data/params/d/SupportedCars_gm")
+  # car lists for the car select menu: each run is a full python start (a few seconds on C2),
+  # so only rebuild them when the code changed (just built) or a list is missing
+  carLists = ('/data/params/d/SupportedCars', '/data/params/d/SupportedCars_gm')
+  if just_built or not all(os.path.isfile(f) and os.path.getsize(f) > 0 for f in carLists):
+    os.system("python /data/openpilot/selfdrive/car/hyundai/values.py > /data/params/d/SupportedCars")
+    os.system("python /data/openpilot/selfdrive/car/gm/values.py > /data/params/d/SupportedCars_gm")
 
   # Start UI early so prepare can happen in the background
   if not prepare_only:
