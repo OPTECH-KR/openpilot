@@ -4,7 +4,9 @@
 Runs while onroad (started by manager) and writes /data/drivelog/<date>-<time>.txt:
   * one status line per second (speed, set speed, engage state, pedals, steering, lead,
     average CPU %, max CPU temp, memory %, free storage GB)
-  * an event line right away when engage state or the alert text changes, or a process stops
+  * an event line right away when engage state or the alert text changes, a fault event appears or clears
+    (canError, steerUnavailable, commIssue, radarFault, ...), controlsd lags, or a process stops
+  * python process crashes write their traceback to crash-<time>-<name>.txt (selfdrive/manager/process.py)
 
 Only the newest message of each service is read (conflated sockets, 10 checks per second),
 so the CPU cost stays small. The newest KEEP_FILES files are kept.
@@ -19,7 +21,16 @@ import cereal.messaging as messaging
 
 LOG_DIR = "/data/drivelog"
 KEEP_FILES = 30
-SERVICES = ("carState", "controlsState", "carControl", "radarState", "deviceState", "managerState")
+SERVICES = ("carState", "controlsState", "carControl", "radarState", "deviceState", "managerState", "carEvents")
+
+# events that happen in normal driving (buttons, pedals, lane change prompts): not written as faults
+NORMAL_EVENTS = {
+  "buttonCancel", "buttonEnable", "pcmEnable", "pcmDisable", "pedalPressed", "gasPressedOverride", "steerOverride",
+  "preEnableStandstill", "preLaneChangeLeft", "preLaneChangeRight", "laneChange", "resumeRequired",
+  "cruisePaused", "cruiseResume", "trafficSignGreen", "trafficSignChanged", "autoHold", "trafficStopping",
+  "speedDown", "audioPrompt", "audioRefuse", "stopStop", "audioLaneChange", "audioTurn", "brakeHold",
+}
+LAG_EVENT_MS = 100  # controlsd frame late by more than this -> event (at most every 10 s)
 
 HEADER = ("# time | v km/h | set | en act lat lon | gas brk str | angle torque | steerCmd accel | "
           "lead d/vrel | cpu% temp mem% freeGB | lag ms")
@@ -37,7 +48,9 @@ class DriveLog:
     self.prev_engage = None
     self.prev_alert = ""
     self.dead = set()
+    self.events = set()
     self.next_line = time.monotonic()
+    self.next_lag_event = 0.
 
   def event(self, text):
     self.out.write(f"{datetime.datetime.now():%H:%M:%S} ** {text}\n")
@@ -71,6 +84,19 @@ class DriveLog:
         elif not down and p.name in self.dead:
           self.event(f"process back: {p.name}")
           self.dead.discard(p.name)
+
+    ev = self.last.get("carEvents")
+    if ev is not None:
+      names = {str(e.name) for e in ev} - NORMAL_EVENTS
+      added, cleared = names - self.events, self.events - names
+      if added or cleared:
+        self.event("events " + " ".join([f"+{n}" for n in sorted(added)] + [f"-{n}" for n in sorted(cleared)]))
+      self.events = names
+
+    now = time.monotonic()
+    if ctl is not None and ctl.cumLagMs > LAG_EVENT_MS and now >= self.next_lag_event:
+      self.event(f"controlsd lag {ctl.cumLagMs:.0f} ms")
+      self.next_lag_event = now + 10.
 
     now = time.monotonic()
     if now < self.next_line or cs is None:
@@ -106,11 +132,12 @@ class DriveLog:
 
 def main():
   os.makedirs(LOG_DIR, exist_ok=True)
-  for f in sorted(f for f in os.listdir(LOG_DIR) if f.endswith(".txt"))[:-KEEP_FILES]:
-    try:
-      os.remove(os.path.join(LOG_DIR, f))
-    except OSError:
-      pass
+  for prefix in ("2", "crash-"):  # drive logs (<date>-<time>.txt) and crash tracebacks, kept separately
+    for f in sorted(f for f in os.listdir(LOG_DIR) if f.startswith(prefix) and f.endswith(".txt"))[:-KEEP_FILES]:
+      try:
+        os.remove(os.path.join(LOG_DIR, f))
+      except OSError:
+        pass
 
   path = os.path.join(LOG_DIR, datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + ".txt")
   with open(path, "a", buffering=1, encoding="utf8") as out:

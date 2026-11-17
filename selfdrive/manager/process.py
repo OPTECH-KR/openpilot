@@ -46,6 +46,15 @@ def launcher(proc: str, name: str) -> None:
     # can't install the crash handler because sys.excepthook doesn't play nice
     # with threads, so catch it here.
     sentry.capture_exception()
+    # no logmessaged / uploader on C2: keep the traceback next to the drive log
+    try:
+      import datetime
+      import traceback
+      os.makedirs("/data/drivelog", exist_ok=True)
+      with open(f"/data/drivelog/crash-{datetime.datetime.now():%Y%m%d-%H%M%S}-{name}.txt", "w") as f:
+        f.write(traceback.format_exc())
+    except Exception:
+      pass
     raise
 
 
