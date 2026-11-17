@@ -259,7 +259,8 @@ class CarController:
 
       #CC.debugTextCC = "230206"
 
-      if self.CP.carFingerprint in (CAR.GENESIS_G90_2019, CAR.GENESIS_G90, CAR.K7):
+      # K7 2020 also needs MDPS12 feedback toward the camera, or LKAS/FCA faults appear while openpilot steers (carrot-wip fix)
+      if self.CP.carFingerprint in (CAR.GENESIS_G90_2019, CAR.GENESIS_G90, CAR.K7, CAR.K7_PE):
         can_sends.append(hyundaican.create_mdps12(self.packer, self.frame, CS.mdps12))
 
       if self.frame % 2 == 0 and self.CP.openpilotLongitudinalControl:
