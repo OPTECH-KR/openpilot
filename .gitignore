@@ -82,3 +82,4 @@ build/
 
 !**/.gitkeep
 .prebuilt_commit
+.lang_ko_default

@@ -42,7 +42,7 @@ def manager_init() -> None:
     ("DisengageOnAccelerator", "0"),
     ("GsmMetered", "1"),
     ("HasAcceptedTerms", "0"),
-    ("LanguageSetting", "main_en"),
+    ("LanguageSetting", "main_ko"),
     ("OpenpilotEnabledToggle", "1"),
     ("ShowDebugUI", "0"),
     ("OPKRServer", "0"),
@@ -184,6 +184,13 @@ def manager_init() -> None:
   for k, v in default_params:
     if params.get(k) is None:
       params.put(k, v)
+
+  # Korean by default: once per install, switch to Korean even if an older install left English behind.
+  # After that the language chosen in the menu is kept (the marker is removed only by a fresh install).
+  langMarker = '/data/openpilot/.lang_ko_default'
+  if not PC and os.path.isdir('/data/openpilot') and not os.path.isfile(langMarker):
+    params.put("LanguageSetting", "main_ko")
+    open(langMarker, 'w').close()
 
   # engage / disengage only by the driver's own button: automatic cruise ON/OFF from the gas pedal, brake
   # release, lead distance and auto engage are removed from the menu and forced off on every boot
