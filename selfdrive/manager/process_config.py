@@ -38,6 +38,7 @@ procs = [
   PythonProcess("torqued", "selfdrive.locationd.torqued"),
   PythonProcess("controlsd", "selfdrive.controls.controlsd"),
   PythonProcess("deleter", "selfdrive.loggerd.deleter", persistent=True),
+  PythonProcess("drivelog", "selfdrive.carrot.tools.drivelog"),  # small text log in /data/drivelog while onroad
   #PythonProcess("logmessaged", "selfdrive.logmessaged", persistent=True),
   PythonProcess("pandad", "selfdrive.boardd.pandad", persistent=True),
   PythonProcess("paramsd", "selfdrive.locationd.paramsd"),
