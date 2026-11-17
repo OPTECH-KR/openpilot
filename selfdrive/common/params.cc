@@ -223,6 +223,7 @@ std::unordered_map<std::string, uint32_t> keys = {
     { "ShowGpsInfo", PERSISTENT },
     { "AutoShutdown", PERSISTENT },
     { "GpsCheck", CLEAR_ON_MANAGER_START },
+    { "GpsSource", PERSISTENT },
     { "ShowConnInfo", PERSISTENT },
     { "ShowLaneInfo", PERSISTENT },
     { "ShowBlindSpot", PERSISTENT },

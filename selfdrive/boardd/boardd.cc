@@ -494,6 +494,9 @@ void peripheral_control_thread(Panda *panda) {
   unsigned int cnt = 0;
 
   FirstOrderFilter integ_lines_filter(0, 30.0, 0.05);
+  // ShowDmInfo -1 (화면 탭 '운전자 모니터링' 기능 끄기, applied at reboot): camerad still runs the driver camera,
+  // so without this the IR LEDs would keep following its exposure
+  const bool dm_off = std::atoi(Params().get("ShowDmInfo").c_str()) < 0;
 
   while (!do_exit && panda->connected) {
     cnt++;
@@ -544,7 +547,7 @@ void peripheral_control_thread(Panda *panda) {
     }
     // Disable ir_pwr on front frame timeout
     uint64_t cur_t = nanos_since_boot();
-    if (cur_t - last_front_frame_t > 1e9) {
+    if (cur_t - last_front_frame_t > 1e9 || dm_off) {
       ir_pwr = 0;
     }
 
@@ -575,6 +578,8 @@ void pigeon_thread(Panda *panda) {
   bool gps_last = false;
   bool gps_check = false;  // GpsCheck: the 'GPS 확인' screen is open, keep the uBlox on with ignition off
   int gps_check_counter = 0;
+  // GpsSource=1: the phone GPS (gpsd) is used instead, keep the panda uBlox off
+  const bool gps_phone = params.get("GpsSource") == "1";
 
   std::unique_ptr<Pigeon> pigeon(Hardware::TICI() ? Pigeon::connect("/dev/ttyHS0") : Pigeon::connect(panda));
 
@@ -585,7 +590,7 @@ void pigeon_thread(Panda *panda) {
       gps_check_counter = 0;
       gps_check = params.getBool("GpsCheck");
     }
-    const bool gps_wanted = ignition_local || gps_check;
+    const bool gps_wanted = !gps_phone && (ignition_local || gps_check);
     std::string recv = pigeon->receive();
 
     // Check based on null bytes

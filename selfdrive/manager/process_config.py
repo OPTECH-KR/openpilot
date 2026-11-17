@@ -15,6 +15,10 @@ else:
   dp_dm = True
   Params().put("ShowDmInfo", "1")
 
+# GpsSource (시작 탭 'GPS 종류', reboot to apply): 0 = panda/uno uBlox (ubloxd), 1 = phone built-in GPS (gpsd).
+# Only one of them runs, since both publish gpsLocationExternal and ubloxGnss.
+gps_phone = EON and Params().get("GpsSource", encoding="utf8") == "1"
+
 def isdriverview(started: bool, params: Params, CP: car.CarParams) -> bool:
   return dp_dm and params.get_bool("IsDriverViewEnabled")  # type: ignore
 
@@ -30,7 +34,9 @@ procs = [
   NativeProcess("proclogd", "selfdrive/proclogd", ["./proclogd"]),
   NativeProcess("sensord", "selfdrive/sensord", ["./sensord"], enabled=not PC, persistent=EON, sigkill=EON),
   # persistent: also parses offroad, for the GPS check screen (it idles when boardd publishes no ubloxRaw)
-  NativeProcess("ubloxd", "selfdrive/locationd", ["./ubloxd"], enabled=(not PC or WEBCAM), persistent=True),
+  NativeProcess("ubloxd", "selfdrive/locationd", ["./ubloxd"], enabled=(not PC or WEBCAM) and not gps_phone, persistent=True),
+  # phone GPS; it starts the GPS engine only onroad or during the GPS check
+  NativeProcess("gpsd", "selfdrive/sensord", ["./_gpsd"], enabled=gps_phone, persistent=True),
   NativeProcess("ui", "selfdrive/ui", ["./ui"], persistent=True, watchdog_max_dt=(5 if TICI else None)),
   NativeProcess("soundd", "selfdrive/ui/soundd", ["./soundd"], persistent=True),
   NativeProcess("locationd", "selfdrive/locationd", ["./locationd"]),

@@ -2,6 +2,8 @@ Import('env', 'arch', 'common', 'cereal', 'messaging')
 
 if arch == "aarch64":
   env.Program('_sensord', 'sensors_qcom.cc', LIBS=['hardware', common, cereal, messaging, 'capnp', 'zmq', 'kj'])
+  # phone built-in GPS (GpsSource=1), see gpsd.cc
+  env.Program('_gpsd', 'gpsd.cc', LIBS=['hardware', common, cereal, messaging, 'capnp', 'zmq', 'kj'])
 else:
   sensors = [
     'sensors/file_sensor.cc',

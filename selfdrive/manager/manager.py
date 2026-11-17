@@ -56,6 +56,7 @@ def manager_init() -> None:
     ("ShowDeviceState", "1"),
     ("ShowGpsInfo", "1"),
     ("AutoShutdown", "1"),
+    ("GpsSource", "0"),
     ("ShowConnInfo", "1"),
     ("ShowLaneInfo", "1"),
     ("ShowBlindSpot", "1"),

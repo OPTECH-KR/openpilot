@@ -21,7 +21,8 @@ import cereal.messaging as messaging
 
 LOG_DIR = "/data/drivelog"
 KEEP_FILES = 30
-SERVICES = ("carState", "controlsState", "carControl", "radarState", "deviceState", "managerState", "carEvents")
+SERVICES = ("carState", "controlsState", "carControl", "radarState", "deviceState", "managerState", "carEvents",
+            "gpsLocationExternal")
 
 # events that happen in normal driving (buttons, pedals, lane change prompts): not written as faults
 NORMAL_EVENTS = {
@@ -33,7 +34,7 @@ NORMAL_EVENTS = {
 LAG_EVENT_MS = 100  # controlsd frame late by more than this -> event (at most every 10 s)
 
 HEADER = ("# time | v km/h | set | en act lat lon | gas brk str | angle torque | steerCmd accel | "
-          "lead d/vrel | cpu% temp mem% freeGB | lag ms")
+          "lead d/vrel | cpu% temp mem% freeGB | lag ms | gps fix sats strong cno accm")
 
 
 def b(x):
@@ -51,6 +52,12 @@ class DriveLog:
     self.events = set()
     self.next_line = time.monotonic()
     self.next_lag_event = 0.
+    # GPS (uno uBlox or phone, see GpsSource): satellites from ubloxGnss.measurementReport, which shares the
+    # service with other uBlox messages, so it is drained instead of conflated
+    self.gnss_sock = messaging.sub_sock("ubloxGnss")
+    self.gps_sats = self.gps_strong = self.gps_cno = 0
+    self.gnss_t = self.loc_t = -100.
+    self.prev_fix = None
 
   def event(self, text):
     self.out.write(f"{datetime.datetime.now():%H:%M:%S} ** {text}\n")
@@ -62,6 +69,24 @@ class DriveLog:
         self.last[s] = getattr(msg, s)
 
     cs, ctl, cc = self.last.get("carState"), self.last.get("controlsState"), self.last.get("carControl")
+
+    now = time.monotonic()
+    for msg in messaging.drain_sock(self.gnss_sock):
+      if msg.ubloxGnss.which() == "measurementReport":
+        cnos = sorted((m.cno for m in msg.ubloxGnss.measurementReport.measurements if m.cno > 0), reverse=True)
+        self.gps_sats, self.gps_strong = len(cnos), sum(c >= 30 for c in cnos)
+        self.gps_cno = sum(cnos[:4]) // len(cnos[:4]) if cnos else 0
+        self.gnss_t = now
+    loc = self.last.get("gpsLocationExternal")
+    if "gpsLocationExternal" in self.last and loc is not self.last.get("_loc_seen"):
+      self.last["_loc_seen"] = loc
+      self.loc_t = now
+    loc_alive = loc is not None and now - self.loc_t < 3.
+    fix = loc_alive and bool(loc.flags & 1)
+    if self.prev_fix is not None and fix != self.prev_fix:
+      self.event(f"gps fix {'on' if fix else 'lost'} (sats {self.gps_sats}, strong {self.gps_strong}"
+                 + (f", acc {loc.accuracy:.0f} m)" if fix else ")"))
+    self.prev_fix = fix
 
     if ctl is not None:
       engage = (ctl.enabled, ctl.active)
@@ -127,6 +152,11 @@ class DriveLog:
     else:
       parts.append("- - - -")
     parts.append(f"{ctl.cumLagMs:5.0f}" if ctl is not None else "-")
+    if now - self.gnss_t < 3. or loc_alive:
+      acc = f"{loc.accuracy:5.0f}" if fix else "    -"
+      parts.append(f"{b(fix)} {self.gps_sats:2d} {self.gps_strong:2d} {self.gps_cno:2d} {acc}")
+    else:
+      parts.append("- - - - -")
     self.out.write(" | ".join(parts) + "\n")
 
 
@@ -143,6 +173,11 @@ def main():
   with open(path, "a", buffering=1, encoding="utf8") as out:
     out.write(HEADER + "\n")
     log = DriveLog(out)
+    try:
+      from common.params import Params
+      log.event("gps source: " + ("phone" if Params().get("GpsSource", encoding="utf8") == "1" else "panda/uno"))
+    except Exception:  # noqa: BLE001
+      pass
     errors = 0
     while True:
       try:
