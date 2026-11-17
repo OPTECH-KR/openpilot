@@ -154,6 +154,9 @@ class CValueControl : public AbstractControl {
 public:
     CValueControl(const QString& params, const QString& title, const QString& desc, const QString& icon, int min, int max, int unit = 1);
 
+signals:
+    void valueChanged(int value);
+
 private:
     QPushButton btnplus;
     QPushButton btnminus;

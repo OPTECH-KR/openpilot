@@ -714,9 +714,16 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   advancedToggles->addItem(new CValueControl("SteerRatioApply", "조향비 고정", "핸들을 돌린 만큼 바퀴가 꺾이는 비율(조향비)을 고정합니다(0.1 단위, 150=15.0). 0:자동 학습값 사용", ROAD_ICON, 0, 300, 2));
   advancedToggles->addItem(new CValueControl("LiveSteerRatioApply", "실시간 조향비 적용", "자동으로 학습한 조향비를 몇 %로 쓸지 정합니다. 커브에서 너무 많이 꺾이면(오버스티어) 낮추세요.", ROAD_ICON, 50, 110, 1));
   advancedToggles->addItem(new CValueControl("SteerActuatorDelay", "조향 반응 지연 보정", "조향 명령을 보낸 뒤 실제로 핸들이 움직이기까지 걸리는 시간 보정입니다(0.01초 단위). 커브에서 늦게 꺾이면 조금 올려 보세요.", ROAD_ICON, 0, 100, 1));
-  advancedToggles->addItem(new CValueControl("LateralTorqueCustom", "토크 사용자 설정", "토크 조향 값을 직접 정할지 고릅니다. 0:차량 기본값 + 주행하며 자동 학습, 1·2:자동 학습을 끄고 아래 '토크 가속 계수'와 '토크 마찰 계수'를 사용(주행 중 바꿔도 몇 초 안에 적용)", ROAD_ICON, 0, 2, 1));
-  advancedToggles->addItem(new CValueControl("LateralTorqueAccelFactor", "토크 가속 계수", "토크 조향에서 원하는 회전량을 내는 데 필요한 힘 계수입니다. 커브에서 덜 꺾이면 낮추고, 너무 꺾이면 높이세요. '토크 사용자 설정'이 켜져 있을 때만 적용됩니다.", ROAD_ICON, 1000, 4000, 10));
-  advancedToggles->addItem(new CValueControl("LateralTorqueFriction", "토크 마찰 계수", "핸들 마찰을 보정하는 값입니다. 직진에서 핸들이 늦게 반응하면 조금 올려 보세요. '토크 사용자 설정'이 켜져 있을 때만 적용됩니다.", ROAD_ICON, 0, 1000, 10));
+  auto torqueCustom = new CValueControl("LateralTorqueCustom", "토크 사용자 설정", "토크 조향 값을 직접 정할지 고릅니다. 0:차량 기본값 + 주행하며 자동 학습, 1·2:자동 학습을 끄고 아래 '토크 가속 계수'와 '토크 마찰 계수'를 사용(주행 중 바꿔도 몇 초 안에 적용)", ROAD_ICON, 0, 2, 1);
+  advancedToggles->addItem(torqueCustom);
+  auto torqueAccel = new CValueControl("LateralTorqueAccelFactor", "토크 가속 계수", "토크 조향에서 원하는 회전량을 내는 데 필요한 힘 계수입니다. 커브에서 덜 꺾이면 낮추고, 너무 꺾이면 높이세요. '토크 사용자 설정'이 켜져 있을 때만 적용됩니다.", ROAD_ICON, 1000, 4000, 10);
+  advancedToggles->addItem(torqueAccel);
+  auto torqueFriction = new CValueControl("LateralTorqueFriction", "토크 마찰 계수", "핸들 마찰을 보정하는 값입니다. 직진에서 핸들이 늦게 반응하면 조금 올려 보세요. '토크 사용자 설정'이 켜져 있을 때만 적용됩니다.", ROAD_ICON, 0, 1000, 10);
+  advancedToggles->addItem(torqueFriction);
+  // show the two torque values only while 토크 사용자 설정 is on
+  auto showTorqueValues = [=](int v) { torqueAccel->setVisible(v > 0); torqueFriction->setVisible(v > 0); };
+  QObject::connect(torqueCustom, &CValueControl::valueChanged, showTorqueValues);
+  showTorqueValues(std::atoi(Params().get("LateralTorqueCustom").c_str()));
   advancedToggles->addItem(carrot_section("출발·정지 (출발이 굼뜨거나 정지가 거칠 때)"));
   advancedToggles->addItem(new CValueControl("JerkStartLimit", "출발 저크", "정차 후 출발할 때 가속이 얼마나 빨리 붙을지 정합니다(0.1 단위). 높이면 빠르게, 낮추면 부드럽게 출발합니다.", ROAD_ICON, 1, 50, 1));
   advancedToggles->addItem(new CValueControl("StartAccelApply", "출발 가속", "정차 후 출발할 때 처음 가속을 몇 % 더 줄지 정합니다. 출발이 굼뜨면 올려 보세요. 0:사용 안 함", ROAD_ICON, 0, 100, 10));
@@ -934,7 +941,9 @@ void TimeZoneSelectCombo::refresh() {
 
 void CValueControl::refresh()
 {
-    label.setText(QString::fromStdString(Params().get(m_params.toStdString())));
+    QString value = QString::fromStdString(Params().get(m_params.toStdString()));
+    label.setText(value);
+    emit valueChanged(value.toInt());
     btnminus.setText("－");
     btnplus.setText("＋");
 }
