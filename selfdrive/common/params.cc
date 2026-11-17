@@ -338,6 +338,7 @@ std::unordered_map<std::string, uint32_t> keys = {
     { "NNFF", PERSISTENT },
     { "NNFFLite", PERSISTENT },
     { "ScreenAlwaysOn", PERSISTENT },
+    { "BrakeResumeSpeedMode", PERSISTENT },
     { "ShowAdvancedSettings", PERSISTENT },
     { "SteerDeltaUp", PERSISTENT },
     { "SteerDeltaDown", PERSISTENT },

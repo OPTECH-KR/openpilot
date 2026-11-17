@@ -165,6 +165,7 @@ def manager_init() -> None:
     ("NNFF", "0"),
     ("NNFFLite", "0"),
     ("ScreenAlwaysOn", "0"),
+    ("BrakeResumeSpeedMode", "1"),
     ("ShowAdvancedSettings", "0"),
     ("SteerActuatorDelay", "30"),       
     ("CruiseControlMode", "4"),

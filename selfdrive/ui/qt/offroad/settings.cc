@@ -651,7 +651,8 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     main_layout->setCurrentWidget(homeScreen);
   });
   startToggles->addItem(selectCarBtn);
-  startToggles->addItem(new ParamControl("AutoResumeFromBrakeRelease", "브레이크 뗀 뒤 자동 재개", "브레이크를 밟으면 조향은 유지하고 가감속만 잠시 운전자에게 넘기며, 브레이크를 떼면 아래 조건에서 다시 openpilot이 가감속합니다. 정차 중: 앞차가 10m 안에 있을 때만. 주행 중: 앞차가 20m보다 멀리 있거나, 앞차 없이 시속 40km 이상일 때 (이때 설정 속도는 지금 속도로 맞춤). 신호만 보고 재개하지 않으며, 핸들을 20도 넘게 돌리고 있을 때와 취소 버튼으로 끈 뒤에는 재개하지 않습니다. 끄면 브레이크를 밟을 때마다 버튼으로 다시 켜야 합니다.", SHELL_ICON, this));
+  startToggles->addItem(new ParamControl("AutoResumeFromBrakeRelease", "브레이크 뗀 뒤 자동 재개", "브레이크를 밟으면 조향은 유지하고 가감속만 잠시 운전자에게 넘기며, 브레이크를 떼면 아래 조건에서 다시 openpilot이 가감속합니다. 정차 중: 앞차가 10m 안에 있을 때만. 주행 중: 앞차가 20m보다 멀리 있거나, 앞차 없이 시속 40km 이상일 때 (설정 속도는 '브레이크 재개 속도'를 따름). 신호만 보고 재개하지 않으며, 핸들을 20도 넘게 돌리고 있을 때와 취소 버튼으로 끈 뒤에는 재개하지 않습니다. 끄면 브레이크를 밟을 때마다 버튼으로 다시 켜야 합니다.", SHELL_ICON, this));
+  startToggles->addItem(new CValueControl("BrakeResumeSpeedMode", "브레이크 재개 속도(1)", "주행 중 브레이크를 밟았다 떼서 다시 가감속을 맡길 때의 설정 속도입니다. 0:브레이크를 뗀 순간의 속도로 이어 가기, 1:브레이크 밟기 전 설정 속도로 복귀(앞차와 차간은 그대로 지키면서 서서히 가속).", SHELL_ICON, 0, 1, 1));
   startToggles->addItem(new CValueControl("SoftHoldMode", "소프트홀드(1)", "정차 후 브레이크를 떼도 차를 멈춘 상태로 잡아 주는 기능입니다. 0:사용 안 함, 1:사용, 2:SCC와 함께 사용(일부 차량은 전자식 주차 브레이크가 걸릴 수 있음)", ROAD_ICON, 0, 2, 1));
   startToggles->addItem(new CValueControl("MixRadarInfo", "SCC 레이더 정보 혼합", "앞차 거리·속도를 정할 때 SCC 레이더 값과 카메라(비전) 값을 섞어 씁니다. 0:사용 안 함, 1:사용", SHELL_ICON, 0, 1, 1));
   startToggles->addItem(new CValueControl("CarrotRadar", "레이더: 당근 앞차 선택(0)", "앞차를 고르는 방식입니다(현대·기아). 0:기존 apilot 방식, 1:당근 방식(옆 차선 차가 끼어들 위험도 함께 계산). 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 1, 1));

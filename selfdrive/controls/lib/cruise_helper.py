@@ -133,6 +133,9 @@ class CruiseHelper:
     self.autoResumeFromGasSpeed = float(int(Params().get("AutoResumeFromGasSpeed", encoding="utf8")))
     self.autoResumeFromGas = int(Params().get("AutoResumeFromGas", encoding="utf8"))
     self.autoResumeFromBrakeRelease = Params().get_bool("AutoResumeFromBrakeRelease")
+    # brake release resume while moving: 0 = set speed becomes the current speed, 1 = back to the set speed before braking
+    self.brakeResumeSpeedMode = int(Params().get("BrakeResumeSpeedMode", encoding="utf8") or 1)
+    self.v_cruise_before_brake = 0.0
     self.autoSyncCruiseSpeedMax = int(Params().get("AutoSyncCruiseSpeedMax"))
     self.autoResumeFromBrakeReleaseDist = float(int(Params().get("AutoResumeFromBrakeReleaseDist", encoding="utf8")))
     self.autoResumeFromBrakeReleaseLeadCar = Params().get_bool("AutoResumeFromBrakeReleaseLeadCar")
@@ -179,6 +182,7 @@ class CruiseHelper:
       elif self.update_params_count == 4:
         self.autoResumeFromGas = int(Params().get("AutoResumeFromGas", encoding="utf8"))
         self.autoResumeFromBrakeRelease = Params().get_bool("AutoResumeFromBrakeRelease")
+        self.brakeResumeSpeedMode = int(Params().get("BrakeResumeSpeedMode", encoding="utf8") or 1)
       elif self.update_params_count == 5:
         self.autoSyncCruiseSpeedMax = int(Params().get("AutoSyncCruiseSpeedMax"))
         self.autoResumeFromBrakeReleaseDist = float(int(Params().get("AutoResumeFromBrakeReleaseDist", encoding="utf8")))
@@ -653,6 +657,12 @@ class CruiseHelper:
   #   - 너무빠르다고 생각하여 속도를 줄였다.  -> 설정속도(40) 이상에서 -> cruiseON
   #
   #
+  def brake_resume_speed(self):
+    """Set speed for a brake-release resume while moving (see BrakeResumeSpeedMode)."""
+    if self.brakeResumeSpeedMode == 1 and self.v_cruise_before_brake > 0:
+      return max(self.v_cruise_before_brake, self.v_ego_kph_set)
+    return self.v_ego_kph_set
+
   def check_brake_cruise_on(self, CS, v_cruise_kph):
     longActiveUser = self.longActiveUser
     resume_cond = abs(CS.steeringAngleDeg) < 20 # and not CS.steeringPressed
@@ -683,19 +693,19 @@ class CruiseHelper:
         if 0 < self.dRel:   # 전방에 차량이 있는경우
           if self.dRel > self.autoResumeFromBrakeReleaseDist: ## 설정값 이상의 거리에서만 작동함... 가까울때는 왜 안하게 했지? 
             longActiveUser = 3
-            v_cruise_kph = self.v_ego_kph_set
+            v_cruise_kph = self.brake_resume_speed()
         elif self.trafficState == 1:  # 신호감지된경우
           if self.v_ego_kph < 70.0 and self.autoResumeFromBrakeReleaseTrafficSign:  #속도가 70키로 미만이면             
             stop_dist = CS.vEgo ** 2 / (2.5 * 2)
             if stop_dist < self.xStop:
               longActiveUser = 3
-              v_cruise_kph = self.v_ego_kph_set
+              v_cruise_kph = self.brake_resume_speed()
           else:        #속도가 빠르면... pass
             pass
         else:   #그냥 감속한경우, 현재속도세트
           if self.v_ego_kph >= self.autoResumeFromBrakeCarSpeed and self.autoResumeFromBrakeCarSpeed > 0:
             longActiveUser = 3
-            v_cruise_kph = self.v_ego_kph_set
+            v_cruise_kph = self.brake_resume_speed()
 
     return longActiveUser, v_cruise_kph
 
@@ -887,6 +897,8 @@ class CruiseHelper:
     v_cruise_kph, longActiveUser = self.update_apilot_cmd(controls, v_cruise_kph, longActiveUser)
     if controls.enabled:      
 
+      if brakePressed and not self.preBrakePressed:
+        self.v_cruise_before_brake = v_cruise_kph if self.longActiveUser > 0 else 0.0
       if brakePressed:
         longActiveUser = -2
         self.longActiveUserReady, v_cruise_kph = self.check_brake_cruise_on(CS, v_cruise_kph)
