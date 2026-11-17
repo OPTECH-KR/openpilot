@@ -688,7 +688,6 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   cruiseToggles->addItem(new CValueControl("CruiseButtonMode", "버튼: 크루즈 속도 모드", "핸들의 크루즈 속도 버튼이 동작하는 방식입니다. 0:순정과 같음, 1~4:사용자 방식(짧게/길게 누를 때 올리고 내리는 폭이 다름)", ROAD_ICON, 0, 4, 1));
   cruiseToggles->addItem(new CValueControl("CruiseSpeedUnit", "버튼: 크루즈 속도 단위", "크루즈 속도 버튼을 한 번 누를 때 바뀌는 속도(km/h)입니다.", ROAD_ICON, 1, 20, 1));
   cruiseToggles->addItem(new CValueControl("CruiseSpeedMin", "크루즈 속도: 하한(10)", "크루즈 설정 속도의 최저값(km/h)입니다. 이보다 낮게 내려가지 않습니다.", ROAD_ICON, 5, 50, 1));
-  cruiseToggles->addItem(new CValueControl("CruiseControlMode", "크루즈: 연비 제어(4km/h)", "연비를 위해 크루즈 설정 속도보다 이만큼(km/h) 잠깐 더 빨리 달렸다가 관성으로 줄이는 방식입니다. 0:사용 안 함", ROAD_ICON, 0, 10, 1));
   cruiseToggles->addItem(new CValueControl("AutoSyncCruiseSpeedMax", "크루즈: 자동 속도 동기화 상한(120km/h)", "가속페달로 크루즈 설정 속도보다 빨리 달리면, 페달을 뗄 때 설정 속도를 지금 속도로 올려 줍니다. 이 값(km/h)까지만 올립니다. 0:사용 안 함", ROAD_ICON, 0, 200, 10));
   cruiseToggles->addItem(new CValueControl("AutoSpeedUptoRoadSpeedLimit", "크루즈: 자동 속도 올림(100%)", "앞차를 따라갈 때 도로 제한속도의 이 비율(%)까지 설정 속도를 자동으로 올립니다. 0:사용 안 함, 100:제한속도까지", ROAD_ICON, 0, 200, 10));
   cruiseToggles->addItem(new CValueControl("TFollowGap1", "차간 1단계: 시간 간격 (110)x0.01초", "차간 1단계(가장 가까움)의 앞차와 시간 간격입니다(0.01초 단위, 110=1.1초). 크면 더 멀리 따라갑니다.", ROAD_ICON, 90, 300, 5));
