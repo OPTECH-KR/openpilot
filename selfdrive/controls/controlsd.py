@@ -700,9 +700,15 @@ class Controls:
                                                                                        lat_plan.psis,
                                                                                        lat_plan.curvatures,
                                                                                        lat_plan.curvatureRates, self.cruise_helper.steerActuatorDelay)
-      actuators.steer, actuators.steeringAngleDeg, lac_log = self.LaC.update(CC.latActive, CS, self.VM, lp,
-                                                                             self.last_actuators, self.steer_limited, self.desired_curvature,
-                                                                             self.desired_curvature_rate, self.sm['liveLocationKalman'])
+      if isinstance(self.LaC, LatControlTorque):  # torque control can use the model plan (NNFF)
+        actuators.steer, actuators.steeringAngleDeg, lac_log = self.LaC.update(CC.latActive, CS, self.VM, lp,
+                                                                               self.last_actuators, self.steer_limited, self.desired_curvature,
+                                                                               self.desired_curvature_rate, self.sm['liveLocationKalman'],
+                                                                               model_data=self.sm['modelV2'])
+      else:
+        actuators.steer, actuators.steeringAngleDeg, lac_log = self.LaC.update(CC.latActive, CS, self.VM, lp,
+                                                                               self.last_actuators, self.steer_limited, self.desired_curvature,
+                                                                               self.desired_curvature_rate, self.sm['liveLocationKalman'])
       actuators.curvature = self.desired_curvature
     else:
       lac_log = log.ControlsState.LateralDebugState.new_message()
