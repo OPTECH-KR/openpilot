@@ -64,8 +64,8 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
     },
     {
       "SccConnectedBus2",
-      "SCC 모듈 BUS2 연결",
-      "범퍼 레이더(SCC) 모듈을 하네스로 BUS2에 연결했을 때 켭니다. 켜면 openpilot이 가속과 브레이크를 직접 제어하는 롱컨 모드로 바뀝니다. 바꾼 뒤 재부팅해야 적용됩니다.",
+      "롱컨 (Long Control)",
+      "롱컨 작업을 마치셨으면 켜 주세요.",
       "../assets/offroad/icon_warning.png",
     },
     {
@@ -91,12 +91,6 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
       tr("Record and Upload Driver Camera"),
       tr("Upload data from the driver facing camera and help improve the driver monitoring algorithm."),
       "../assets/offroad/icon_monitoring.png",
-    },
-    {
-      "DisengageOnAccelerator",
-      tr("Disengage on Accelerator Pedal"),
-      tr("When enabled, pressing the accelerator pedal will disengage openpilot."),
-      "../assets/offroad/icon_disengage_on_accelerator.svg",
     },
 #ifdef ENABLE_MAPS
     {
@@ -739,7 +733,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   advancedToggles->addItem(new CValueControl("AutoCurveSpeedFactor", "커브 감속 비율", "커브 감속 정도입니다(%). 높이면 커브에서 더 빨리 달리고, 낮추면 더 많이 감속합니다.", ROAD_ICON, 50, 300, 1));
   advancedToggles->addItem(carrot_section("실험 모드"));
   {
-    auto op_long = new ParamControl("ExperimentalLongitudinalEnabled", "openpilot 가감속 제어 (알파)", "CAN FD 현대·기아용 롱컨 스위치입니다. 일반 CAN 현대·기아는 이 스위치 대신 'SCC 모듈 BUS2 연결'로 롱컨을 켜지만, 실험 모드 스위치는 이 값이 켜져 있어야 동작합니다. 켜면 자동 긴급 제동(AEB)이 꺼질 수 있습니다.", SHELL_ICON, this);
+    auto op_long = new ParamControl("ExperimentalLongitudinalEnabled", "openpilot 가감속 제어 (알파)", "CAN FD 현대·기아용 롱컨 스위치입니다. 일반 CAN 현대·기아는 이 스위치 대신 토글의 '롱컨'으로 롱컨을 켜지만, 실험 모드 스위치는 이 값이 켜져 있어야 동작합니다. 켜면 자동 긴급 제동(AEB)이 꺼질 수 있습니다.", SHELL_ICON, this);
     op_long->setConfirmation(true, false);
     advancedToggles->addItem(op_long);
     auto e2e = new ParamControl("ExperimentalMode", "실험 모드", "가감속을 항상 주행 모델 주도(blended)로 고정합니다. apilot은 평소 레이더 방식(acc)과 모델 방식을 상황에 따라 자동으로 바꾸고 신호 정지도 자체 기능으로 하므로 보통은 꺼 두는 것을 권장합니다. 롱컨(openpilot 가감속 제어)일 때만 적용됩니다. 알파 단계 기능이라 실수가 있을 수 있습니다.", SHELL_ICON, this);
