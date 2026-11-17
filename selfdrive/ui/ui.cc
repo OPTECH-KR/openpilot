@@ -791,12 +791,12 @@ void Device::updateWakefulness(const UIState &s) {
 
   if (ignition_just_turned_off || motionTriggered(s)) {
     resetInteractiveTimout();
+  } else if (s.screen_always_on > 0) {
+    // ScreenAlwaysOn: never time out while the car is off (and don't fire interactiveTimout,
+    // which would keep closing the settings window)
+    if (interactive_timeout <= 0) interactive_timeout = 1;
   } else if (interactive_timeout > 0 && --interactive_timeout == 0) {
     emit interactiveTimout();
-  }
-  // ScreenAlwaysOn: keep the display on while the car is off instead of sleeping after the idle timeout
-  if (s.screen_always_on > 0 && interactive_timeout <= 0) {
-    interactive_timeout = 1;
   }
   setAwake(s.scene.ignition || interactive_timeout > 0);
 }

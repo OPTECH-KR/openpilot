@@ -164,7 +164,7 @@ def manager_init() -> None:
     ("LateralTorqueFriction", "100"),       
     ("NNFF", "0"),
     ("NNFFLite", "0"),
-    ("ScreenAlwaysOn", "0"),
+    ("ScreenAlwaysOn", "1"),
     ("BrakeResumeSpeedMode", "1"),
     ("ShowAdvancedSettings", "0"),
     ("SteerActuatorDelay", "30"),       
