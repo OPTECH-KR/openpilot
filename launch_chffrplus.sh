@@ -198,6 +198,15 @@ function launch {
   # write tmux scrollback to a file
   #tmux capture-pane -pq -S-1000 > /tmp/launch_log
 
+  # fast boot: keep prebuilt only while the code is the same commit that was built
+  if [ -f "$BASEDIR/prebuilt" ]; then
+    CUR_COMMIT=$(git -C "$BASEDIR" rev-parse HEAD 2>/dev/null)
+    BUILT_COMMIT=$(cat "$BASEDIR/.prebuilt_commit" 2>/dev/null)
+    if [ -z "$CUR_COMMIT" ] || [ "$CUR_COMMIT" != "$BUILT_COMMIT" ]; then
+      rm -f "$BASEDIR/prebuilt"
+    fi
+  fi
+
   if [ -f "$BASEDIR/prebuilt" ]; then
     python /data/openpilot/common/spinner.py &
   fi

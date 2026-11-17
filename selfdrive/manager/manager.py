@@ -74,7 +74,7 @@ def manager_init() -> None:
     ("AutoResumeFromGasSpeed", "30"),
     ("AutoResumeFromGasSpeedMode", "0"),    
     ("AutoCancelFromGasMode", "1"),    
-    ("OpkrPrebuiltOn", "0"),
+    ("OpkrPrebuiltOn", "1"),
     ("OpkrHotspotOnBoot", "0"),
     ("OPKRTimeZone", "Asia/Seoul"),    
     ("AutoCurveSpeedCtrlUse", "1"),
@@ -329,7 +329,8 @@ def main() -> None:
   if not os.path.isdir("/data/openpilot"):
       pass
   elif not os.path.isfile(preBuiltFile) and preBuiltOn:
-    os.system("cd /data/openpilot; touch prebuilt")
+    # build.py just finished successfully; remember which commit was built
+    os.system("cd /data/openpilot; git rev-parse HEAD > .prebuilt_commit && touch prebuilt")
   elif os.path.isfile(preBuiltFile) and not preBuiltOn:
     os.system("cd /data/openpilot; rm -f prebuilt")
 

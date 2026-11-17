@@ -173,13 +173,13 @@ class CPrebuiltToggle : public ToggleControl {
     Q_OBJECT
 
 public:
-    CPrebuiltToggle() : ToggleControl("프리빌트", "빌드된 파일을 사용해 부팅 시간을 줄입니다.", "../assets/offroad/icon_shell.png", Params().getBool("OpkrPrebuiltOn")) {
+    CPrebuiltToggle() : ToggleControl("빠른 부팅 (프리빌트)", "켜두면 한 번 빌드한 뒤로는 빌드를 건너뛰어 부팅이 빨라집니다. 업데이트로 코드가 바뀌면 다음 부팅 때 자동으로 한 번만 다시 빌드합니다.", "../assets/offroad/icon_shell.png", Params().getBool("OpkrPrebuiltOn")) {
         QObject::connect(this, &CPrebuiltToggle::toggleFlipped, [=](int state) {
             Params().putBool("OpkrPrebuiltOn", (bool)state);
 
             if (state)
             {
-                std::system("cd /data/openpilot; touch prebuilt");
+                std::system("cd /data/openpilot; git rev-parse HEAD > .prebuilt_commit && touch prebuilt");
             }
             else
             {
