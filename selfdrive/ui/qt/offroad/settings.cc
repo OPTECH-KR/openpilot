@@ -651,7 +651,6 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     main_layout->setCurrentWidget(homeScreen);
   });
   startToggles->addItem(selectCarBtn);
-  startToggles->addItem(new ParamControl("KeepEngage", "인게이지 유지 모드", "켜 두면 기어를 D가 아닌 곳(P, N 등)으로 바꿔도 openpilot이 꺼지지 않고 유지됩니다.", SHELL_ICON, this));
   startToggles->addItem(new CValueControl("SoftHoldMode", "소프트홀드(1)", "정차 후 브레이크를 떼도 차를 멈춘 상태로 잡아 주는 기능입니다. 0:사용 안 함, 1:사용, 2:SCC와 함께 사용(일부 차량은 전자식 주차 브레이크가 걸릴 수 있음)", ROAD_ICON, 0, 2, 1));
   startToggles->addItem(new CValueControl("MixRadarInfo", "SCC 레이더 정보 혼합", "앞차 거리·속도를 정할 때 SCC 레이더 값과 카메라(비전) 값을 섞어 씁니다. 0:사용 안 함, 1:사용", SHELL_ICON, 0, 1, 1));
   startToggles->addItem(new CValueControl("CarrotRadar", "레이더: 당근 앞차 선택(0)", "앞차를 고르는 방식입니다(현대·기아). 0:기존 apilot 방식, 1:당근 방식(옆 차선 차가 끼어들 위험도 함께 계산). 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 1, 1));

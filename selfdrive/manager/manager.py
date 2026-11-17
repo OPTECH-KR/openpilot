@@ -186,7 +186,8 @@ def manager_init() -> None:
 
   # engage / disengage only by the driver's own button: automatic cruise ON/OFF from the gas pedal, brake
   # release, lead distance and auto engage are removed from the menu and forced off on every boot
-  for k in ("EnableAutoEngage", "CruiseOnDist", "AutoResumeFromGas", "AutoCancelFromGasMode", "AutoResumeFromBrakeRelease"):
+  # KeepEngage too: leaving D (N / R) disengages, as in stock openpilot
+  for k in ("EnableAutoEngage", "CruiseOnDist", "AutoResumeFromGas", "AutoCancelFromGasMode", "AutoResumeFromBrakeRelease", "KeepEngage"):
     params.put(k, "0")
 
   # is this dashcam?
