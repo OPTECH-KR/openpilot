@@ -136,6 +136,8 @@ private:
   QVBoxLayout* carrotLayout;
 
   ListWidget* cruiseToggles;
+  ListWidget* speedToggles;
+  ListWidget* steerToggles;
   ListWidget* dispToggles;
   ListWidget* startToggles;
   ListWidget* advancedToggles;
