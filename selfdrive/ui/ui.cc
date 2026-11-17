@@ -641,6 +641,9 @@ void ui_update_params(UIState *s) {
       s->show_path_mode_cruise_off = std::atoi(params.get("ShowPathModeCruiseOff").c_str());;
       s->show_path_color_cruise_off = std::atoi(params.get("ShowPathColorCruiseOff").c_str());;
       break;
+  case 90:
+      s->screen_always_on = std::atoi(params.get("ScreenAlwaysOn").c_str());
+      break;
   }
  }
 
@@ -790,6 +793,10 @@ void Device::updateWakefulness(const UIState &s) {
     resetInteractiveTimout();
   } else if (interactive_timeout > 0 && --interactive_timeout == 0) {
     emit interactiveTimout();
+  }
+  // ScreenAlwaysOn: keep the display on while the car is off instead of sleeping after the idle timeout
+  if (s.screen_always_on > 0 && interactive_timeout <= 0) {
+    interactive_timeout = 1;
   }
   setAwake(s.scene.ignition || interactive_timeout > 0);
 }
