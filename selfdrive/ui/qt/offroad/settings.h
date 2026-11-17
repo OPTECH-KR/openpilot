@@ -145,6 +145,13 @@ private:
   void togglesCarrot(int widgetIndex);
   void updateButtonStyles();
 
+  // rows shown only with 고급 설정 보기 = 1
+  QList<QWidget*> advancedWidgets;
+  bool showAdvanced = false;
+  bool advancedApplied = false;
+  QWidget *advanced(QWidget *w);
+  void updateAdvanced();
+
 public:
   explicit CarrotPanel(QWidget* parent = nullptr);
 };

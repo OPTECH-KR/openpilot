@@ -337,6 +337,7 @@ std::unordered_map<std::string, uint32_t> keys = {
     { "LateralTorqueFriction", PERSISTENT },
     { "NNFF", PERSISTENT },
     { "NNFFLite", PERSISTENT },
+    { "ShowAdvancedSettings", PERSISTENT },
     { "SteerDeltaUp", PERSISTENT },
     { "SteerDeltaDown", PERSISTENT },
 };
