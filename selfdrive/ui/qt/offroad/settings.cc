@@ -665,7 +665,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     const char* gitcommit = "/data/openpilot/selfdrive/assets/addon/sh/gitcommit.sh";
     const char* gitpull = "/data/openpilot/selfdrive/assets/addon/sh/gitpull.sh";
     std::system(gitcommit);
-    std::system("date '+%F %T' > /data/params/d/LastUpdateTime");
+    std::system("date -u '+%Y-%m-%dT%H:%M:%S' > /data/params/d/LastUpdateTime");
     QString desc = "";
     QString commit_local = QString::fromStdString(Params().get("GitCommit").substr(0, 7));
     QString commit_remote = QString::fromStdString(Params().get("GitCommitRemote").substr(0, 7));

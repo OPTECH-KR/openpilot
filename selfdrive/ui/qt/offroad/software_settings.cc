@@ -32,15 +32,25 @@ SoftwarePanel::SoftwarePanel(QWidget* parent) : ListWidget(parent) {
   lastUpdateLbl = new LabelControl("마지막 업데이트", "");
   addItem(lastUpdateLbl);
 
-  // download update btn
-  downloadBtn = new ButtonControl("최신 업데이트", tr("CHECK"));
+  // download update btn: C2 has no updated process, so check/pull with git directly
+  downloadBtn = new ButtonControl("최신 업데이트", "확인");
   connect(downloadBtn, &ButtonControl::clicked, [=]() {
     downloadBtn->setEnabled(false);
-    if (downloadBtn->text() == tr("CHECK")) {
-      checkForUpdates();
-    } else {
-      std::system("pkill -SIGHUP -f selfdrive.updated");
+    downloadBtn->setValue("확인 중...");
+    std::system("/data/openpilot/selfdrive/assets/addon/sh/gitcommit.sh");
+    std::system("date -u '+%Y-%m-%dT%H:%M:%S' > /data/params/d/LastUpdateTime");
+    QString local = QString::fromStdString(params.get("GitCommit")).left(7);
+    QString remote = QString::fromStdString(params.get("GitCommitRemote")).left(7);
+    if (remote.isEmpty()) {
+      ConfirmationDialog::alert("업데이트 서버에 연결하지 못했어요.\n와이파이 연결을 확인해 주세요.", this);
+    } else if (local == remote) {
+      ConfirmationDialog::alert("이미 최신 버전이에요.\n(" + local + ")", this);
+    } else if (ConfirmationDialog::confirm("새 업데이트가 있어요.\n지금 " + local + " → 새 버전 " + remote +
+                                           "\n\n받은 뒤 자동으로 재부팅해요. 업데이트할까요?", "업데이트", this)) {
+      downloadBtn->setValue("업데이트 받는 중...");
+      std::system("/data/openpilot/selfdrive/assets/addon/sh/gitpull.sh");
     }
+    updateLabels();
   });
   addItem(downloadBtn);
 
@@ -80,9 +90,7 @@ SoftwarePanel::SoftwarePanel(QWidget* parent) : ListWidget(parent) {
       checkForUpdates();
     }
   });
-  if (!params.getBool("IsTestedBranch")) {
-    addItem(targetBranchBtn);
-  }
+  // targetBranchBtn needs selfdrive.updated, which is off on C2: not shown
 
   // uninstall button
   auto uninstallBtn = new ButtonControl(getBrand() + " 삭제", tr("UNINSTALL"));
@@ -129,27 +137,12 @@ void SoftwarePanel::updateLabels() {
   downloadBtn->setVisible(!is_onroad);
 
   // download update
-  QString updater_state = QString::fromStdString(params.get("UpdaterState"));
-  bool failed = std::atoi(params.get("UpdateFailedCount").c_str()) > 0;
-  if (updater_state != "idle") {
-    downloadBtn->setEnabled(false);
-    downloadBtn->setValue(updater_state);
-  } else {
-    if (failed) {
-      downloadBtn->setText(tr("CHECK"));
-      downloadBtn->setValue("업데이트 확인 실패");
-    } else if (params.getBool("UpdaterFetchAvailable")) {
-      downloadBtn->setText("다운로드");
-      downloadBtn->setValue("업데이트 있음");
-    } else {
-      QString lastUpdate = "없음";
-      auto tm = params.get("LastUpdateTime");
-      if (!tm.empty()) {
-        lastUpdate = timeAgo(QDateTime::fromString(QString::fromStdString(tm + "Z"), Qt::ISODate));
-      }
-      downloadBtn->setText(tr("CHECK"));
-      downloadBtn->setValue("최신 버전, 마지막 확인: " + lastUpdate);
-    }
+  {
+    QString local = QString::fromStdString(params.get("GitCommit")).left(7);
+    QString remote = QString::fromStdString(params.get("GitCommitRemote")).left(7);
+    if (remote.isEmpty()) downloadBtn->setValue("눌러서 확인");
+    else if (local == remote) downloadBtn->setValue("최신 버전");
+    else downloadBtn->setValue("업데이트 있음");
     downloadBtn->setEnabled(true);
   }
   targetBranchBtn->setValue(QString::fromStdString(params.get("UpdaterTargetBranch")));
@@ -162,7 +155,7 @@ void SoftwarePanel::updateLabels() {
   branchLbl->setText(QString::fromStdString(params.get("GitBranch")));
   commitLbl->setText(QString::fromStdString(params.get("GitCommit")).left(10));
 
-  installBtn->setVisible(!is_onroad && params.getBool("UpdateAvailable"));
+  installBtn->setVisible(false);  // needs selfdrive.updated (off on C2)
   installBtn->setValue(QString::fromStdString(params.get("UpdaterNewDescription")));
   installBtn->setDescription(QString::fromStdString(params.get("UpdaterNewReleaseNotes")));
 
