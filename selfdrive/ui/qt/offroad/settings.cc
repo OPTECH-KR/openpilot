@@ -685,17 +685,9 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
 
   // ---- Cruise: buttons, cruise speed, gap, drive mode, traffic stop ----
   cruiseToggles = new ListWidget(this);
-  cruiseToggles->addItem(new CValueControl("CruiseButtonMode", "버튼: 크루즈 속도 모드", "핸들의 크루즈 속도 버튼이 동작하는 방식입니다. 0:순정과 같음, 1~4:사용자 방식(짧게/길게 누를 때 올리고 내리는 폭이 다름)", ROAD_ICON, 0, 4, 1));
   cruiseToggles->addItem(new CValueControl("CruiseSpeedUnit", "버튼: 크루즈 속도 단위", "크루즈 속도 버튼을 한 번 누를 때 바뀌는 속도(km/h)입니다.", ROAD_ICON, 1, 20, 1));
-  cruiseToggles->addItem(new CValueControl("CruiseSpeedMin", "크루즈 속도: 하한(10)", "크루즈 설정 속도의 최저값(km/h)입니다. 이보다 낮게 내려가지 않습니다.", ROAD_ICON, 5, 50, 1));
   cruiseToggles->addItem(new CValueControl("AutoSyncCruiseSpeedMax", "크루즈: 자동 속도 동기화 상한(120km/h)", "가속페달로 크루즈 설정 속도보다 빨리 달리면, 페달을 뗄 때 설정 속도를 지금 속도로 올려 줍니다. 이 값(km/h)까지만 올립니다. 0:사용 안 함", ROAD_ICON, 0, 200, 10));
   cruiseToggles->addItem(new CValueControl("AutoSpeedUptoRoadSpeedLimit", "크루즈: 자동 속도 올림(100%)", "앞차를 따라갈 때 도로 제한속도의 이 비율(%)까지 설정 속도를 자동으로 올립니다. 0:사용 안 함, 100:제한속도까지", ROAD_ICON, 0, 200, 10));
-  cruiseToggles->addItem(new CValueControl("TFollowGap1", "차간 1단계: 시간 간격 (110)x0.01초", "차간 1단계(가장 가까움)의 앞차와 시간 간격입니다(0.01초 단위, 110=1.1초). 크면 더 멀리 따라갑니다.", ROAD_ICON, 90, 300, 5));
-  cruiseToggles->addItem(new CValueControl("TFollowGap2", "차간 2단계: 시간 간격 (120)x0.01초", "차간 2단계의 앞차와 시간 간격입니다(0.01초 단위, 120=1.2초). 크면 더 멀리 따라갑니다.", ROAD_ICON, 90, 300, 5));
-  cruiseToggles->addItem(new CValueControl("TFollowGap3", "차간 3단계: 시간 간격 (140)x0.01초", "차간 3단계의 앞차와 시간 간격입니다(0.01초 단위, 140=1.4초). 크면 더 멀리 따라갑니다.", ROAD_ICON, 90, 300, 5));
-  cruiseToggles->addItem(new CValueControl("TFollowGap4", "차간 4단계: 시간 간격 (160)x0.01초", "차간 4단계(가장 멂)의 앞차와 시간 간격입니다(0.01초 단위, 160=1.6초). 크면 더 멀리 따라갑니다.", ROAD_ICON, 90, 300, 5));
-  cruiseToggles->addItem(new ParamControl("ApplyLongDynamicCost", "차간: 다이나믹 제어(0)", "켜 두면 앞차 속도 변화에 더 빨리 반응해서 차간 거리를 일정하게 유지하려고 합니다. 대신 가감속이 조금 더 잦을 수 있습니다.", ROAD_ICON, this));
-  cruiseToggles->addItem(new CValueControl("TFollowSpeedRatio", "차간: 속도별 보정(110%)", "속도가 빠를수록 차간을 더 벌립니다. 100km/h에서 차간 시간 간격에 이 비율(%)을 곱합니다(110이면 10% 더 멀리). 100:속도와 관계없이 같음", ROAD_ICON, 100, 300, 5));
 
   // ---- Speed: curve, speed camera / bump, auto turn ----
   speedToggles = new ListWidget(this);
@@ -789,6 +781,15 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     e2e->setConfirmation(true, true);
     advancedToggles->addItem(e2e);
   }
+  advancedToggles->addItem(carrot_section("차간 · 크루즈 버튼 (보통 그대로)"));
+  advancedToggles->addItem(new CValueControl("CruiseButtonMode", "버튼: 크루즈 속도 모드", "핸들의 크루즈 속도 버튼이 동작하는 방식입니다. 0:순정과 같음, 1~4:사용자 방식(짧게/길게 누를 때 올리고 내리는 폭이 다름)", ROAD_ICON, 0, 4, 1));
+  advancedToggles->addItem(new CValueControl("CruiseSpeedMin", "크루즈 속도: 하한(10)", "크루즈 설정 속도의 최저값(km/h)입니다. 이보다 낮게 내려가지 않습니다.", ROAD_ICON, 5, 50, 1));
+  advancedToggles->addItem(new CValueControl("TFollowGap1", "차간 1단계: 시간 간격 (110)x0.01초", "차간 1단계(가장 가까움)의 앞차와 시간 간격입니다(0.01초 단위, 110=1.1초). 크면 더 멀리 따라갑니다.", ROAD_ICON, 90, 300, 5));
+  advancedToggles->addItem(new CValueControl("TFollowGap2", "차간 2단계: 시간 간격 (120)x0.01초", "차간 2단계의 앞차와 시간 간격입니다(0.01초 단위, 120=1.2초). 크면 더 멀리 따라갑니다.", ROAD_ICON, 90, 300, 5));
+  advancedToggles->addItem(new CValueControl("TFollowGap3", "차간 3단계: 시간 간격 (140)x0.01초", "차간 3단계의 앞차와 시간 간격입니다(0.01초 단위, 140=1.4초). 크면 더 멀리 따라갑니다.", ROAD_ICON, 90, 300, 5));
+  advancedToggles->addItem(new CValueControl("TFollowGap4", "차간 4단계: 시간 간격 (160)x0.01초", "차간 4단계(가장 멂)의 앞차와 시간 간격입니다(0.01초 단위, 160=1.6초). 크면 더 멀리 따라갑니다.", ROAD_ICON, 90, 300, 5));
+  advancedToggles->addItem(new ParamControl("ApplyLongDynamicCost", "차간: 다이나믹 제어(0)", "켜 두면 앞차 속도 변화에 더 빨리 반응해서 차간 거리를 일정하게 유지하려고 합니다. 대신 가감속이 조금 더 잦을 수 있습니다.", ROAD_ICON, this));
+  advancedToggles->addItem(new CValueControl("TFollowSpeedRatio", "차간: 속도별 보정(110%)", "속도가 빠를수록 차간을 더 벌립니다. 100km/h에서 차간 시간 간격에 이 비율(%)을 곱합니다(110이면 10% 더 멀리). 100:속도와 관계없이 같음", ROAD_ICON, 100, 300, 5));
   advancedToggles->addItem(carrot_section("가감속 게인 (시험용, 잘 모르면 그대로)"));
   advancedToggles->addItem(new CValueControl("LongitudinalTuningKpV", "가감속: P 게인(100)", "가감속 제어가 목표 속도와의 차이에 얼마나 세게 반응할지 정합니다. 시험용이니 잘 모르면 그대로 두세요.", ROAD_ICON, 50, 150, 1));
   advancedToggles->addItem(new CValueControl("LongitudinalTuningKiV", "가감속: I 게인(200)", "가감속 제어가 쌓인 오차를 얼마나 보정할지 정합니다. 시험용이니 잘 모르면 그대로 두세요.", ROAD_ICON, 0, 2000, 5));
