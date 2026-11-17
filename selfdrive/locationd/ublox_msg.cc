@@ -2,6 +2,7 @@
 
 #include <unistd.h>
 
+#include <algorithm>
 #include <cassert>
 #include <chrono>
 #include <cmath>
@@ -116,6 +117,9 @@ std::pair<std::string, kj::Array<capnp::word>> UbloxMsgParser::gen_msg() {
   case 0x0a0b:
     return {"ubloxGnss", gen_mon_hw2(static_cast<ubx_t::mon_hw2_t*>(body))};
     break;
+  case 0x0135:
+    return {"ubloxGnss", gen_nav_sat(dat)};
+    break;
   default:
     LOGE("Unknown message type %x", ubx_message.msg_type());
     return {"ubloxGnss", kj::Array<capnp::word>()};
@@ -123,6 +127,31 @@ std::pair<std::string, kj::Array<capnp::word>> UbloxMsgParser::gen_msg() {
   }
 }
 
+
+// NAV-SAT (not in the kaitai spec, parsed by hand): published as a measurementReport carrying only gnssId, svId and
+// cno (C/N0 dB-Hz) per satellite, so the UI GPS summary works on receivers without RXM-RAWX (C2 uno uBlox M8).
+// Payload: iTOW U4, version U1, numSvs U1, reserved 2, then numSvs x 12 bytes (gnssId, svId, cno, elev, azim I2, prRes I2, flags X4).
+kj::Array<capnp::word> UbloxMsgParser::gen_nav_sat(const std::string &dat) {
+  const size_t payload = ublox::UBLOX_HEADER_SIZE;
+  if (dat.size() < payload + 8 + ublox::UBLOX_CHECKSUM_SIZE) return kj::Array<capnp::word>();
+  const uint8_t *p = (const uint8_t *)dat.data() + payload;
+  const uint32_t itow = p[0] | (p[1] << 8) | (p[2] << 16) | ((uint32_t)p[3] << 24);
+  size_t num_svs = p[5];
+  num_svs = std::min(num_svs, (dat.size() - payload - 8 - ublox::UBLOX_CHECKSUM_SIZE) / 12);
+
+  MessageBuilder msg_builder;
+  auto mr = msg_builder.initEvent().initUbloxGnss().initMeasurementReport();
+  mr.setRcvTow(itow / 1000.0);
+  mr.setNumMeas(num_svs);
+  auto meas = mr.initMeasurements(num_svs);
+  for (size_t i = 0; i < num_svs; i++) {
+    const uint8_t *sv = p + 8 + i * 12;
+    meas[i].setGnssId(sv[0]);
+    meas[i].setSvId(sv[1]);
+    meas[i].setCno(sv[2]);
+  }
+  return capnp::messageToFlatArray(msg_builder);
+}
 
 kj::Array<capnp::word> UbloxMsgParser::gen_nav_pvt(ubx_t::nav_pvt_t *msg) {
   MessageBuilder msg_builder;

@@ -136,6 +136,9 @@ void Pigeon::init() {
     if (!send_with_ack("\xB5\x62\x06\x01\x03\x00\x02\x13\x01\x20\x6C"s)) continue;
     if (!send_with_ack("\xB5\x62\x06\x01\x03\x00\x0A\x09\x01\x1E\x70"s)) continue;
     if (!send_with_ack("\xB5\x62\x06\x01\x03\x00\x0A\x0B\x01\x20\x74"s)) continue;
+    // NAV-SAT every 10th solution (1 Hz): per-satellite signal strength for the GPS check screen. uBlox M8 parts
+    // without raw measurements (no RXM-RAWX, e.g. the C2 uno) still have it. Not fatal if the receiver refuses it.
+    send_with_ack("\xB5\x62\x06\x01\x03\x00\x01\x35\x0A\x4A\xB6"s);
 
     // check the backup restore status
     send("\xB5\x62\x09\x14\x00\x00\x1D\x60"s);

@@ -96,6 +96,7 @@ class UbloxMsgParser {
     kj::Array<capnp::word> gen_rxm_rawx(ubx_t::rxm_rawx_t *msg);
     kj::Array<capnp::word> gen_mon_hw(ubx_t::mon_hw_t *msg);
     kj::Array<capnp::word> gen_mon_hw2(ubx_t::mon_hw2_t *msg);
+    kj::Array<capnp::word> gen_nav_sat(const std::string &dat);
 
   private:
     inline bool valid_cheksum();
