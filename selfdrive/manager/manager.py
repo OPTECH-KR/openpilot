@@ -194,7 +194,9 @@ def manager_init() -> None:
   # stopped -> only behind a lead within 10 m; moving -> lead farther than 20 m, or no lead at 40 km/h or more,
   # at the current speed; never on a detected traffic signal alone
   for k, v in (("AutoResumeFromBrakeReleaseLeadCar", "1"), ("AutoResumeFromBrakeReleaseDist", "20"),
-               ("AutoResumeFromBrakeCarSpeed", "40"), ("AutoResumeFromBrakeReleaseTrafficSign", "0")):
+               ("AutoResumeFromBrakeCarSpeed", "40"), ("AutoResumeFromBrakeReleaseTrafficSign", "0"),
+               ("TFollowGap1", "110"), ("TFollowGap2", "120"), ("TFollowGap3", "140"), ("TFollowGap4", "160"),
+               ("ApplyLongDynamicCost", "0"), ("TFollowSpeedRatio", "110")):
     params.put(k, v)
 
   # is this dashcam?
