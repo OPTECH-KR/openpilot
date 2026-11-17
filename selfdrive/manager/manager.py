@@ -184,6 +184,11 @@ def manager_init() -> None:
     if params.get(k) is None:
       params.put(k, v)
 
+  # engage / disengage only by the driver's own button: automatic cruise ON/OFF from the gas pedal, brake
+  # release, lead distance and auto engage are removed from the menu and forced off on every boot
+  for k in ("EnableAutoEngage", "CruiseOnDist", "AutoResumeFromGas", "AutoCancelFromGasMode", "AutoResumeFromBrakeRelease"):
+    params.put(k, "0")
+
   # is this dashcam?
   if os.getenv("PASSIVE") is not None:
     params.put_bool("Passive", bool(int(os.getenv("PASSIVE", "0"))))
