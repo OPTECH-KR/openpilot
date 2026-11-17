@@ -48,7 +48,7 @@ SoftwarePanel::SoftwarePanel(QWidget* parent) : ListWidget(parent) {
     } else {
       QString changes = QString::fromStdString(util::read_file("/tmp/update_changelog.txt")).trimmed();
       if (changes.isEmpty()) changes = "(바뀐 내용 목록을 불러오지 못했어요)";
-      if (ConfirmationDialog::confirm("새 업데이트가 있어요. (" + local + " → " + remote + ")\n\n바뀐 내용:\n" + changes +
+      if (ConfirmationDialog::richConfirm("새 업데이트가 있어요. (" + local + " → " + remote + ")\n\n바뀐 내용:\n" + changes +
                                       "\n\n받은 뒤 자동으로 재부팅해요. 업데이트할까요?", "업데이트", this)) {
         downloadBtn->setValue("업데이트 받는 중...");
         std::system("/data/openpilot/selfdrive/assets/addon/sh/gitpull.sh");

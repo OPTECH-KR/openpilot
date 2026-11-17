@@ -59,6 +59,8 @@ public:
   static bool alert(const QString &prompt_text, QWidget *parent);
   static bool confirm(const QString &prompt_text, const QString &confirm_text, QWidget *parent);
   static bool rich(const QString &prompt_text, QWidget *parent);
+  // long text (scrollable, smaller font) with cancel + confirm buttons
+  static bool richConfirm(const QString &prompt_text, const QString &confirm_text, QWidget *parent);
 };
 
 class MultiOptionDialog : public QDialogBase {
