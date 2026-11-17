@@ -38,6 +38,7 @@
 #include <QDateTime> // opkr
 #include <QTimer> // opkr
 #include <QFileInfo> // opkr
+#include <QDir>
 
 TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
   // param, title, desc, icon, confirm
@@ -745,6 +746,65 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
 
   // ---- 고급: experimental / developer ----
   advancedToggles = new ListWidget(this);
+  advancedToggles->addItem(carrot_section("주행 기록"));
+  auto drivelog_btn = new ButtonControl("주행 기록 보기", "보기", "주행할 때마다 자동으로 남는 기록입니다. 고른 주행에서 켜짐·꺼짐, 경고, 오류, 프로그램 멈춤을 시간순으로 보여 줍니다. (최근 30번 보관)");
+  QObject::connect(drivelog_btn, &ButtonControl::clicked, [=]() {
+    const QString dir_path = "/data/drivelog";
+    QDir dir(dir_path);
+    QStringList files = dir.entryList(QStringList() << "2*.txt", QDir::Files, QDir::Name | QDir::Reversed);
+    if (files.isEmpty()) {
+      ConfirmationDialog::alert("아직 주행 기록이 없어요.", this);
+      return;
+    }
+    // file name: YYYYmmdd-HHMMSS.txt -> "11/18 08:30 주행"
+    QStringList labels;
+    for (const QString &f : files) {
+      labels << QString("%1/%2 %3:%4 주행").arg(f.mid(4, 2), f.mid(6, 2), f.mid(9, 2), f.mid(11, 2));
+    }
+    const QString sel = MultiOptionDialog::getSelection("볼 주행을 고르세요", labels, "", this);
+    if (sel.isEmpty()) return;
+    const int idx = labels.indexOf(sel);
+    const QString file = files[idx];
+
+    QString first_time, last_time;
+    QStringList events;
+    const QStringList lines = QString::fromStdString(util::read_file((dir_path + "/" + file).toStdString())).split('\n');
+    for (const QString &line : lines) {
+      if (line.isEmpty() || line.startsWith("#")) continue;
+      const QString t = line.left(5);  // HH:MM
+      if (first_time.isEmpty()) first_time = t;
+      last_time = t;
+      if (line.contains(" ** ")) events << line.left(8) + "  " + line.mid(line.indexOf(" ** ") + 4);
+    }
+
+    // crash tracebacks written during this drive (between this file and the next newer one)
+    const QString start = file.left(15);
+    const QString end = idx > 0 ? files[idx - 1].left(15) : "99999999-999999";
+    QStringList crashes;
+    for (const QString &c : dir.entryList(QStringList() << "crash-*.txt", QDir::Files, QDir::Name)) {
+      const QString when = c.mid(6, 15);  // crash-YYYYmmdd-HHMMSS-<name>.txt
+      if (when >= start && when < end) {
+        const QStringList tb = QString::fromStdString(util::read_file((dir_path + "/" + c).toStdString())).trimmed().split('\n');
+        const QString name = c.mid(22, c.length() - 22 - 4);
+        crashes << c.mid(15, 2) + ":" + c.mid(17, 2) + ":" + c.mid(19, 2) + "  " + name + " : " + tb.last();
+      }
+    }
+
+    QString text = sel + (first_time.isEmpty() ? "" : " (" + first_time + " ~ " + last_time + ")") + "\n\n";
+    if (events.isEmpty() && crashes.isEmpty()) {
+      text += "경고나 오류 없이 정상이었어요.";
+    } else {
+      if (!crashes.isEmpty()) text += "[프로그램 오류]\n" + crashes.join("\n") + "\n\n";
+      if (events.size() > 200) {
+        text += QString("(앞부분 %1줄 생략)\n").arg(events.size() - 200);
+        events = events.mid(events.size() - 200);
+      }
+      text += events.join("\n");
+    }
+    ConfirmationDialog d(text, "확인", "", true, this);
+    d.exec();
+  });
+  advancedToggles->addItem(drivelog_btn);
   advancedToggles->addItem(carrot_section("실험 모드"));
   {
     auto op_long = new ParamControl("ExperimentalLongitudinalEnabled", "openpilot 가감속 제어 (알파)", "CAN FD 현대·기아용 롱컨 스위치입니다. 일반 CAN 현대·기아는 이 스위치 대신 토글의 '롱컨'으로 롱컨을 켜지만, 실험 모드 스위치는 이 값이 켜져 있어야 동작합니다. 켜면 자동 긴급 제동(AEB)이 꺼질 수 있습니다.", SHELL_ICON, this);
