@@ -1,7 +1,10 @@
 #include "selfdrive/ui/ui.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <functional>
+#include <vector>
 
 #include <QtConcurrent>
 
@@ -511,9 +514,37 @@ static void update_sockets(UIState *s) {
   s->sm->update(0);
 }
 
+static void update_gps(const SubMaster &sm, UIScene &scene) {
+  if (!sm.alive("ubloxGnss")) {
+    scene.gps_sats = scene.gps_strong = scene.gps_cno = 0;
+    scene.gps_antenna_bad = false;
+    return;
+  }
+  if (!sm.updated("ubloxGnss")) return;
+  const auto gnss = sm["ubloxGnss"].getUbloxGnss();
+  if (gnss.which() == cereal::UbloxGnss::MEASUREMENT_REPORT) {
+    std::vector<int> cnos;
+    for (const auto &meas : gnss.getMeasurementReport().getMeasurements()) {
+      if (meas.getCno() > 0) cnos.push_back(meas.getCno());
+    }
+    std::sort(cnos.begin(), cnos.end(), std::greater<int>());
+    const int top = std::min<int>(4, cnos.size());
+    int sum = 0;
+    for (int i = 0; i < top; i++) sum += cnos[i];
+    scene.gps_sats = cnos.size();
+    scene.gps_strong = std::count_if(cnos.begin(), cnos.end(), [](int c) { return c >= 30; });
+    scene.gps_cno = top > 0 ? sum / top : 0;
+  } else if (gnss.which() == cereal::UbloxGnss::HW_STATUS) {
+    const auto ant = gnss.getHwStatus().getAStatus();
+    scene.gps_antenna_bad = ant == cereal::UbloxGnss::HwStatus::AntennaSupervisorState::SHORT ||
+                            ant == cereal::UbloxGnss::HwStatus::AntennaSupervisorState::OPEN;
+  }
+}
+
 static void update_state(UIState *s) {
   SubMaster &sm = *(s->sm);
   UIScene &scene = s->scene;
+  update_gps(sm, scene);
 
   if (sm.updated("liveCalibration")) {
     auto rpy_list = sm["liveCalibration"].getLiveCalibration().getRpyCalib();

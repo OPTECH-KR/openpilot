@@ -155,6 +155,11 @@ typedef struct UIScene {
   uint64_t started_frame;
   cereal::DeviceState::Reader deviceState;
   cereal::LongitudinalPlan::Reader longitudinal_plan;
+
+  // GPS summary from the uBlox (ubloxGnss RXM-RAWX + MON-HW): satellites seen, strong ones (C/N0 >= 30 dB-Hz),
+  // mean C/N0 of the 4 strongest, antenna short/open. Updated in update_state, zeroed when ubloxGnss stops.
+  int gps_sats = 0, gps_strong = 0, gps_cno = 0;
+  bool gps_antenna_bad = false;
 } UIScene;
 
 class UIState : public QObject {

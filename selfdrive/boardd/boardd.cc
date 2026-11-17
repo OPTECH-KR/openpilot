@@ -571,17 +571,25 @@ void pigeon_thread(Panda *panda) {
   util::set_thread_name("boardd_pigeon");
 
   PubMaster pm({"ubloxRaw"});
-  bool ignition_last = false;
+  Params params;
+  bool gps_last = false;
+  bool gps_check = false;  // GpsCheck: the 'GPS 확인' screen is open, keep the uBlox on with ignition off
+  int gps_check_counter = 0;
 
   std::unique_ptr<Pigeon> pigeon(Hardware::TICI() ? Pigeon::connect("/dev/ttyHS0") : Pigeon::connect(panda));
 
   while (!do_exit && panda->connected) {
     bool need_reset = false;
     bool ignition_local = ignition;
+    if (++gps_check_counter >= 100) {  // ~1 s
+      gps_check_counter = 0;
+      gps_check = params.getBool("GpsCheck");
+    }
+    const bool gps_wanted = ignition_local || gps_check;
     std::string recv = pigeon->receive();
 
     // Check based on null bytes
-    if (ignition_local && recv.length() > 0 && recv[0] == (char)0x00) {
+    if (gps_wanted && recv.length() > 0 && recv[0] == (char)0x00) {
       need_reset = true;
       LOGW("received invalid ublox message while onroad, resetting panda GPS");
     }
@@ -590,12 +598,12 @@ void pigeon_thread(Panda *panda) {
       pigeon_publish_raw(pm, recv);
     }
 
-    // init pigeon on rising ignition edge
+    // init pigeon on rising ignition (or GPS check) edge
     // since it was turned off in low power mode
-    if((ignition_local && !ignition_last) || need_reset) {
+    if((gps_wanted && !gps_last) || need_reset) {
       pigeon_active = true;
       pigeon->init();
-    } else if (!ignition_local && ignition_last) {
+    } else if (!gps_wanted && gps_last) {
       // power off on falling edge of ignition
       LOGD("powering off pigeon\n");
       pigeon->stop();
@@ -603,7 +611,7 @@ void pigeon_thread(Panda *panda) {
       pigeon_active = false;
     }
 
-    ignition_last = ignition_local;
+    gps_last = gps_wanted;
 
     // 10ms - 100 Hz
     util::sleep_for(10);

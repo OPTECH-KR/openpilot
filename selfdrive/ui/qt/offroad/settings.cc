@@ -39,6 +39,8 @@
 #include <QTimer> // opkr
 #include <QFileInfo> // opkr
 #include <QDir>
+#include <QElapsedTimer>
+#include <QLabel>
 
 TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
   // param, title, desc, icon, confirm
@@ -597,6 +599,53 @@ static QLabel *carrot_section(const QString &title) {
   return label;
 }
 
+// Live text for the 'GPS 확인' screen: uses the GPS summary the UI keeps in UIScene (ubloxGnss) plus gpsLocationExternal.
+static QString gps_check_text(int elapsed_s) {
+  const UIState *s = uiState();
+  const SubMaster &sm = *(s->sm);
+  const UIScene &scene = s->scene;
+  const bool panda = scene.pandaType != cereal::PandaState::PandaType::UNKNOWN;
+  const bool gnss_alive = sm.alive("ubloxGnss");
+  const bool loc_alive = sm.alive("gpsLocationExternal");
+  const auto loc = sm["gpsLocationExternal"].getGpsLocationExternal();
+  const bool fixed = loc_alive && (loc.getFlags() & 1);
+  const float acc = loc.getAccuracy();
+
+  QString state, color;
+  if (!panda) { state = "판다 연결 안 됨"; color = "#AAAAAA"; }
+  else if (!gnss_alive) { state = "GPS 신호 없음"; color = "#AAAAAA"; }
+  else if (scene.gps_antenna_bad) { state = "안테나 이상"; color = "#FF4040"; }
+  else if (!fixed) { state = "위성 찾는 중"; color = "#DACA25"; }
+  else if (acc <= 5.0f) { state = "잡힘 (좋음)"; color = "#33DD33"; }
+  else if (acc <= 15.0f) { state = "잡힘 (보통)"; color = "#DACA25"; }
+  else { state = "잡힘 (약함)"; color = "#DA6F25"; }
+
+  const int cno = scene.gps_cno;
+  const int bars = cno >= 35 ? 4 : cno >= 30 ? 3 : cno >= 25 ? 2 : cno >= 20 ? 1 : 0;
+  const QString bar_text = QString("<span style='color:%1'>%2</span><span style='color:#555555'>%3</span>")
+                             .arg(color, QString("■").repeated(bars), QString("■").repeated(4 - bars));
+
+  QString t = "<h2>GPS 확인</h2>";
+  t += QString("<p style='font-size:60px; color:%1'><b>%2</b></p>").arg(color, state);
+  t += QString("<p>신호 세기: %1 &nbsp;(%2 dB-Hz)</p>").arg(bar_text).arg(cno);
+  t += QString("<p>보이는 위성: %1개 &nbsp;(강한 위성 %2개)</p>").arg(scene.gps_sats).arg(scene.gps_strong);
+  if (fixed) {
+    t += QString("<p>위치 오차: 약 %1 m</p>").arg(acc, 0, 'f', 0);
+    t += QString("<p>위치: %1, %2</p>").arg(loc.getLatitude(), 0, 'f', 5).arg(loc.getLongitude(), 0, 'f', 5);
+  } else {
+    t += "<p>위치 오차: -</p>";
+  }
+  t += QString("<p style='color:#888888'>확인 시작 후 %1초</p>").arg(elapsed_s);
+  if (!panda) {
+    t += "<p>판다(uno 보드)가 연결되지 않았어요. C2에 차량 하네스 전원이 들어와야 GPS가 켜집니다.</p>";
+  } else if (!gnss_alive && elapsed_s >= 20) {
+    t += "<p>GPS 칩에서 데이터가 오지 않아요. GPS가 없는 판다이거나 GPS 칩이 응답하지 않는 상태일 수 있어요.</p>";
+  } else if (!fixed) {
+    t += "<p>처음 켜면 위성을 찾는 데 1~3분 걸릴 수 있어요. 하늘이 잘 보이는 곳에서 확인하세요.</p>";
+  }
+  return t;
+}
+
 CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   main_layout = new QStackedLayout(this);
   homeScreen = new QWidget(this);
@@ -646,6 +695,23 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     main_layout->setCurrentWidget(homeScreen);
   });
   startToggles->addItem(selectCarBtn);
+  auto gps_btn = new ButtonControl("GPS 확인", "확인", "시동을 걸지 않아도 판다(uno)의 GPS를 켜서 잡힘 여부, 신호 세기, 위성 수, 위치 오차를 실시간으로 보여 줍니다. 창을 닫으면 GPS는 다시 꺼집니다. 차량 하네스 전원이 연결돼 있어야 합니다.");
+  QObject::connect(gps_btn, &ButtonControl::clicked, [=]() {
+    Params().putBool("GpsCheck", true);  // boardd powers the uBlox while this is set (read about once a second)
+    ConfirmationDialog d(gps_check_text(0), "닫기", "", true, this);
+    QLabel *label = d.findChild<QLabel *>();
+    QElapsedTimer started;
+    started.start();
+    QTimer refresh;
+    QObject::connect(&refresh, &QTimer::timeout, [&]() {
+      if (label) label->setText(gps_check_text(started.elapsed() / 1000));
+    });
+    refresh.start(500);
+    d.exec();
+    refresh.stop();
+    Params().putBool("GpsCheck", false);
+  });
+  startToggles->addItem(gps_btn);
   startToggles->addItem(new ParamControl("AutoShutdown", "자동 꺼짐", "켜 두면(초록색) 차량이나 충전기 전원 없이 배터리로만 켜져 있고 주행 중이 아닐 때, 약 10분 뒤 기기가 스스로 꺼져 배터리를 보호합니다. 끄면 배터리가 다 닳을 때까지 켜져 있습니다. 주행 중이거나 전원이 연결돼 있으면 이 설정과 상관없이 꺼지지 않습니다.", SHELL_ICON, this));
   startToggles->addItem(new ParamControl("OpkrHotspotOnBoot", "부팅 시 핫스팟 켜기", "켜 두면 기기가 켜질 때 핫스팟(테더링)이 자동으로 켜집니다.", SHELL_ICON, this));
   auto updateBtn = new ButtonControl("업데이트 확인 후 적용", "업데이트");

@@ -1967,33 +1967,10 @@ NVGcolor alert_color;
 static void ui_draw_gps_info(const UIState* s) {
     if (!s->show_gps_info) return;
     SubMaster& sm = *(s->sm);
-    static int gps_sats = 0, gps_strong = 0, gps_cno = 0;
-    static bool gps_antenna_bad = false;
-
+    const UIScene& scene = s->scene;
+    const int gps_sats = scene.gps_sats, gps_strong = scene.gps_strong, gps_cno = scene.gps_cno;
+    const bool gps_antenna_bad = scene.gps_antenna_bad;
     const bool gnss_alive = sm.alive("ubloxGnss");
-    if (gnss_alive && sm.updated("ubloxGnss")) {
-        const auto gnss = sm["ubloxGnss"].getUbloxGnss();
-        if (gnss.which() == cereal::UbloxGnss::MEASUREMENT_REPORT) {
-            std::vector<int> cnos;
-            for (const auto& meas : gnss.getMeasurementReport().getMeasurements()) {
-                if (meas.getCno() > 0) cnos.push_back(meas.getCno());
-            }
-            std::sort(cnos.begin(), cnos.end(), std::greater<int>());
-            int sum = 0;
-            const int top = std::min<int>(4, cnos.size());
-            for (int i = 0; i < top; i++) sum += cnos[i];
-            gps_sats = cnos.size();
-            gps_strong = std::count_if(cnos.begin(), cnos.end(), [](int c) { return c >= 30; });
-            gps_cno = top > 0 ? sum / top : 0;
-        } else if (gnss.which() == cereal::UbloxGnss::HW_STATUS) {
-            const auto ant = gnss.getHwStatus().getAStatus();
-            gps_antenna_bad = ant == cereal::UbloxGnss::HwStatus::AntennaSupervisorState::SHORT ||
-                              ant == cereal::UbloxGnss::HwStatus::AntennaSupervisorState::OPEN;
-        }
-    } else if (!gnss_alive) {
-        gps_sats = gps_strong = gps_cno = 0;
-        gps_antenna_bad = false;
-    }
 
     const bool loc_alive = sm.alive("gpsLocationExternal");
     const auto loc = sm["gpsLocationExternal"].getGpsLocationExternal();
