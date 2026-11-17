@@ -136,11 +136,8 @@ private:
   QVBoxLayout* carrotLayout;
 
   ListWidget* cruiseToggles;
-  ListWidget* latLongToggles;
-  ListWidget* pathToggles;
   ListWidget* dispToggles;
   ListWidget* startToggles;
-  ListWidget* speedToggles;
   ListWidget* advancedToggles;
 
   void togglesCarrot(int widgetIndex);

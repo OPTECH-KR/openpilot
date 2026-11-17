@@ -611,7 +611,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   QHBoxLayout* select_layout = new QHBoxLayout();
   select_layout->setSpacing(10);
 
-  const QStringList tab_names = {"시작", "크루즈", "속도", "튜닝", "화면", "경로", "고급"};
+  const QStringList tab_names = {"시작", "주행", "화면", "고급"};
   for (int i = 0; i < tab_names.size(); i++) {
     QPushButton* tab = new QPushButton(tab_names[i]);
     tab->setObjectName(QString("tab_btn_%1").arg(i));
@@ -628,7 +628,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   QWidget* toggles = new QWidget();
   QVBoxLayout* toggles_layout = new QVBoxLayout(toggles);
 
-  // ---- Start: car, engage / auto cruise, carrot radar, system ----
+  // ---- 시작: car, hotspot, update ----
   startToggles = new ListWidget(this);
   QString selected = QString::fromStdString(Params().get("SelectedCar"));
   QPushButton* selectCarBtn = new QPushButton(selected.length() ? selected : tr("차종 선택"));
@@ -651,14 +651,6 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     main_layout->setCurrentWidget(homeScreen);
   });
   startToggles->addItem(selectCarBtn);
-  startToggles->addItem(new ParamControl("AutoResumeFromBrakeRelease", "브레이크 뗀 뒤 자동 재개", "브레이크를 밟으면 조향은 유지하고 가감속만 잠시 운전자에게 넘기며, 브레이크를 떼면 아래 조건에서 다시 openpilot이 가감속합니다. 정차 중: 앞차가 10m 안에 있을 때만. 주행 중: 앞차가 20m보다 멀리 있거나, 앞차 없이 시속 40km 이상일 때 (설정 속도는 '브레이크 재개 속도'를 따름). 신호만 보고 재개하지 않으며, 핸들을 20도 넘게 돌리고 있을 때와 취소 버튼으로 끈 뒤에는 재개하지 않습니다. 끄면 브레이크를 밟을 때마다 버튼으로 다시 켜야 합니다.", SHELL_ICON, this));
-  startToggles->addItem(new CValueControl("BrakeResumeSpeedMode", "브레이크 재개 속도(1)", "주행 중 브레이크를 밟았다 떼서 다시 가감속을 맡길 때의 설정 속도입니다. 0:브레이크를 뗀 순간의 속도로 이어 가기, 1:브레이크 밟기 전 설정 속도로 복귀(앞차와 차간은 그대로 지키면서 서서히 가속).", SHELL_ICON, 0, 1, 1));
-  startToggles->addItem(new CValueControl("SoftHoldMode", "소프트홀드(1)", "정차 후 브레이크를 떼도 차를 멈춘 상태로 잡아 주는 기능입니다. 0:사용 안 함, 1:사용, 2:SCC와 함께 사용(일부 차량은 전자식 주차 브레이크가 걸릴 수 있음)", ROAD_ICON, 0, 2, 1));
-  startToggles->addItem(new CValueControl("MixRadarInfo", "SCC 레이더 정보 혼합", "앞차 거리·속도를 정할 때 SCC 레이더 값과 카메라(비전) 값을 섞어 씁니다. 0:사용 안 함, 1:사용", SHELL_ICON, 0, 1, 1));
-  startToggles->addItem(new CValueControl("CarrotRadar", "레이더: 당근 앞차 선택(0)", "앞차를 고르는 방식입니다(현대·기아). 0:기존 apilot 방식, 1:당근 방식(옆 차선 차가 끼어들 위험도 함께 계산). 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 1, 1));
-  startToggles->addItem(new CValueControl("CarrotCutInPredecel", "레이더: 당근 끼어들기 사전감속(0)", "옆 차선 차가 끼어들 것 같으면 미리 살짝 감속합니다(최대 -0.25~-0.65m/s²). '레이더: 당근 앞차 선택'이 1일 때만 동작합니다.", ROAD_ICON, 0, 1, 1));
-  startToggles->addItem(new CValueControl("CarrotStoppingLead", "레이더: 당근 정차 앞차 필터(0)", "정차 중 앞차가 멈춰 있는데 레이더 잡음 때문에 출발한 것으로 잘못 아는 것을 막습니다. 앞차가 실제로 0.15m 이상 멀어져야 출발로 판단합니다. '레이더: 당근 앞차 선택'이 1일 때만 동작합니다.", ROAD_ICON, 0, 1, 1));
-  startToggles->addItem(new CValueControl("LongControlActiveSound", "크루즈 알림음", "크루즈가 켜지고 꺼질 때 나는 알림음 크기입니다. 0:끄기, 1:작게, 2:크게", ROAD_ICON, 0, 2, 1));
   startToggles->addItem(new ParamControl("OpkrHotspotOnBoot", "부팅 시 핫스팟 켜기", "켜 두면 기기가 켜질 때 핫스팟(테더링)이 자동으로 켜집니다.", SHELL_ICON, this));
   auto updateBtn = new ButtonControl("업데이트 확인 후 적용", "업데이트");
   QObject::connect(updateBtn, &ButtonControl::clicked, [=]() {
@@ -666,14 +658,19 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     const char* gitpull = "/data/openpilot/selfdrive/assets/addon/sh/gitpull.sh";
     std::system(gitcommit);
     std::system("date -u '+%Y-%m-%dT%H:%M:%S' > /data/params/d/LastUpdateTime");
-    QString desc = "";
-    QString commit_local = QString::fromStdString(Params().get("GitCommit").substr(0, 7));
-    QString commit_remote = QString::fromStdString(Params().get("GitCommitRemote").substr(0, 7));
-    desc += QString("(Local/Remote): %1/%2\n").arg(commit_local, commit_remote);
-    desc += (commit_local == commit_remote) ? QString("No Update exist.") : QString("Update exist.");
-    if (ConfirmationDialog::alert(desc, this)) {
-      std::system("cd /data/openpilot; rm -f prebuilt");
-      std::system(gitpull);
+    QString commit_local = QString::fromStdString(Params().get("GitCommit")).left(7);
+    QString commit_remote = QString::fromStdString(Params().get("GitCommitRemote")).left(7);
+    if (commit_remote.isEmpty()) {
+      ConfirmationDialog::alert("업데이트 서버에 연결하지 못했어요.\n와이파이 연결을 확인해 주세요.", this);
+    } else if (commit_local == commit_remote) {
+      ConfirmationDialog::alert("이미 최신 버전이에요.\n(" + commit_local + ")", this);
+    } else {
+      QString changes = QString::fromStdString(util::read_file("/tmp/update_changelog.txt")).trimmed();
+      if (changes.isEmpty()) changes = "(바뀐 내용 목록을 불러오지 못했어요)";
+      if (ConfirmationDialog::confirm("새 업데이트가 있어요. (" + commit_local + " → " + commit_remote + ")\n\n바뀐 내용:\n" + changes +
+                                      "\n\n받은 뒤 자동으로 재부팅해요. 업데이트할까요?", "업데이트", this)) {
+        std::system(gitpull);
+      }
     }
   });
   startToggles->addItem(updateBtn);
@@ -683,95 +680,63 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     ConfirmationDialog::alert(QString::fromStdString(txt), this);
   });
 
-  // ---- Cruise: buttons, cruise speed, gap, drive mode, traffic stop ----
+  // ---- 주행: only what a driver changes ----
   cruiseToggles = new ListWidget(this);
-  cruiseToggles->addItem(new CValueControl("CruiseSpeedUnit", "버튼: 크루즈 속도 단위", "크루즈 속도 버튼을 한 번 누를 때 바뀌는 속도(km/h)입니다.", ROAD_ICON, 1, 20, 1));
-  cruiseToggles->addItem(new CValueControl("AutoSyncCruiseSpeedMax", "크루즈: 자동 속도 동기화 상한(120km/h)", "가속페달로 크루즈 설정 속도보다 빨리 달리면, 페달을 뗄 때 설정 속도를 지금 속도로 올려 줍니다. 이 값(km/h)까지만 올립니다. 0:사용 안 함", ROAD_ICON, 0, 200, 10));
-  cruiseToggles->addItem(new CValueControl("AutoSpeedUptoRoadSpeedLimit", "크루즈: 자동 속도 올림(100%)", "앞차를 따라갈 때 도로 제한속도의 이 비율(%)까지 설정 속도를 자동으로 올립니다. 0:사용 안 함, 100:제한속도까지", ROAD_ICON, 0, 200, 10));
+  cruiseToggles->addItem(carrot_section("브레이크"));
+  cruiseToggles->addItem(new ParamControl("AutoResumeFromBrakeRelease", "브레이크 뗀 뒤 자동 재개", "브레이크를 밟으면 조향은 유지하고 가감속만 잠시 운전자에게 넘기며, 브레이크를 떼면 아래 조건에서 다시 openpilot이 가감속합니다. 정차 중: 앞차가 10m 안에 있을 때만. 주행 중: 앞차가 20m보다 멀리 있거나, 앞차 없이 시속 40km 이상일 때 (설정 속도는 '브레이크 재개 속도'를 따름). 신호만 보고 재개하지 않으며, 핸들을 20도 넘게 돌리고 있을 때와 취소 버튼으로 끈 뒤에는 재개하지 않습니다. 끄면 브레이크를 밟을 때마다 버튼으로 다시 켜야 합니다.", SHELL_ICON, this));
+  cruiseToggles->addItem(new CValueControl("BrakeResumeSpeedMode", "브레이크 재개 속도", "주행 중 브레이크를 밟았다 떼서 다시 가감속을 맡길 때의 설정 속도입니다. 0:브레이크를 뗀 순간의 속도로 이어 가기, 1:브레이크 밟기 전 설정 속도로 복귀(앞차와 차간은 그대로 지키면서 서서히 가속).", SHELL_ICON, 0, 1, 1));
+  cruiseToggles->addItem(new CValueControl("SoftHoldMode", "소프트홀드", "정차 후 브레이크를 떼도 차를 멈춘 상태로 잡아 주는 기능입니다. 0:사용 안 함, 1:사용, 2:SCC와 함께 사용(일부 차량은 전자식 주차 브레이크가 걸릴 수 있음)", ROAD_ICON, 0, 2, 1));
+  cruiseToggles->addItem(carrot_section("크루즈"));
+  cruiseToggles->addItem(new CValueControl("LongControlActiveSound", "크루즈 알림음", "크루즈가 켜지고 꺼질 때 나는 알림음 크기입니다. 0:끄기, 1:작게, 2:크게", ROAD_ICON, 0, 2, 1));
+  cruiseToggles->addItem(new CValueControl("CruiseSpeedUnit", "버튼 한 번에 바뀌는 속도", "크루즈 속도 버튼을 한 번 누를 때 바뀌는 속도(km/h)입니다.", ROAD_ICON, 1, 20, 1));
+  cruiseToggles->addItem(new CValueControl("AutoSyncCruiseSpeedMax", "가속페달 속도 맞춤 상한", "가속페달로 크루즈 설정 속도보다 빨리 달리면, 페달을 뗄 때 설정 속도를 지금 속도로 올려 줍니다. 이 값(km/h)까지만 올립니다. 0:사용 안 함", ROAD_ICON, 0, 200, 10));
+  cruiseToggles->addItem(new CValueControl("AutoSpeedUptoRoadSpeedLimit", "제한속도까지 자동 올림", "앞차를 따라갈 때 도로 제한속도의 이 비율(%)까지 설정 속도를 자동으로 올립니다. 0:사용 안 함, 100:제한속도까지", ROAD_ICON, 0, 200, 10));
+  cruiseToggles->addItem(carrot_section("감속"));
+  cruiseToggles->addItem(new CValueControl("AutoCurveSpeedCtrlUse", "커브 자동 감속", "커브를 만나면 미리 속도를 줄입니다. 0:사용 안 함, 1·3:도로 설계 기준(주행 경로의 휘어짐으로 계산), 2:당근 방식(카메라로 앞 커브를 보고 거리에 맞춰 미리 감속)", ROAD_ICON, 0, 3, 1));
+  cruiseToggles->addItem(new CValueControl("AutoNaviSpeedCtrl", "카메라 감속", "과속카메라 앞에서 자동으로 감속합니다. 0:사용 안 함, 1:APM(내비 연동), 2:APM + 순정 내비게이션, 3:NDA", ROAD_ICON, 0, 3, 1));
+  cruiseToggles->addItem(new CValueControl("SpeedCamDB", "내장 카메라 DB", "내비 앱 없이 C2 안에 넣어 둔 전국 고정식 단속카메라 목록(공공데이터, 과속·신호과속·구간단속 약 3만 1천 대)과 GPS로 앞쪽 카메라를 찾아 감속합니다. 내비 앱(APM)이 카메라 정보를 보내면 앱 정보를 우선하고, 앱이 회전 안내만 보낼 때(티맵 등)는 내장 DB로 카메라 감속을 합니다. 이동식 카메라와 새로 생긴 카메라는 없고, 반대 차로 카메라에서도 제한속도까지 줄일 수 있습니다. '카메라 감속'이 1 이상이어야 감속합니다. 0:끄기, 1:켜기. 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 1, 1));
+  cruiseToggles->addItem(new CValueControl("HapticFeedbackWhenSpeedCamera", "카메라 알림", "과속카메라가 가까워질 때 알려 주는 방법입니다. 0:사용 안 함, 1:핸들 진동, 2:계기판 표시, 3:HUD 표시", ROAD_ICON, 0, 3, 1));
+  cruiseToggles->addItem(new CValueControl("AutoNaviSpeedBumpSpeed", "방지턱 통과 속도", "과속방지턱을 넘을 때의 속도(km/h)입니다.", ROAD_ICON, 10, 100, 5));
+  cruiseToggles->addItem(carrot_section("조향"));
+  cruiseToggles->addItem(new CValueControl("PathOffset", "경로 좌우 보정 (쏠릴 때)", "차가 차로 안에서 한쪽으로 치우쳐 달리면 보정합니다. -값:왼쪽으로, +값:오른쪽으로 옮깁니다.", ROAD_ICON, -200, 200, 1));
+  cruiseToggles->addItem(new CValueControl("NNFF", "NNFF 조향 보정", "차종별로 미리 학습된 작은 신경망으로 커브에서 필요한 핸들 힘을 더 정확히 계산합니다(twilsonco NNFF, 당근 c3-wip에서 이식). 현대·기아·제네시스 31개 차종에만 모델이 있고, 모델이 없는 차(K7, 그랜저 IG, 볼트 등)는 켜도 기존 방식 그대로입니다. 토크 조향 차량에서만 동작합니다. 0:끄기, 1:켜기. 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 1, 1));
+  cruiseToggles->addItem(new CValueControl("AutoLaneChangeSpeed", "차선변경 최소 속도", "방향지시등을 켰을 때 자동 차선 변경이 되는 최소 속도(km/h)입니다.", ROAD_ICON, 5, 60, 5));
 
-  // ---- Speed: curve, speed camera / bump, auto turn ----
-  speedToggles = new ListWidget(this);
-  speedToggles->addItem(carrot_section("커브"));
-  speedToggles->addItem(new CValueControl("AutoCurveSpeedCtrlUse", "자동 감속(1)", "커브를 만나면 미리 속도를 줄입니다. 0:사용 안 함, 1·3:도로 설계 기준(주행 경로의 휘어짐으로 계산), 2:당근 방식(카메라로 앞 커브를 보고 거리에 맞춰 미리 감속)", ROAD_ICON, 0, 3, 1));
-  speedToggles->addItem(new CValueControl("CarrotTurnAccel", "당근 가속 제한(0)", "커브에서 가속을 얼마나 제한할지 정하는 방식입니다. 0:기존(지금 조향각 기준), 1:당근(주행 경로 3초 앞의 휘어짐 기준, 커브 들어가기 전에 미리 가속을 줄임)", ROAD_ICON, 0, 1, 1));
-  speedToggles->addItem(new CValueControl("AutoCurveSpeedFactor", "감속 비율(100%)", "커브 감속 정도입니다(%). 높이면 커브에서 더 빨리 달리고, 낮추면 더 많이 감속합니다.", ROAD_ICON, 50, 300, 1));
-  speedToggles->addItem(new CValueControl("AutoCurveSpeedFactorIn", "진입 비율(10%)", "커브에 들어가는 순간 감속을 얼마나 더할지 정합니다(%). 높이면 커브 입구에서 더 많이 줄입니다.", ROAD_ICON, 0, 300, 1));
-  speedToggles->addItem(carrot_section("과속카메라"));
-  speedToggles->addItem(new CValueControl("AutoNaviSpeedCtrl", "카메라 감속 사용(1)", "과속카메라 앞에서 자동으로 감속합니다. 0:사용 안 함, 1:APM(내비 연동), 2:APM + 순정 내비게이션, 3:NDA", ROAD_ICON, 0, 3, 1));
-  speedToggles->addItem(new CValueControl("SpeedCamDB", "내장 카메라 DB 사용(0)", "내비 앱 없이 C2 안에 넣어 둔 전국 고정식 단속카메라 목록(공공데이터, 과속·신호과속·구간단속 약 3만 1천 대)과 GPS로 앞쪽 카메라를 찾아 감속합니다. 내비 앱(APM)이 카메라 정보를 보내면 앱 정보를 우선하고, 앱이 회전 안내만 보낼 때(티맵 등)는 내장 DB로 카메라 감속을 합니다. 이동식 카메라와 새로 생긴 카메라는 없고, 반대 차로 카메라에서도 제한속도까지 줄일 수 있습니다. '카메라 감속 사용'이 1 이상이어야 감속합니다. 0:끄기, 1:켜기. 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 1, 1));
-  speedToggles->addItem(new CValueControl("HapticFeedbackWhenSpeedCamera", "카메라 알림 방식(0)", "과속카메라가 가까워질 때 알려 주는 방법입니다. 0:사용 안 함, 1:핸들 진동, 2:계기판 표시, 3:HUD 표시", ROAD_ICON, 0, 3, 1));
-  speedToggles->addItem(carrot_section("과속카메라 세부 조정 (보통 그대로 두세요)"));
-  speedToggles->addItem(new CValueControl("AutoNaviSpeedCtrlStart", "감속 시작(22초 전)", "과속카메라 몇 초 전부터 감속을 시작할지 정합니다. 크면 더 멀리서부터 줄입니다.", ROAD_ICON, 10, 50, 1));
-  speedToggles->addItem(new CValueControl("AutoNaviSpeedCtrlEnd", "감속 완료(6초 전)", "과속카메라 몇 초 전까지 감속을 끝낼지 정합니다. 크면 카메라보다 더 일찍 제한속도에 맞춥니다.", ROAD_ICON, 3, 20, 1));
-  speedToggles->addItem(new CValueControl("AutoNaviSpeedDecelRate", "감속 세기 x0.01m/s^2(80)", "과속카메라 앞 감속 세기입니다(0.01m/s² 단위). 낮으면 더 멀리서부터 부드럽게 줄입니다.", ROAD_ICON, 10, 200, 10));
-  speedToggles->addItem(new CValueControl("AutoNaviSpeedSafetyFactor", "제한속도 여유(105%)", "과속카메라 제한속도에 곱하는 비율(%)입니다. 105면 제한속도의 105%까지 허용하고, 낮추면 더 여유 있게 줄입니다.", ROAD_ICON, 80, 120, 1));
-  speedToggles->addItem(new CValueControl("AutoNaviSpeedCtrlMode", "감속 방식(0)", "과속카메라 감속을 계산하는 방식입니다. 0:기존 방식, 1:APILOT 방식", ROAD_ICON, 0, 1, 1));
-  speedToggles->addItem(carrot_section("과속방지턱"));
-  speedToggles->addItem(new CValueControl("AutoNaviSpeedBumpDist", "방지턱 감속 거리(10m)", "과속방지턱 몇 m 앞에서 아래 방지턱 속도까지 줄일지 정합니다.", ROAD_ICON, 1, 50, 1));
-  speedToggles->addItem(new CValueControl("AutoNaviSpeedBumpSpeed", "방지턱 통과 속도(35km/h)", "과속방지턱을 넘을 때의 속도(km/h)입니다.", ROAD_ICON, 10, 100, 5));
-  speedToggles->addItem(carrot_section("자동 턴 (내비 앱 연동)"));
-  speedToggles->addItem(new CValueControl("AutoTurnControl", "NOO 도우미(0)", "내비 안내에 맞춰 차로 변경과 회전을 도와줍니다(NOO). 0:사용 안 함, 1:외부 내비 연동만, 2:자동 차로 변경, 3:자동 속도 조절", ROAD_ICON, 0, 3, 1));
-  speedToggles->addItem(new CValueControl("AutoTurnControlSpeedLaneChange", "차로변경 속도(60)", "내비 안내로 자동 차로 변경을 할 수 있는 최소 속도(km/h)입니다. 0:사용 안 함", ROAD_ICON, 0, 100, 10));
-  speedToggles->addItem(new CValueControl("AutoTurnControlSpeedTurn", "회전 속도(20)", "내비 안내로 회전(좌·우회전)할 때 줄일 속도(km/h)입니다. 0:사용 안 함", ROAD_ICON, 0, 100, 5));
-  speedToggles->addItem(new CValueControl("AutoTurnControlTurnEnd", "회전 제어 거리시간(3)", "회전 지점 몇 초 전부터 회전 속도 제어를 할지 정합니다(거리 = 속도 x 시간).", ROAD_ICON, 0, 30, 1));
-
-  // ---- Tuning: lateral, longitudinal, accel table ----
-  latLongToggles = new ListWidget(this);
-  latLongToggles->addItem(new CValueControl("UseLaneLineSpeed", "레인모드 전환 속도(0)", "이 속도(km/h) 이상에서는 차선을 보고 달리는 '레인모드'로 바뀌고, 그보다 느리면 차선 없이 경로를 따라가는 '레인리스'로 달립니다. 0:항상 레인리스", ROAD_ICON, 0, 200, 10));
-  latLongToggles->addItem(new CValueControl("AutoLaneChangeSpeed", "차선변경: 최소 속도(30)", "방향지시등을 켰을 때 자동 차선 변경이 되는 최소 속도(km/h)입니다.", ROAD_ICON, 5, 60, 5));
-  latLongToggles->addItem(new CValueControl("PathOffset", "조향: 경로 좌우 보정", "차가 차로 안에서 한쪽으로 치우쳐 달리면 보정합니다. -값:왼쪽으로, +값:오른쪽으로 옮깁니다.", ROAD_ICON, -200, 200, 1));
-  latLongToggles->addItem(new CValueControl("SteerRatioApply", "조향: 조향비 고정(0x0.1)", "핸들을 돌린 만큼 바퀴가 꺾이는 비율(조향비)을 고정합니다(0.1 단위, 150=15.0). 0:자동 학습값 사용", ROAD_ICON, 0, 300, 2));
-  latLongToggles->addItem(new CValueControl("LiveSteerRatioApply", "조향: 실시간 조향비 적용(100)", "자동으로 학습한 조향비를 몇 %로 쓸지 정합니다. 커브에서 너무 많이 꺾이면(오버스티어) 낮추세요.", ROAD_ICON, 50, 110, 1));
-  latLongToggles->addItem(new CValueControl("SteerActuatorDelay", "조향: 액추에이터 지연(30)", "조향 명령을 보낸 뒤 실제로 핸들이 움직이기까지 걸리는 시간 보정입니다(0.01초 단위). 커브에서 늦게 꺾이면 조금 올려 보세요.", ROAD_ICON, 0, 100, 1));
-  latLongToggles->addItem(new CValueControl("LateralTorqueCustom", "조향: 토크 사용자 설정(0)", "토크 조향 값을 직접 정할지 고릅니다. 0:차량 기본값, 1~2:아래 '토크 가속 계수'와 '토크 마찰 계수'를 사용", ROAD_ICON, 0, 2, 1));
-  latLongToggles->addItem(new CValueControl("LateralTorqueAccelFactor", "조향: 토크 가속 계수(2500)", "토크 조향에서 원하는 회전량을 내는 데 필요한 힘 계수입니다. 커브에서 덜 꺾이면 낮추고, 너무 꺾이면 높이세요. '토크 사용자 설정'이 켜져 있을 때만 적용됩니다.", ROAD_ICON, 1000, 4000, 10));
-  latLongToggles->addItem(new CValueControl("LateralTorqueFriction", "조향: 토크 마찰 계수(100)", "핸들 마찰을 보정하는 값입니다. 직진에서 핸들이 늦게 반응하면 조금 올려 보세요. '토크 사용자 설정'이 켜져 있을 때만 적용됩니다.", ROAD_ICON, 0, 1000, 10));
-  latLongToggles->addItem(new CValueControl("NNFF", "조향: NNFF 신경망 보정(0)", "차종별로 미리 학습된 작은 신경망으로 커브에서 필요한 핸들 힘을 더 정확히 계산합니다(twilsonco NNFF, 당근 c3-wip에서 이식). 현대·기아·제네시스 31개 차종에만 모델이 있고, 모델이 없는 차(K7, 그랜저 IG, 볼트 등)는 켜도 기존 방식 그대로입니다. 토크 조향 차량에서만 동작합니다. 0:끄기, 1:켜기. 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 1, 1));
-  latLongToggles->addItem(new CValueControl("NNFFLite", "조향: NNFF 라이트(0)", "NNFF 모델이 없는 차(K7, 그랜저, 볼트 등)용입니다. 주행 모델이 예상한 앞쪽 커브 변화를 미리 보고, 커브에 들어가거나 나올 때 핸들 마찰 보정을 미리 넣어 늦게 꺾이거나 늦게 풀리는 느낌을 줄입니다. 보정 크기는 기존 마찰 값 안으로 제한됩니다. 모델이 있는 차에서 NNFF를 켜면 NNFF가 우선합니다. 토크 조향 차량에서만 동작합니다. 0:끄기, 1:켜기. 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 1, 1));
-  latLongToggles->addItem(new CValueControl("SteerDeltaUp", "조향: 토크 증가 속도(3)", "조향 힘을 한 번에 얼마나 빨리 올릴 수 있는지 정합니다. 높이면 빨리 꺾지만 거칠어질 수 있습니다.", ROAD_ICON, 1, 20, 1));
-  latLongToggles->addItem(new CValueControl("SteerDeltaDown", "조향: 토크 감소 속도(7)", "조향 힘을 한 번에 얼마나 빨리 줄일 수 있는지 정합니다.", ROAD_ICON, 1, 20, 1));
-  latLongToggles->addItem(new CValueControl("JerkStartLimit", "가감속: 출발 저크(10)x0.1", "정차 후 출발할 때 가속이 얼마나 빨리 붙을지 정합니다(0.1 단위). 높이면 빠르게, 낮추면 부드럽게 출발합니다.", ROAD_ICON, 1, 50, 1));
-  latLongToggles->addItem(new CValueControl("StartAccelApply", "가감속: 출발 가속 2.0x(0%)", "정차 후 출발할 때 처음 가속을 몇 % 더 줄지 정합니다. 출발이 굼뜨면 올려 보세요. 0:사용 안 함", ROAD_ICON, 0, 100, 10));
-  latLongToggles->addItem(new CValueControl("StopAccelApply", "가감속: 정지 유지 -2.0x(30%)", "멈춰 있을 때 브레이크를 얼마나 세게 잡을지 정합니다(%). 정차 중 차가 밀리면 올려 보세요. 0:사용 안 함", ROAD_ICON, 0, 100, 10));
-  latLongToggles->addItem(new CValueControl("StopDistance", "가감속: 앞차 정지 거리(600cm)", "앞차 뒤에 멈출 때의 거리(cm)입니다. 600이면 약 6m 뒤에 멈춥니다.", ROAD_ICON, 200, 1000, 50));
-  latLongToggles->addItem(new CValueControl("CruiseMaxVals1", "가속: 0km/h(160)", "이 속도에서 낼 수 있는 최대 가속 세기입니다(단위 0.01m/s²). 높이면 더 빠르게 가속하고, 낮추면 부드럽게 가속합니다.", ROAD_ICON, 1, 250, 5));
-  latLongToggles->addItem(new CValueControl("CruiseMaxVals2", "가속: 40km/h(120)", "이 속도에서 낼 수 있는 최대 가속 세기입니다(단위 0.01m/s²). 높이면 더 빠르게 가속하고, 낮추면 부드럽게 가속합니다.", ROAD_ICON, 1, 250, 5));
-  latLongToggles->addItem(new CValueControl("CruiseMaxVals3", "가속: 60km/h(100)", "이 속도에서 낼 수 있는 최대 가속 세기입니다(단위 0.01m/s²). 높이면 더 빠르게 가속하고, 낮추면 부드럽게 가속합니다.", ROAD_ICON, 1, 250, 5));
-  latLongToggles->addItem(new CValueControl("CruiseMaxVals4", "가속: 80km/h(80)", "이 속도에서 낼 수 있는 최대 가속 세기입니다(단위 0.01m/s²). 높이면 더 빠르게 가속하고, 낮추면 부드럽게 가속합니다.", ROAD_ICON, 1, 250, 5));
-  latLongToggles->addItem(new CValueControl("CruiseMaxVals5", "가속: 110km/h(70)", "이 속도에서 낼 수 있는 최대 가속 세기입니다(단위 0.01m/s²). 높이면 더 빠르게 가속하고, 낮추면 부드럽게 가속합니다.", ROAD_ICON, 1, 250, 5));
-  latLongToggles->addItem(new CValueControl("CruiseMaxVals6", "가속: 140km/h(60)", "이 속도에서 낼 수 있는 최대 가속 세기입니다(단위 0.01m/s²). 높이면 더 빠르게 가속하고, 낮추면 부드럽게 가속합니다.", ROAD_ICON, 1, 250, 5));
-
-  // ---- Disp: onroad display ----
+  // ---- 화면 ----
   dispToggles = new ListWidget(this);
   dispToggles->addItem(new CValueControl("ShowHudMode", "화면 모드", "주행 화면에서 속도 등 정보를 어디에 어떻게 보여줄지 고릅니다. 0:기본, 1:APilot, 2:아래, 3:위, 4:왼쪽, 5:왼쪽 아래, 6:당근(C3X) 스타일 박스", SHELL_ICON, 0, 6, 1));
-  dispToggles->addItem(new CValueControl("ShowTpms", "타이어 공기압 정보", "타이어 공기압을 주행 화면에 보여줍니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
-  dispToggles->addItem(new CValueControl("ScreenAlwaysOn", "화면 항상 켜기(0)", "시동이 꺼져 있을 때 아무것도 만지지 않아도 화면이 꺼지지 않게 합니다. 기본은 30초 뒤 꺼집니다. 켜 두면 차 배터리를 조금 더 쓰고 기기 발열이 늘 수 있습니다. 0:기본(30초 뒤 꺼짐), 1:항상 켜기", SHELL_ICON, 0, 1, 1));
-  dispToggles->addItem(new CValueControl("ShowDateTime", "시간 정보", "주행 화면에 시간과 날짜를 보여줍니다. 0:안 보임, 1:시간+날짜, 2:시간만, 3:날짜만", SHELL_ICON, 0, 3, 1));
-  dispToggles->addItem(new CValueControl("ShowPathEnd", "경로 끝 표시", "주행 경로 끝에 표시를 그립니다. 0:안 보임, 1~2:보임", SHELL_ICON, 0, 2, 1));
+  dispToggles->addItem(new CValueControl("ScreenAlwaysOn", "화면 항상 켜기", "시동이 꺼져 있을 때 아무것도 만지지 않아도 화면이 꺼지지 않게 합니다. 기본은 30초 뒤 꺼집니다. 켜 두면 차 배터리를 조금 더 쓰고 기기 발열이 늘 수 있습니다. 0:기본(30초 뒤 꺼짐), 1:항상 켜기", SHELL_ICON, 0, 1, 1));
+  dispToggles->addItem(new CValueControl("ShowTpms", "타이어 공기압", "타이어 공기압을 주행 화면에 보여줍니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
+  dispToggles->addItem(new CValueControl("ShowDateTime", "시간 표시", "주행 화면에 시간과 날짜를 보여줍니다. 0:안 보임, 1:시간+날짜, 2:시간만, 3:날짜만", SHELL_ICON, 0, 3, 1));
   dispToggles->addItem(new CValueControl("ShowDeviceState", "기기 상태", "기기 상태(CPU 온도, 메모리, 저장공간)를 보여줍니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
-  dispToggles->addItem(new CValueControl("ShowLaneInfo", "차선 정보", "차선을 얼마나 그릴지 고릅니다. -1:안 그림, 0:경로만, 1:경로+차선, 2:경로+차선+도로 가장자리", SHELL_ICON, -1, 2, 1));
-  dispToggles->addItem(new CValueControl("ShowRadarInfo", "레이더 정보", "레이더가 잡은 차들을 화면에 표시합니다. 0:안 보임, 1:보임, 2:상대 위치까지, 3:멈춘 차까지", SHELL_ICON, 0, 3, 1));
-  dispToggles->addItem(new CValueControl("ShowSteerRotate", "핸들 회전", "핸들 아이콘이 실제 핸들처럼 돌아가게 합니다. 0:고정, 1:회전", SHELL_ICON, 0, 1, 1));
-  dispToggles->addItem(new CValueControl("ShowAccelRpm", "가속도 미터", "가속도 막대를 보여줍니다. 0:안 보임, 1:가속도, 2:가속도+엔진(모터) 회전수", SHELL_ICON, 0, 2, 1));
-  dispToggles->addItem(new CValueControl("ShowSteerMode", "핸들 표시 모드", "핸들 아이콘 모양을 고릅니다. 0:검정, 1:컬러, 2:안 보임", SHELL_ICON, 0, 2, 1));
+  dispToggles->addItem(new CValueControl("ShowBlindSpot", "후측방(BSD) 경고", "후측방 감지(BSD) 경고를 화면에 표시합니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
   dispToggles->addItem(new CValueControl("ShowConnInfo", "APM 연결 표시", "내비(APM/NDA) 연결 상태 아이콘을 보여줍니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
-  dispToggles->addItem(new CValueControl("ShowBlindSpot", "후측방(BSD) 정보", "후측방 감지(BSD) 경고를 화면에 표시합니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
-  dispToggles->addItem(new CValueControl("ShowGapInfo", "차간 정보", "차간 단계와 주행 모드를 앞차 표시 옆에 보여줍니다. -1:모두 끔, 0:간단히, 1:보임", SHELL_ICON, -1, 1, 1));
-  dispToggles->addItem(new CValueControl("ShowDmInfo", "운전자 모니터링 정보", "운전자 모니터링(얼굴 인식) 아이콘을 보여줍니다. 0:안 보임, 1:보임, -1:기능 끄기(재부팅 필요)", SHELL_ICON, -1, 1, 1));
+  dispToggles->addItem(new CValueControl("ShowDmInfo", "운전자 모니터링", "운전자 모니터링(얼굴 인식) 아이콘을 보여줍니다. 0:안 보임, 1:보임, -1:기능 끄기(재부팅 필요)", SHELL_ICON, -1, 1, 1));
 
-  // ---- Path: path drawing ----
-  pathToggles = new ListWidget(this);
-  pathToggles->addItem(new CValueControl("ShowZOffset", "경로 높이 보정(170)", "화면에 그리는 주행 경로의 높이를 맞춥니다. +값:아래로, -값:위로. 경로가 도로에서 떠 보이면 조절하세요.", SHELL_ICON, -300, 300, 10));
-  pathToggles->addItem(new CValueControl("ShowPathModeCruiseOff", "경로 모양: 크루즈 OFF", "주행 경로를 화면에 어떤 모양으로 그릴지 고릅니다. 0:기본, 1~2:사각형, 3~4:화살표(^^), 5~6:사각형, 7~8:화살표(^^), 9~12:부드러운 화살표 (크루즈가 꺼져 있을 때)", SHELL_ICON, 0, 15, 1));
-  pathToggles->addItem(new CValueControl("ShowPathColorCruiseOff", "경로 색: 크루즈 OFF", "주행 경로 색을 고릅니다. 0:빨강, 1:주황, 2:노랑, 3:초록, 4:파랑, 5:남색, 6:보라, 7:갈색, 8:흰색, 9:검정. 10을 더하면(예: 13) 테두리만 그립니다. (크루즈가 꺼져 있을 때)", SHELL_ICON, 0, 19, 1));
-  pathToggles->addItem(new CValueControl("ShowPathMode", "경로 모양: 레인리스", "주행 경로를 화면에 어떤 모양으로 그릴지 고릅니다. 0:기본, 1~2:사각형, 3~4:화살표(^^), 5~6:사각형, 7~8:화살표(^^), 9~12:부드러운 화살표 (레인리스로 달릴 때)", SHELL_ICON, 0, 15, 1));
-  pathToggles->addItem(new CValueControl("ShowPathColor", "경로 색: 레인리스", "주행 경로 색을 고릅니다. 0:빨강, 1:주황, 2:노랑, 3:초록, 4:파랑, 5:남색, 6:보라, 7:갈색, 8:흰색, 9:검정. 10을 더하면(예: 13) 테두리만 그립니다. (레인리스로 달릴 때)", SHELL_ICON, 0, 19, 1));
-  pathToggles->addItem(new CValueControl("ShowPathModeLane", "경로 모양: 레인모드", "주행 경로를 화면에 어떤 모양으로 그릴지 고릅니다. 0:기본, 1~2:사각형, 3~4:화살표(^^), 5~6:사각형, 7~8:화살표(^^), 9~12:부드러운 화살표 (레인모드로 달릴 때)", SHELL_ICON, 0, 15, 1));
-  pathToggles->addItem(new CValueControl("ShowPathColorLane", "경로 색: 레인모드", "주행 경로 색을 고릅니다. 0:빨강, 1:주황, 2:노랑, 3:초록, 4:파랑, 5:남색, 6:보라, 7:갈색, 8:흰색, 9:검정. 10을 더하면(예: 13) 테두리만 그립니다. (레인모드로 달릴 때)", SHELL_ICON, 0, 19, 1));
-  pathToggles->addItem(new CValueControl("ShowPathWidth", "경로 폭 비율(100%)", "화면에 그리는 주행 경로의 폭(%)입니다. 100이 기본 폭입니다.", SHELL_ICON, 10, 200, 10));
-
-  // ---- 고급: test / developer settings in one place ----
+  // ---- 고급: only when the car behaves oddly ----
   advancedToggles = new ListWidget(this);
+  advancedToggles->addItem(carrot_section("조향 세부 (커브에서 덜 꺾이거나 너무 꺾일 때)"));
+  advancedToggles->addItem(new CValueControl("SteerRatioApply", "조향비 고정", "핸들을 돌린 만큼 바퀴가 꺾이는 비율(조향비)을 고정합니다(0.1 단위, 150=15.0). 0:자동 학습값 사용", ROAD_ICON, 0, 300, 2));
+  advancedToggles->addItem(new CValueControl("LiveSteerRatioApply", "실시간 조향비 적용", "자동으로 학습한 조향비를 몇 %로 쓸지 정합니다. 커브에서 너무 많이 꺾이면(오버스티어) 낮추세요.", ROAD_ICON, 50, 110, 1));
+  advancedToggles->addItem(new CValueControl("SteerActuatorDelay", "조향 반응 지연 보정", "조향 명령을 보낸 뒤 실제로 핸들이 움직이기까지 걸리는 시간 보정입니다(0.01초 단위). 커브에서 늦게 꺾이면 조금 올려 보세요.", ROAD_ICON, 0, 100, 1));
+  advancedToggles->addItem(new CValueControl("NNFFLite", "NNFF 라이트", "NNFF 모델이 없는 차(K7, 그랜저, 볼트 등)용입니다. 주행 모델이 예상한 앞쪽 커브 변화를 미리 보고, 커브에 들어가거나 나올 때 핸들 마찰 보정을 미리 넣어 늦게 꺾이거나 늦게 풀리는 느낌을 줄입니다. 보정 크기는 기존 마찰 값 안으로 제한됩니다. 모델이 있는 차에서 NNFF를 켜면 NNFF가 우선합니다. 토크 조향 차량에서만 동작합니다. 0:끄기, 1:켜기. 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 1, 1));
+  advancedToggles->addItem(new CValueControl("LateralTorqueCustom", "토크 사용자 설정", "토크 조향 값을 직접 정할지 고릅니다. 0:차량 기본값, 1~2:아래 '토크 가속 계수'와 '토크 마찰 계수'를 사용", ROAD_ICON, 0, 2, 1));
+  advancedToggles->addItem(new CValueControl("LateralTorqueAccelFactor", "토크 가속 계수", "토크 조향에서 원하는 회전량을 내는 데 필요한 힘 계수입니다. 커브에서 덜 꺾이면 낮추고, 너무 꺾이면 높이세요. '토크 사용자 설정'이 켜져 있을 때만 적용됩니다.", ROAD_ICON, 1000, 4000, 10));
+  advancedToggles->addItem(new CValueControl("LateralTorqueFriction", "토크 마찰 계수", "핸들 마찰을 보정하는 값입니다. 직진에서 핸들이 늦게 반응하면 조금 올려 보세요. '토크 사용자 설정'이 켜져 있을 때만 적용됩니다.", ROAD_ICON, 0, 1000, 10));
+  advancedToggles->addItem(carrot_section("출발·정지 (출발이 굼뜨거나 정지가 거칠 때)"));
+  advancedToggles->addItem(new CValueControl("JerkStartLimit", "출발 저크", "정차 후 출발할 때 가속이 얼마나 빨리 붙을지 정합니다(0.1 단위). 높이면 빠르게, 낮추면 부드럽게 출발합니다.", ROAD_ICON, 1, 50, 1));
+  advancedToggles->addItem(new CValueControl("StartAccelApply", "출발 가속", "정차 후 출발할 때 처음 가속을 몇 % 더 줄지 정합니다. 출발이 굼뜨면 올려 보세요. 0:사용 안 함", ROAD_ICON, 0, 100, 10));
+  advancedToggles->addItem(new CValueControl("StopAccelApply", "정지 유지 힘", "멈춰 있을 때 브레이크를 얼마나 세게 잡을지 정합니다(%). 정차 중 차가 밀리면 올려 보세요. 0:사용 안 함", ROAD_ICON, 0, 100, 10));
+  advancedToggles->addItem(new CValueControl("StopDistance", "앞차 뒤 정지 거리", "앞차 뒤에 멈출 때의 거리(cm)입니다. 600이면 약 6m 뒤에 멈춥니다.", ROAD_ICON, 200, 1000, 50));
+  advancedToggles->addItem(carrot_section("속도별 가속 세기 (가속이 너무 세거나 약할 때)"));
+  advancedToggles->addItem(new CValueControl("CruiseMaxVals1", "가속: 0km/h", "이 속도에서 낼 수 있는 최대 가속 세기입니다(단위 0.01m/s²). 높이면 더 빠르게 가속하고, 낮추면 부드럽게 가속합니다.", ROAD_ICON, 1, 250, 5));
+  advancedToggles->addItem(new CValueControl("CruiseMaxVals2", "가속: 40km/h", "이 속도에서 낼 수 있는 최대 가속 세기입니다(단위 0.01m/s²). 높이면 더 빠르게 가속하고, 낮추면 부드럽게 가속합니다.", ROAD_ICON, 1, 250, 5));
+  advancedToggles->addItem(new CValueControl("CruiseMaxVals3", "가속: 60km/h", "이 속도에서 낼 수 있는 최대 가속 세기입니다(단위 0.01m/s²). 높이면 더 빠르게 가속하고, 낮추면 부드럽게 가속합니다.", ROAD_ICON, 1, 250, 5));
+  advancedToggles->addItem(new CValueControl("CruiseMaxVals4", "가속: 80km/h", "이 속도에서 낼 수 있는 최대 가속 세기입니다(단위 0.01m/s²). 높이면 더 빠르게 가속하고, 낮추면 부드럽게 가속합니다.", ROAD_ICON, 1, 250, 5));
+  advancedToggles->addItem(new CValueControl("CruiseMaxVals5", "가속: 110km/h", "이 속도에서 낼 수 있는 최대 가속 세기입니다(단위 0.01m/s²). 높이면 더 빠르게 가속하고, 낮추면 부드럽게 가속합니다.", ROAD_ICON, 1, 250, 5));
+  advancedToggles->addItem(new CValueControl("CruiseMaxVals6", "가속: 140km/h", "이 속도에서 낼 수 있는 최대 가속 세기입니다(단위 0.01m/s²). 높이면 더 빠르게 가속하고, 낮추면 부드럽게 가속합니다.", ROAD_ICON, 1, 250, 5));
+  advancedToggles->addItem(carrot_section("커브 (감속이 과하거나 부족할 때)"));
+  advancedToggles->addItem(new CValueControl("AutoCurveSpeedFactor", "커브 감속 비율", "커브 감속 정도입니다(%). 높이면 커브에서 더 빨리 달리고, 낮추면 더 많이 감속합니다.", ROAD_ICON, 50, 300, 1));
   advancedToggles->addItem(carrot_section("실험 모드"));
   {
     auto op_long = new ParamControl("ExperimentalLongitudinalEnabled", "openpilot 가감속 제어 (알파)", "CAN FD 현대·기아용 롱컨 스위치입니다. 일반 CAN 현대·기아는 이 스위치 대신 'SCC 모듈 BUS2 연결'로 롱컨을 켜지만, 실험 모드 스위치는 이 값이 켜져 있어야 동작합니다. 켜면 자동 긴급 제동(AEB)이 꺼질 수 있습니다.", SHELL_ICON, this);
@@ -781,33 +746,15 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     e2e->setConfirmation(true, true);
     advancedToggles->addItem(e2e);
   }
-  advancedToggles->addItem(carrot_section("크루즈 버튼 (보통 그대로)"));
-  advancedToggles->addItem(new CValueControl("CruiseButtonMode", "버튼: 크루즈 속도 모드", "핸들의 크루즈 속도 버튼이 동작하는 방식입니다. 0:순정과 같음, 1~4:사용자 방식(짧게/길게 누를 때 올리고 내리는 폭이 다름)", ROAD_ICON, 0, 4, 1));
-  advancedToggles->addItem(new CValueControl("CruiseSpeedMin", "크루즈 속도: 하한(10)", "크루즈 설정 속도의 최저값(km/h)입니다. 이보다 낮게 내려가지 않습니다.", ROAD_ICON, 5, 50, 1));
-  advancedToggles->addItem(carrot_section("가감속 게인 (시험용, 잘 모르면 그대로)"));
-  advancedToggles->addItem(new CValueControl("LongitudinalTuningKpV", "가감속: P 게인(100)", "가감속 제어가 목표 속도와의 차이에 얼마나 세게 반응할지 정합니다. 시험용이니 잘 모르면 그대로 두세요.", ROAD_ICON, 50, 150, 1));
-  advancedToggles->addItem(new CValueControl("LongitudinalTuningKiV", "가감속: I 게인(200)", "가감속 제어가 쌓인 오차를 얼마나 보정할지 정합니다. 시험용이니 잘 모르면 그대로 두세요.", ROAD_ICON, 0, 2000, 5));
-  advancedToggles->addItem(new CValueControl("LongitudinalTuningKf", "가감속: 피드포워드 게인(200)", "목표 가속을 미리 반영하는 정도입니다. 시험용이니 잘 모르면 그대로 두세요.", ROAD_ICON, 0, 200, 1));
-  advancedToggles->addItem(carrot_section("조향 비용 (전문가용)"));
-  advancedToggles->addItem(new CValueControl("SteeringRateCost", "조향: 조향 속도 비용(700)", "핸들을 얼마나 천천히 돌리게 할지 정합니다. 높이면 부드럽지만 반응이 느리고, 낮추면 빠르지만 흔들릴 수 있습니다.", ROAD_ICON, 0, 2000, 10));
-  advancedToggles->addItem(new CValueControl("PathCostApply", "조향: 경로 비용 적용(100)", "계획한 경로를 얼마나 정확히 따라갈지 정합니다(%). 높이면 경로에 더 딱 붙고, 낮추면 더 여유 있게 따라갑니다.", ROAD_ICON, 0, 200, 5));
-  advancedToggles->addItem(new CValueControl("LateralAccelCost", "조향: 횡가속 비용(0)", "커브에서 옆으로 쏠리는 힘(횡가속)을 얼마나 줄이려 할지 정합니다. 높이면 쏠림이 적어지지만 경로를 덜 정확히 따라갈 수 있습니다.", ROAD_ICON, 0, 300, 1));
-  advancedToggles->addItem(new CValueControl("LateralMotionCost", "조향: 횡움직임 비용(11)", "옆으로 움직이는 동작을 얼마나 아낄지 정합니다. 높이면 덜 움직이고 부드럽지만 반응이 느려집니다.", ROAD_ICON, 0, 50, 1));
-  advancedToggles->addItem(new CValueControl("LateralJerkCost", "조향: 횡저크 비용(4)", "조향이 갑자기 바뀌는 것(저크)을 얼마나 막을지 정합니다. 높이면 부드럽지만 반응이 느려집니다.", ROAD_ICON, 0, 50, 1));
-  advancedToggles->addItem(carrot_section("조향 장치"));
-  advancedToggles->addItem(new CValueControl("MaxAngleFrames", "최대 조향각 프레임(89)", "핸들을 크게 돌린 상태가 몇 프레임 이어지면 조향 힘을 잠깐 끊을지 정합니다(현대차 조향 각도 제한). 계기판에 조향 오류가 뜨면 85~87로 낮추세요. 기본 89", ROAD_ICON, 80, 100, 1));
   advancedToggles->addItem(carrot_section("개발용"));
   advancedToggles->addItem(new ParamControl("ShowDebugUI", "디버그 정보", "켜 두면 주행 화면에 개발용 상세 정보를 글자로 보여줍니다.", SHELL_ICON, this));
   advancedToggles->addItem(new CValueControl("ShowPlotMode", "디버그 그래프", "개발용 그래프를 보여줍니다. 0:안 보임, 1~5:그래프 종류", SHELL_ICON, 0, 5, 1));
   advancedToggles->addItem(tmuxlog_btn);
 
-  toggles_layout->addWidget(cruiseToggles);
-  toggles_layout->addWidget(advancedToggles);
-  toggles_layout->addWidget(latLongToggles);
-  toggles_layout->addWidget(dispToggles);
-  toggles_layout->addWidget(pathToggles);
   toggles_layout->addWidget(startToggles);
-  toggles_layout->addWidget(speedToggles);
+  toggles_layout->addWidget(cruiseToggles);
+  toggles_layout->addWidget(dispToggles);
+  toggles_layout->addWidget(advancedToggles);
   ScrollView* toggles_view = new ScrollView(toggles, this);
   carrotLayout->addWidget(toggles_view, 1);
 
@@ -824,19 +771,16 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
 void CarrotPanel::togglesCarrot(int widgetIndex) {
   startToggles->setVisible(widgetIndex == 0);
   cruiseToggles->setVisible(widgetIndex == 1);
-  speedToggles->setVisible(widgetIndex == 2);
-  latLongToggles->setVisible(widgetIndex == 3);
-  dispToggles->setVisible(widgetIndex == 4);
-  pathToggles->setVisible(widgetIndex == 5);
-  advancedToggles->setVisible(widgetIndex == 6);
+  dispToggles->setVisible(widgetIndex == 2);
+  advancedToggles->setVisible(widgetIndex == 3);
 }
 
 void CarrotPanel::updateButtonStyles() {
   QString styleSheet = R"(
-      #tab_btn_0, #tab_btn_1, #tab_btn_2, #tab_btn_3, #tab_btn_4, #tab_btn_5, #tab_btn_6 {
+      #tab_btn_0, #tab_btn_1, #tab_btn_2, #tab_btn_3 {
         height: 120px; border-radius: 15px; background-color: #393939;
       }
-      #tab_btn_0:pressed, #tab_btn_1:pressed, #tab_btn_2:pressed, #tab_btn_3:pressed, #tab_btn_4:pressed, #tab_btn_5:pressed, #tab_btn_6:pressed {
+      #tab_btn_0:pressed, #tab_btn_1:pressed, #tab_btn_2:pressed, #tab_btn_3:pressed {
         background-color: #4a4a4a;
       }
   )";

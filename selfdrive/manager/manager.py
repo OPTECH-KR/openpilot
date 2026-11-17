@@ -198,6 +198,19 @@ def manager_init() -> None:
                ("TFollowGap1", "110"), ("TFollowGap2", "120"), ("TFollowGap3", "140"), ("TFollowGap4", "160"),
                ("ApplyLongDynamicCost", "0"), ("TFollowSpeedRatio", "110")):
     params.put(k, v)
+  # settings removed from the menu (4-tab cleanup): keep them at their defaults so they can't get stuck
+  for k, v in (("MixRadarInfo", "0"), ("CarrotRadar", "0"), ("CarrotCutInPredecel", "0"), ("CarrotStoppingLead", "0"),
+               ("AutoCurveSpeedFactorIn", "10"), ("CarrotTurnAccel", "0"),
+               ("AutoNaviSpeedCtrlStart", "22"), ("AutoNaviSpeedCtrlEnd", "6"), ("AutoNaviSpeedDecelRate", "80"),
+               ("AutoNaviSpeedSafetyFactor", "105"), ("AutoNaviSpeedCtrlMode", "0"), ("AutoNaviSpeedBumpDist", "10"),
+               ("AutoTurnControl", "0"), ("AutoTurnControlSpeedLaneChange", "60"), ("AutoTurnControlSpeedTurn", "20"),
+               ("AutoTurnControlTurnEnd", "3"),
+               ("LongitudinalTuningKpV", "100"), ("LongitudinalTuningKiV", "200"), ("LongitudinalTuningKf", "100"),
+               ("SteeringRateCost", "700"), ("PathCostApply", "100"), ("LateralAccelCost", "0"),
+               ("LateralMotionCost", "11"), ("LateralJerkCost", "5"), ("MaxAngleFrames", "89"),
+               ("SteerDeltaUp", "3"), ("SteerDeltaDown", "7"), ("UseLaneLineSpeed", "0"),
+               ("CruiseButtonMode", "0"), ("CruiseSpeedMin", "10")):
+    params.put(k, v)
 
   # is this dashcam?
   if os.getenv("PASSIVE") is not None:
