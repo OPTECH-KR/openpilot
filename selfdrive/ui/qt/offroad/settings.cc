@@ -683,17 +683,17 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   cruiseToggles->addItem(carrot_section("크루즈 버튼"));
   cruiseToggles->addItem(new CValueControl("LongControlActiveSound", "크루즈 알림음", "크루즈가 켜지고 꺼질 때 나는 알림음 크기입니다. 0:끄기, 1:작게, 2:크게", ROAD_ICON, 0, 2, 1));
   cruiseToggles->addItem(new CValueControl("CruiseSpeedUnit", "버튼 한 번에 바뀌는 속도", "크루즈 속도 버튼을 한 번 누를 때 바뀌는 속도(km/h)입니다.", ROAD_ICON, 1, 20, 1));
+  cruiseToggles->addItem(carrot_section("과속카메라 · 방지턱"));
+  cruiseToggles->addItem(new CValueControl("AutoNaviSpeedCtrl", "카메라 감속", "과속카메라 앞에서 자동으로 감속합니다. 0:사용 안 함, 1:APM(내비 연동), 2:APM + 순정 내비게이션, 3:NDA", ROAD_ICON, 0, 3, 1));
+  cruiseToggles->addItem(new CValueControl("SpeedCamDB", "내장 카메라 DB", "내비 앱 없이 C2 안에 넣어 둔 전국 고정식 단속카메라 목록(공공데이터, 과속·신호과속·구간단속 약 3만 1천 대)과 GPS로 앞쪽 카메라를 찾아 감속합니다. 내비 앱(APM)이 카메라 정보를 보내면 앱 정보를 우선하고, 앱이 회전 안내만 보낼 때(티맵 등)는 내장 DB로 카메라 감속을 합니다. 이동식 카메라와 새로 생긴 카메라는 없고, 반대 차로 카메라에서도 제한속도까지 줄일 수 있습니다. '카메라 감속'이 1 이상이어야 감속합니다. 0:끄기, 1:켜기. 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 1, 1));
+  cruiseToggles->addItem(new CValueControl("HapticFeedbackWhenSpeedCamera", "카메라 알림", "과속카메라가 가까워질 때 알려 주는 방법입니다. 0:사용 안 함, 1:핸들 진동, 2:계기판 표시, 3:HUD 표시", ROAD_ICON, 0, 3, 1));
+  cruiseToggles->addItem(new CValueControl("AutoNaviSpeedBumpSpeed", "방지턱 통과 속도", "과속방지턱을 넘을 때의 속도(km/h)입니다.", ROAD_ICON, 10, 100, 5));
 
   // ---- 속도: cruise speed, camera / bump, accel ----
   speedToggles = new ListWidget(this);
   speedToggles->addItem(carrot_section("크루즈 속도"));
   speedToggles->addItem(new CValueControl("AutoSyncCruiseSpeedMax", "가속페달 속도 맞춤 상한", "가속페달로 크루즈 설정 속도보다 빨리 달리면, 페달을 뗄 때 설정 속도를 지금 속도로 올려 줍니다. 이 값(km/h)까지만 올립니다. 0:사용 안 함", ROAD_ICON, 0, 200, 10));
   speedToggles->addItem(new CValueControl("AutoSpeedUptoRoadSpeedLimit", "제한속도까지 자동 올림", "앞차를 따라갈 때 도로 제한속도의 이 비율(%)까지 설정 속도를 자동으로 올립니다. 0:사용 안 함, 100:제한속도까지", ROAD_ICON, 0, 200, 10));
-  speedToggles->addItem(carrot_section("과속카메라 · 방지턱"));
-  speedToggles->addItem(new CValueControl("AutoNaviSpeedCtrl", "카메라 감속", "과속카메라 앞에서 자동으로 감속합니다. 0:사용 안 함, 1:APM(내비 연동), 2:APM + 순정 내비게이션, 3:NDA", ROAD_ICON, 0, 3, 1));
-  speedToggles->addItem(new CValueControl("SpeedCamDB", "내장 카메라 DB", "내비 앱 없이 C2 안에 넣어 둔 전국 고정식 단속카메라 목록(공공데이터, 과속·신호과속·구간단속 약 3만 1천 대)과 GPS로 앞쪽 카메라를 찾아 감속합니다. 내비 앱(APM)이 카메라 정보를 보내면 앱 정보를 우선하고, 앱이 회전 안내만 보낼 때(티맵 등)는 내장 DB로 카메라 감속을 합니다. 이동식 카메라와 새로 생긴 카메라는 없고, 반대 차로 카메라에서도 제한속도까지 줄일 수 있습니다. '카메라 감속'이 1 이상이어야 감속합니다. 0:끄기, 1:켜기. 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 1, 1));
-  speedToggles->addItem(new CValueControl("HapticFeedbackWhenSpeedCamera", "카메라 알림", "과속카메라가 가까워질 때 알려 주는 방법입니다. 0:사용 안 함, 1:핸들 진동, 2:계기판 표시, 3:HUD 표시", ROAD_ICON, 0, 3, 1));
-  speedToggles->addItem(new CValueControl("AutoNaviSpeedBumpSpeed", "방지턱 통과 속도", "과속방지턱을 넘을 때의 속도(km/h)입니다.", ROAD_ICON, 10, 100, 5));
   speedToggles->addItem(carrot_section("출발·정지 (출발이 굼뜨거나 정지가 거칠 때)"));
   speedToggles->addItem(new CValueControl("JerkStartLimit", "출발 저크", "정차 후 출발할 때 가속이 얼마나 빨리 붙을지 정합니다(0.1 단위). 높이면 빠르게, 낮추면 부드럽게 출발합니다.", ROAD_ICON, 1, 50, 1));
   speedToggles->addItem(new CValueControl("StartAccelApply", "출발 가속", "정차 후 출발할 때 처음 가속을 몇 % 더 줄지 정합니다. 출발이 굼뜨면 올려 보세요. 0:사용 안 함", ROAD_ICON, 0, 100, 10));
