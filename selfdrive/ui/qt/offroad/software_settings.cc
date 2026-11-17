@@ -45,10 +45,14 @@ SoftwarePanel::SoftwarePanel(QWidget* parent) : ListWidget(parent) {
       ConfirmationDialog::alert("업데이트 서버에 연결하지 못했어요.\n와이파이 연결을 확인해 주세요.", this);
     } else if (local == remote) {
       ConfirmationDialog::alert("이미 최신 버전이에요.\n(" + local + ")", this);
-    } else if (ConfirmationDialog::confirm("새 업데이트가 있어요.\n지금 " + local + " → 새 버전 " + remote +
-                                           "\n\n받은 뒤 자동으로 재부팅해요. 업데이트할까요?", "업데이트", this)) {
-      downloadBtn->setValue("업데이트 받는 중...");
-      std::system("/data/openpilot/selfdrive/assets/addon/sh/gitpull.sh");
+    } else {
+      QString changes = QString::fromStdString(util::read_file("/tmp/update_changelog.txt")).trimmed();
+      if (changes.isEmpty()) changes = "(바뀐 내용 목록을 불러오지 못했어요)";
+      if (ConfirmationDialog::confirm("새 업데이트가 있어요. (" + local + " → " + remote + ")\n\n바뀐 내용:\n" + changes +
+                                      "\n\n받은 뒤 자동으로 재부팅해요. 업데이트할까요?", "업데이트", this)) {
+        downloadBtn->setValue("업데이트 받는 중...");
+        std::system("/data/openpilot/selfdrive/assets/addon/sh/gitpull.sh");
+      }
     }
     updateLabels();
   });

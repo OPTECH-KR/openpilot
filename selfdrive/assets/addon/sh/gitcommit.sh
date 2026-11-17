@@ -14,3 +14,5 @@ LOCAL_HASH=$(git rev-parse HEAD)
 /usr/bin/git fetch
 REMOTE_HASH=$(git rev-parse --verify origin/$CURRENT_BRANCH)
 echo -n "$REMOTE_HASH" > /data/params/d/GitCommitRemote
+# list what the update changes (newest first), shown in the update dialog
+git log --no-merges --format='• %s' HEAD..origin/$CURRENT_BRANCH 2>/dev/null | head -n 12 > /tmp/update_changelog.txt
