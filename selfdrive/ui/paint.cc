@@ -1,7 +1,10 @@
 ﻿#include "selfdrive/ui/paint.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <functional>
+#include <vector>
 
 //#define __TEST
 
@@ -1959,6 +1962,81 @@ DrawApilot::DrawApilot() {
 DrawApilot* drawApilot;
 Alert alert;
 NVGcolor alert_color;
+// GPS status line at the bottom right, left of the Wi-Fi address: fix state, 4 signal bars, satellites seen, accuracy.
+// Signal strength = mean C/N0 of the 4 strongest satellites from ublox RXM-RAWX (ubloxGnss.measurementReport).
+static void ui_draw_gps_info(const UIState* s) {
+    if (!s->show_gps_info) return;
+    SubMaster& sm = *(s->sm);
+    static int gps_sats = 0, gps_strong = 0, gps_cno = 0;
+    static bool gps_antenna_bad = false;
+
+    const bool gnss_alive = sm.alive("ubloxGnss");
+    if (gnss_alive && sm.updated("ubloxGnss")) {
+        const auto gnss = sm["ubloxGnss"].getUbloxGnss();
+        if (gnss.which() == cereal::UbloxGnss::MEASUREMENT_REPORT) {
+            std::vector<int> cnos;
+            for (const auto& meas : gnss.getMeasurementReport().getMeasurements()) {
+                if (meas.getCno() > 0) cnos.push_back(meas.getCno());
+            }
+            std::sort(cnos.begin(), cnos.end(), std::greater<int>());
+            int sum = 0;
+            const int top = std::min<int>(4, cnos.size());
+            for (int i = 0; i < top; i++) sum += cnos[i];
+            gps_sats = cnos.size();
+            gps_strong = std::count_if(cnos.begin(), cnos.end(), [](int c) { return c >= 30; });
+            gps_cno = top > 0 ? sum / top : 0;
+        } else if (gnss.which() == cereal::UbloxGnss::HW_STATUS) {
+            const auto ant = gnss.getHwStatus().getAStatus();
+            gps_antenna_bad = ant == cereal::UbloxGnss::HwStatus::AntennaSupervisorState::SHORT ||
+                              ant == cereal::UbloxGnss::HwStatus::AntennaSupervisorState::OPEN;
+        }
+    } else if (!gnss_alive) {
+        gps_sats = gps_strong = gps_cno = 0;
+        gps_antenna_bad = false;
+    }
+
+    const bool loc_alive = sm.alive("gpsLocationExternal");
+    const auto loc = sm["gpsLocationExternal"].getGpsLocationExternal();
+    const bool fixed = loc_alive && (loc.getFlags() & 1);
+    const float acc = loc.getAccuracy();
+
+    const char* state;
+    NVGcolor color;
+    if (!gnss_alive && !loc_alive) { state = "꺼짐"; color = nvgRGBA(170, 170, 170, 255); }
+    else if (gps_antenna_bad) { state = "안테나 이상"; color = COLOR_RED; }
+    else if (!fixed) { state = "찾는 중"; color = COLOR_YELLOW; }
+    else if (acc <= 5.0f) { state = "잡힘"; color = nvgRGBA(0, 230, 0, 255); }
+    else if (acc <= 15.0f) { state = "잡힘"; color = COLOR_YELLOW; }
+    else { state = "약함"; color = COLOR_OCHRE; }
+
+    char str[96];
+    if (fixed) snprintf(str, sizeof(str), "GPS %s · 위성 %d개(강 %d) · 오차 %.0fm", state, gps_sats, gps_strong, acc);
+    else if (gnss_alive) snprintf(str, sizeof(str), "GPS %s · 위성 %d개(강 %d)", state, gps_sats, gps_strong);
+    else snprintf(str, sizeof(str), "GPS %s", state);
+
+    const float tx = s->fb_w - 300, ty = s->fb_h - 15, fsize = 32;
+    nvgTextAlign(s->vg, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
+    ui_draw_text(s, tx, ty, str, fsize, color, BOLD, 2.0f, 0.0f);
+
+    // signal bars left of the text: <20 dB-Hz none, then one bar per 5 dB-Hz up to 35+
+    float bounds[4];
+    nvgFontFace(s->vg, BOLD);
+    nvgFontSize(s->vg, fsize);
+    nvgTextBounds(s->vg, tx, ty, str, NULL, bounds);
+    const int bars = gps_cno >= 35 ? 4 : gps_cno >= 30 ? 3 : gps_cno >= 25 ? 2 : gps_cno >= 20 ? 1 : 0;
+    const float bw = 9, gap = 4, bx0 = bounds[0] - 15 - 4 * (bw + gap);
+    for (int i = 0; i < 4; i++) {
+        const float bh = 8 + i * 6;
+        nvgBeginPath(s->vg);
+        nvgRect(s->vg, bx0 + i * (bw + gap), ty - 6 - bh, bw, bh);
+        nvgFillColor(s->vg, i < bars ? color : nvgRGBA(255, 255, 255, 60));
+        nvgFill(s->vg);
+        nvgStrokeColor(s->vg, COLOR_BLACK_ALPHA(200));
+        nvgStrokeWidth(s->vg, 1.5f);
+        nvgStroke(s->vg);
+    }
+}
+
 void ui_draw(UIState *s, int w, int h) {
   // Update intrinsics matrix after possible wide camera toggle change
   if (s->fb_w != w || s->fb_h != h) {
@@ -1974,6 +2052,7 @@ void ui_draw(UIState *s, int w, int h) {
   drawApilot->drawLeadApilot(s);
   drawApilot->drawDebugText(s, s->show_debug);
   drawApilot->drawDeviceState(s, s->show_device_stat);
+  ui_draw_gps_info(s);
 
   ui_draw_text_a2(s);
 

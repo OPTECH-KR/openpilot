@@ -220,6 +220,8 @@ std::unordered_map<std::string, uint32_t> keys = {
     { "ShowTpms", PERSISTENT },
     { "ShowSteerMode", PERSISTENT },
     { "ShowDeviceState", PERSISTENT },
+    { "ShowGpsInfo", PERSISTENT },
+    { "AutoShutdown", PERSISTENT },
     { "ShowConnInfo", PERSISTENT },
     { "ShowLaneInfo", PERSISTENT },
     { "ShowBlindSpot", PERSISTENT },

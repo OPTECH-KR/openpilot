@@ -615,6 +615,7 @@ void ui_update_params(UIState *s) {
   case 30:
       s->show_steer_mode = std::atoi(params.get("ShowSteerMode").c_str());;
       s->show_device_stat = std::atoi(params.get("ShowDeviceState").c_str());;
+      s->show_gps_info = std::atoi(params.get("ShowGpsInfo").c_str());
       s->show_conn_info = std::atoi(params.get("ShowConnInfo").c_str());;
       break;
   case 40:
@@ -689,7 +690,7 @@ UIState::UIState(QObject *parent) : QObject(parent) {
     "pandaStates", "carParams", "driverMonitoringState", "carState", "liveLocationKalman", "driverState",
     "wideRoadCameraState", "managerState", "navInstruction", "navRoute", "uiPlan",
     "lateralPlan", "longitudinalPlan", "gpsLocationExternal", "carControl", "liveParameters", "roadLimitSpeed",
-    "liveTorqueParameters", "sensorEvents",
+    "liveTorqueParameters", "sensorEvents", "ubloxGnss",
   });
 
   Params params;

@@ -646,6 +646,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     main_layout->setCurrentWidget(homeScreen);
   });
   startToggles->addItem(selectCarBtn);
+  startToggles->addItem(new ParamControl("AutoShutdown", "자동 꺼짐", "켜 두면(초록색) 차량이나 충전기 전원 없이 배터리로만 켜져 있고 주행 중이 아닐 때, 약 10분 뒤 기기가 스스로 꺼져 배터리를 보호합니다. 끄면 배터리가 다 닳을 때까지 켜져 있습니다. 주행 중이거나 전원이 연결돼 있으면 이 설정과 상관없이 꺼지지 않습니다.", SHELL_ICON, this));
   startToggles->addItem(new ParamControl("OpkrHotspotOnBoot", "부팅 시 핫스팟 켜기", "켜 두면 기기가 켜질 때 핫스팟(테더링)이 자동으로 켜집니다.", SHELL_ICON, this));
   auto updateBtn = new ButtonControl("업데이트 확인 후 적용", "업데이트");
   QObject::connect(updateBtn, &ButtonControl::clicked, [=]() {
@@ -739,6 +740,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   dispToggles->addItem(new CValueControl("ScreenAlwaysOn", "화면 항상 켜기", "시동이 꺼져 있을 때 아무것도 만지지 않아도 화면이 꺼지지 않게 합니다. 기본은 30초 뒤 꺼집니다. 켜 두면 차 배터리를 조금 더 쓰고 기기 발열이 늘 수 있습니다. 0:기본(30초 뒤 꺼짐), 1:항상 켜기", SHELL_ICON, 0, 1, 1));
   dispToggles->addItem(new CValueControl("ShowTpms", "타이어 공기압", "타이어 공기압을 주행 화면에 보여줍니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
   dispToggles->addItem(new CValueControl("ShowDateTime", "시간 표시", "주행 화면에 시간과 날짜를 보여줍니다. 0:안 보임, 1:시간+날짜, 2:시간만, 3:날짜만", SHELL_ICON, 0, 3, 1));
+  dispToggles->addItem(new CValueControl("ShowGpsInfo", "GPS 상태", "주행 화면 오른쪽 아래에 GPS가 잡혔는지, 신호 세기(막대 4칸), 보이는 위성 수, 위치 오차(m)를 보여줍니다. GPS는 시동이 켜져 있을 때만 동작합니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
   dispToggles->addItem(new CValueControl("ShowDeviceState", "기기 상태", "기기 상태(CPU 온도, 메모리, 저장공간)를 보여줍니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
   dispToggles->addItem(new CValueControl("ShowBlindSpot", "후측방(BSD) 경고", "후측방 감지(BSD) 경고를 화면에 표시합니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
   dispToggles->addItem(new CValueControl("ShowConnInfo", "APM 연결 표시", "내비(APM/NDA) 연결 상태 아이콘을 보여줍니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));

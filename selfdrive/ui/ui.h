@@ -193,6 +193,7 @@ public:
   int show_path_end = 1;
   int show_steer_mode = 0;
   bool show_device_stat = true;
+  bool show_gps_info = true;
   bool show_conn_info = true;
   int  show_lane_info = 2;
   bool show_blind_spot = true;
