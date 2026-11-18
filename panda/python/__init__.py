@@ -206,6 +206,8 @@ class Panda(object):
     self._handle.close()
     self._handle = None
 
+  # USB vendor id: 0xbbaa on this panda firmware, 0x3801 on comma's firmware since 2023 (a new red panda ships with it),
+  # so both are accepted to find the panda and flash this firmware onto it
   def connect(self, claim=True, wait=False):
     if self._handle is not None:
       self.close()
@@ -216,7 +218,7 @@ class Panda(object):
     while 1:
       try:
         for device in context.getDeviceList(skip_on_error=True):
-          if device.getVendorID() == 0xbbaa and device.getProductID() in [0xddcc, 0xddee]:
+          if device.getVendorID() in (0xbbaa, 0x3801) and device.getProductID() in [0xddcc, 0xddee]:
             try:
               this_serial = device.getSerialNumber()
             except Exception:
@@ -353,7 +355,7 @@ class Panda(object):
     ret = []
     try:
       for device in context.getDeviceList(skip_on_error=True):
-        if device.getVendorID() == 0xbbaa and device.getProductID() in [0xddcc, 0xddee]:
+        if device.getVendorID() in (0xbbaa, 0x3801) and device.getProductID() in [0xddcc, 0xddee]:
           try:
             ret.append(device.getSerialNumber())
           except Exception:
