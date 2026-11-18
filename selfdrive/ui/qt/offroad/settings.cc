@@ -820,7 +820,6 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
 
   // ---- 화면 ----
   dispToggles = new ListWidget(this);
-  dispToggles->addItem(new CValueControl("ShowHudMode", "화면 모드", "주행 화면에서 속도 등 정보를 어디에 어떻게 보여줄지 고릅니다. 0:기본, 1:APilot, 2:아래, 3:위, 4:왼쪽, 5:왼쪽 아래, 6:당근(C3X) 스타일 박스", SHELL_ICON, 0, 6, 1));
   dispToggles->addItem(new CValueControl("ScreenAlwaysOn", "화면 항상 켜기", "시동이 꺼져 있을 때 아무것도 만지지 않아도 화면이 꺼지지 않게 합니다. 기본은 30초 뒤 꺼집니다. 켜 두면 차 배터리를 조금 더 쓰고 기기 발열이 늘 수 있습니다. 0:기본(30초 뒤 꺼짐), 1:항상 켜기", SHELL_ICON, 0, 1, 1));
   dispToggles->addItem(new CValueControl("ShowTpms", "타이어 공기압", "타이어 공기압을 주행 화면에 보여줍니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
   dispToggles->addItem(new CValueControl("ShowDateTime", "시간 표시", "주행 화면에 시간과 날짜를 보여줍니다. 0:안 보임, 1:시간+날짜, 2:시간만, 3:날짜만", SHELL_ICON, 0, 3, 1));

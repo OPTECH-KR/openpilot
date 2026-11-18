@@ -237,7 +237,9 @@ void ExperimentalButton::updateState(const UIState &s) {
 
   // button is "visible" if engageable or enabled
   const auto cs = sm["controlsState"].getControlsState();
-  setVisible(cs.getEngageable() || cs.getEnabled());
+  // C2 port: the top right corner is kept empty (the button only showed the APILOT / blended-mode logo)
+  setVisible(false);
+  (void)cs;
 
   // button is "checked" if experimental mode is enabled
     const auto lp = (*s.sm)["longitudinalPlan"].getLongitudinalPlan();

@@ -47,7 +47,7 @@ def manager_init() -> None:
     ("ShowDebugUI", "0"),
     ("OPKRServer", "0"),
     ("ShowDateTime", "1"),
-    ("ShowHudMode", "4"),
+    ("ShowHudMode", "6"),
     ("ShowSteerRotate", "1"),
     ("ShowPathEnd", "1"),
     ("ShowAccelRpm", "1"),
@@ -219,7 +219,8 @@ def manager_init() -> None:
                ("SteeringRateCost", "700"), ("PathCostApply", "100"), ("LateralAccelCost", "0"),
                ("LateralMotionCost", "11"), ("LateralJerkCost", "5"), ("MaxAngleFrames", "89"),
                ("SteerDeltaUp", "3"), ("SteerDeltaDown", "7"), ("UseLaneLineSpeed", "0"),
-               ("CruiseButtonMode", "0"), ("CruiseSpeedMin", "10")):
+               ("CruiseButtonMode", "0"), ("CruiseSpeedMin", "10"),
+               ("ShowHudMode", "6")):  # screen mode fixed to the carrot HUD box; the selector is removed
     params.put(k, v)
 
   # is this dashcam?

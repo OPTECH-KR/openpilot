@@ -817,8 +817,12 @@ static void carrot_hud_background(const UIState* s, int bx, int by, bool cam_det
         for (int i = 0; i < std::size(cpuTempC); i++) cpuTemp += cpuTempC[i];
         cpuTemp /= (float)std::size(cpuTempC);
     }
-    const int mem = deviceState.getMemoryUsagePercent();
-    const float disk = 100.f - deviceState.getFreeSpacePercent();
+    const auto cpuUsage = deviceState.getCpuUsagePercent();
+    int cpuUse = 0;
+    if (std::size(cpuUsage) > 0) {
+        for (int i = 0; i < std::size(cpuUsage); i++) cpuUse += cpuUsage[i];
+        cpuUse /= (int)std::size(cpuUsage);
+    }
     const NVGcolor tile_ok = nvgRGBA(0, 255, 0, 190);
     const NVGcolor tile_hot = nvgRGBA(255, 0, 0, 255);
     const bool blink_on = carrot_blink <= 8;
@@ -826,13 +830,15 @@ static void carrot_hud_background(const UIState* s, int bx, int by, bool cam_det
 
     const int dx = bx - 35, dy = by - 200;
     const int xs[3] = {dx, dx + 150, dx + 300};
-    const char* labels[3] = {"CPU", "MEM", "DISK"};
-    NVGcolor fills[3] = {(cpuTemp > 80 && blink_on) ? tile_hot : tile_ok, (mem > 85 && blink_on) ? tile_hot : tile_ok, tile_ok};
+    // CPU temperature (the font has no degree sign, so the unit is in the label), CPU use (core average), screen FPS
+    const char* labels[3] = {"CPU온도", "CPU사용", "FPS"};
+    NVGcolor fills[3] = {(cpuTemp > 80 && blink_on) ? tile_hot : tile_ok, (cpuUse > 90 && blink_on) ? tile_hot : tile_ok,
+                         (g_fps > 0 && g_fps < 15 && blink_on) ? tile_hot : tile_ok};
     for (int i = 0; i < 3; i++) {
         carrot_round_box(s, xs[i] - 65, dy - 38, 130, 90, fills[i], COLOR_WHITE, 7, 2);
-        if (i == 0) snprintf(str, sizeof(str), "%.0f°C", cpuTemp);
-        else if (i == 1) snprintf(str, sizeof(str), "%d%%", mem);
-        else snprintf(str, sizeof(str), "%.0f%%", disk);
+        if (i == 0) snprintf(str, sizeof(str), "%.0f", cpuTemp);
+        else if (i == 1) snprintf(str, sizeof(str), "%d%%", cpuUse);
+        else snprintf(str, sizeof(str), "%d", g_fps);
         ui_draw_text(s, xs[i], dy - 5, labels[i], 25, COLOR_WHITE, BOLD, 1.0f, 4.0f);
         ui_draw_text(s, xs[i], dy + 40, str, 40, COLOR_WHITE, BOLD, 1.0f, 4.0f);
     }
@@ -1875,7 +1881,8 @@ void DrawApilot::drawDeviceState(UIState* s, bool show) {
     int r = interp<float>(cpuTemp, { 50.f, 90.f }, { 200.f, 255.f }, false);
     int g = interp<float>(cpuTemp, { 50.f, 90.f }, { 255.f, 200.f }, false);
     NVGcolor textColor = nvgRGBA(r, g, 200, 255);
-    if (s->fb_w > 1200 && show) {
+    // C2 port: the top right corner is kept empty; the carrot HUD box shows CPU temperature, CPU use and FPS
+    if (false && s->fb_w > 1200 && show) {
         ui_draw_text(s, s->fb_w - 20, 35, str, 35, textColor, BOLD);
         float engineRpm = car_state.getEngineRpm();
         float motorRpm = car_state.getMotorRpm();
