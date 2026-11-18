@@ -1969,6 +1969,8 @@ CANFD_UNSUPPORTED_LONGITUDINAL_CAR = {CAR.IONIQ_6, CAR.KONA_EV_2ND_GEN, CAR.IONI
 ANGLE_CONTROL_CAR = {CAR.IONIQ_5_PE, CAR.IONIQ_6_PE, CAR.KIA_EV6_PE, CAR.IONIQ_9, CAR.SANTA_FE_MX5, CAR.SANTA_FE_MX5_HEV, CAR.KIA_EV9}
 NON_SCC_CAR = {CAR.KIA_RAY_EV, CAR.PORTER_II_EV}
 OTHER_CAR = ANGLE_CONTROL_CAR | NON_SCC_CAR
+# what this branch's 기타 차종 page offers (the cars without SCC are CAN cars: their page is on apilot-c2-port)
+OTHER_CAR_MENU = ANGLE_CONTROL_CAR
 
 # The camera does SCC on these cars, rather than the radar
 CAMERA_SCC_CAR = {CAR.KONA_EV_2022, CAR.KONA_2022, CAR.CASPER_EV, }
@@ -2099,9 +2101,10 @@ DBC = {
 
 
 def main():
-  # the car menu list (manager writes it to /data/params/d/SupportedCars); 기타 차종 have their own page
+  # the car menu list (manager writes it to /data/params/d/SupportedCars): this branch is for the red panda, so only
+  # CAN FD cars; CAN cars are on apilot-c2-port. 기타 차종 have their own page
   for member, value in vars(CAR).items():
-    if not member.startswith("_") and value not in OTHER_CAR:
+    if not member.startswith("_") and value in CANFD_CAR and value not in OTHER_CAR:
       print(value)
 
 

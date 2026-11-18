@@ -754,7 +754,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   startToggles->addItem(updateBtn);
   // 기타 차종: the last item of the start tab; opens its own page
   otherCars = new OtherCars(this);
-  auto other_cars_btn = new ButtonControl("기타 차종 (시험 중)", "열기", "아직 실제 차로 시험하지 않은 기능이 필요한 차종입니다. 핸들을 각도로 움직이는 신형 차(아이오닉 5 PE·EV6 PE 등, 레드판다 필요)와 스마트 크루즈(SCC)가 없는 차(레이 EV·포터 II EV)를 여기서 고르고 설정합니다.");
+  auto other_cars_btn = new ButtonControl("기타 차종 (시험 중)", "열기", "아직 실제 차로 시험하지 않은 기능이 필요한 차종입니다. 핸들을 각도로 움직이는 신형 차(아이오닉 5 PE·EV6 PE 등)를 여기서 고르고, CAN FD 차량의 HDA 방식을 정합니다. 스마트 크루즈(SCC)가 없는 레이 EV·포터 II EV는 apilot-c2-port 브랜치에 있습니다.");
   QObject::connect(other_cars_btn, &ButtonControl::clicked, [=]() { main_layout->setCurrentWidget(otherCars); });
   connect(otherCars, &OtherCars::backPress, [=]() { main_layout->setCurrentWidget(homeScreen); });
   connect(otherCars, &OtherCars::selectedCar, [=]() {
@@ -1184,7 +1184,8 @@ SelectCar::SelectCar(QWidget* parent): QWidget(parent) {
 }
 
 // ---- 기타 차종 page ----
-// CAR names must match selfdrive/car/hyundai/values.py (OTHER_CAR); tests/test_other_cars_c2.py checks them.
+// CAR names must match selfdrive/car/hyundai/values.py (OTHER_CAR_MENU); tests/test_other_cars_c2.py checks them.
+// This branch (apilot-c2-canfd) offers the angle-steering CAN FD cars; the cars without SCC are on apilot-c2-port.
 struct OtherCarEntry { const char *car; const char *title; const char *desc; };
 static const OtherCarEntry OTHER_ANGLE_CARS[] = {
   {"HYUNDAI IONIQ 5 PE 2025", "아이오닉 5 PE (2024~)", "LFA2 차량. 레드판다가 필요합니다."},
@@ -1194,10 +1195,6 @@ static const OtherCarEntry OTHER_ANGLE_CARS[] = {
   {"HYUNDAI SANTA FE MX5 2024", "싼타페 MX5 (가솔린)", "LFA2 차량. 레드판다가 필요합니다."},
   {"HYUNDAI SANTA FE MX5 HEV 2024", "싼타페 MX5 하이브리드", "LFA2 차량. 레드판다가 필요합니다."},
   {"KIA EV9 2024", "EV9", "LFA2 차량. 레드판다가 필요합니다."},
-};
-static const OtherCarEntry OTHER_NON_SCC_CARS[] = {
-  {"KIA RAY EV 2024", "레이 EV", "스마트 크루즈(SCC)가 없는 차량입니다. openpilot은 조향만 하고, 속도는 차의 크루즈 컨트롤이 유지합니다."},
-  {"HYUNDAI PORTER II EV 2024", "포터 II EV", "스마트 크루즈(SCC)가 없는 차량입니다. openpilot은 조향만 하고, 속도는 차의 크루즈 컨트롤이 유지합니다."},
 };
 
 OtherCars::OtherCars(QWidget* parent): QWidget(parent) {
@@ -1233,11 +1230,6 @@ OtherCars::OtherCars(QWidget* parent): QWidget(parent) {
   for (const auto &e : OTHER_ANGLE_CARS) add_car(e);
   list->addItem(new CValueControl("AngleSteerMaxGain", "각도 조향 최대 힘",
     "각도 방식 차에서 openpilot이 쓸 수 있는 핸들 힘의 상한(%)입니다. 운전자가 핸들을 잡으면 이 값과 상관없이 힘이 자동으로 줄어듭니다. 커브에서 힘이 모자라면 올리고, 핸들이 너무 세게 느껴지면 내리세요. 30~100, 기본 100", ROAD_ICON, 30, 100, 5));
-
-  list->addItem(carrot_section("스마트 크루즈(SCC)가 없는 차"));
-  for (const auto &e : OTHER_NON_SCC_CARS) add_car(e);
-  list->addItem(new ParamControl("CcOnlySpeedButtons", "크루즈 속도 자동 조절",
-    "켜면 openpilot이 크루즈 버튼을 대신 눌러 설정 속도를 바꿉니다(커브·과속카메라 감속 등). 이 차들은 앞차를 감지하는 레이더가 없고 크루즈가 브레이크를 세게 걸지 못하므로, 앞차와의 거리는 항상 운전자가 직접 지켜야 합니다. 기본은 꺼짐(조향만).", SHELL_ICON, this));
 
   // CanfdHdaMode: selfdrive/car/hyundai/interface.py reads it at start (reboot to apply)
   list->addItem(carrot_section("CAN FD 차량 공통 (레드판다)"));
