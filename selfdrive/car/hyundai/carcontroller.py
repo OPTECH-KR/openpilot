@@ -66,8 +66,8 @@ class CarController:
     self.softHoldMode = 1
     self.blinking_signal = False #아이콘 깜박이용 1Hz
     self.blinking_frame = int(1.0 / DT_CTRL)
-    self.steerDeltaUp = 3
-    self.steerDeltaDown = 7
+    self.steerDeltaUp = self.params.STEER_DELTA_UP
+    self.steerDeltaDown = self.params.STEER_DELTA_DOWN
     self.button_wait = 12
     self.jerk_count = 0
 
@@ -128,6 +128,12 @@ class CarController:
       self.softHoldMode = int(Params().get("SoftHoldMode", encoding="utf8"))
       self.steerDeltaUp = int(Params().get("SteerDeltaUp", encoding="utf8"))
       self.steerDeltaDown = int(Params().get("SteerDeltaDown", encoding="utf8"))
+      if self.CP.carFingerprint in CANFD_CAR:
+        # the CAN FD panda safety allows torque rate up 2 / down 3 per frame and at least 89 valid frames
+        # (HYUNDAI_CANFD_STEERING_LIMITS); the menu defaults (3 / 7) would make the panda drop every steering message
+        self.steerDeltaUp = min(self.steerDeltaUp, 2)
+        self.steerDeltaDown = min(self.steerDeltaDown, 3)
+        self.maxAngleFrames = max(self.maxAngleFrames, MAX_ANGLE_FRAMES)
 
     # tester present - w/ no response (keeps relevant ECU disabled)
     if self.frame % 100 == 0 and not (self.CP.flags & HyundaiFlags.CANFD_CAMERA_SCC.value) and self.CP.openpilotLongitudinalControl:
@@ -160,7 +166,7 @@ class CarController:
 
       # disable LFA on HDA2
       if self.frame % 5 == 0 and hda2:
-        can_sends.append(hyundaicanfd.create_cam_0x2a4(self.packer, CS.cam_0x2a4))
+        can_sends.append(hyundaicanfd.create_cam_0x2a4(self.packer, self.CP, CS.cam_0x2a4))
 
       # LFA and HDA icons
       if self.frame % 5 == 0 and (not hda2 or hda2_long):
@@ -168,7 +174,7 @@ class CarController:
 
       if self.CP.openpilotLongitudinalControl:
         if hda2:
-          can_sends.extend(hyundaicanfd.create_adrv_messages(self.packer, self.frame))
+          can_sends.extend(hyundaicanfd.create_adrv_messages(self.packer, self.CP, self.frame))
         if self.frame % 2 == 0:
           can_sends.append(hyundaicanfd.create_acc_control(self.packer, self.CP, CC.enabled, self.accel_last, accel, stopping, CC.cruiseControl.override,
                                                            set_speed_in_units))
