@@ -715,17 +715,17 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   });
   startToggles->addItem(gps_btn);
   // EngageWithLong: what the cruise button turns on (controlsd / cruise_helper); no reboot needed
-  auto engage_mode_btn = new ButtonControl("사용 방식", "", "크루즈 버튼으로 openpilot을 켤 때 무엇을 켤지 고릅니다. 조향+가감속 사용: 조향과 가감속이 함께 켜지고, 설정 속도는 그때의 현재 속도입니다. 브레이크를 밟았다 떼면 원래 설정 속도로 다시 갑니다. 조향만 사용: 조향만 켜지고, 어떤 버튼이나 페달로도 가감속은 켜지지 않습니다. 어느 쪽이든 크루즈 버튼을 다시 누르면 모두 꺼지고, +/- 버튼은 가감속이 켜져 있을 때 설정 속도만 바꿉니다.");
+  auto engage_mode_btn = new ButtonControl("", "선택", "크루즈 버튼으로 openpilot을 켤 때 무엇을 켤지 고릅니다. 조향+가감속 사용: 조향과 가감속이 함께 켜지고, 설정 속도는 그때의 현재 속도입니다. 브레이크를 밟았다 떼면 원래 설정 속도로 다시 갑니다. 조향만 사용: 조향만 켜지고, 어떤 버튼이나 페달로도 가감속은 켜지지 않습니다. 어느 쪽이든 크루즈 버튼을 다시 누르면 모두 꺼지고, +/- 버튼은 가감속이 켜져 있을 때 설정 속도만 바꿉니다.");
   auto engage_mode_name = []() {
     return Params().getBool("EngageWithLong") ? QString("조향+가감속 사용") : QString("조향만 사용");
   };
-  engage_mode_btn->setText(engage_mode_name());
+  engage_mode_btn->setTitle(engage_mode_name());  // the current choice is the title; the button says 선택
   QObject::connect(engage_mode_btn, &ButtonControl::clicked, [=]() {
     const QStringList names = {"조향+가감속 사용", "조향만 사용"};
     const QString sel = MultiOptionDialog::getSelection("사용 방식을 고르세요", names, engage_mode_name(), this);
     if (sel.isEmpty() || sel == engage_mode_name()) return;
     Params().putBool("EngageWithLong", sel == names[0]);
-    engage_mode_btn->setText(engage_mode_name());
+    engage_mode_btn->setTitle(engage_mode_name());
   });
   startToggles->addItem(engage_mode_btn);
   startToggles->addItem(new ParamControl("AutoShutdown", "자동 꺼짐", "켜 두면(초록색) 차량이나 충전기 전원 없이 배터리로만 켜져 있고 주행 중이 아닐 때, 약 10분 뒤 기기가 스스로 꺼져 배터리를 보호합니다. 끄면 배터리가 다 닳을 때까지 켜져 있습니다. 주행 중이거나 전원이 연결돼 있으면 이 설정과 상관없이 꺼지지 않습니다.", SHELL_ICON, this));
