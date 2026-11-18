@@ -1901,10 +1901,7 @@ void DrawApilot::drawDeviceState(UIState* s, bool show) {
         sprintf(str, "FPS: %d, %s: %.0f CHARGE: %.0f%%                      ", g_fps, (motorRpm > 0.0) ? "MOTOR" : "RPM", (motorRpm > 0.0) ? motorRpm : engineRpm, car_state.getChargeMeter());
         ui_draw_text(s, s->fb_w - 20, 90, str, 35, textColor, BOLD);
     }
-    qstr = QString::fromStdString(deviceState.getWifiIpAddress().cStr());
-    nvgTextAlign(s->vg, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
-    ui_draw_text(s, s->fb_w - 20, s->fb_h - 15, qstr.toStdString().c_str(), 30, COLOR_WHITE, BOLD, 0.0f, 0.0f);
-
+    // C2 port: no IP address in the bottom right corner, the sidebar already shows it
 }
 void DrawApilot::drawDebugText(UIState* s, bool show) {
     if (s->fb_w < 1200) return;
