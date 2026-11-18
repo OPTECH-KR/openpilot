@@ -74,6 +74,12 @@ class HyundaiFlags(IntFlag):
   USE_FCA = 256
   # CAN FD on EON/C2: the red panda is the only panda, so its buses are 0-2 (see canfd_bus)
   CANFD_SINGLE_PANDA = 512
+  # CAN FD variants found by fingerprint (carrot-wip): gear in GEAR (0x45) / in ACCELERATOR (EV with no gear message),
+  # HDA2 steering through LKAS_ALT (0x110) + CAM_0x362 instead of LKAS (0x50) + CAM_0x2a4, hybrid gas in ACCELERATOR_ALT (0x105)
+  CANFD_GEARS_69 = 1024
+  CANFD_GEARS_ACCEL = 2048
+  CANFD_HDA2_ALT_STEERING = 4096
+  CANFD_HYBRID = 8192
 
 
 def canfd_bus(CP, bus):
@@ -81,6 +87,11 @@ def canfd_bus(CP, bus):
   2 = camera side. With the red panda as the only panda (EON, C2 without its uno) that is the number itself; behind a
   first panda (C3, or a C2 that keeps its uno) everything is 4 higher, which is what this code originally assumed."""
   return bus if CP.flags & HyundaiFlags.CANFD_SINGLE_PANDA else bus + 4
+
+
+def canfd_hybrid(CP):
+  """hybrid gas signal: a listed hybrid, or a CAN FD car where ACCELERATOR_ALT (0x105) showed up (carrot detects it the same way)"""
+  return CP.carFingerprint in HYBRID_CAR or bool(CP.flags & HyundaiFlags.CANFD_HYBRID)
 
 
 class CAR:
@@ -171,6 +182,30 @@ class CAR:
   KIA_K5_HEV_JF = "KIA K5 HEV 2017"
   KIA_K5_HEV_2022 = "KIA K5 HEV 2022 LEGACY"
   KIA_K9 = "KIA K9 2016-2019"
+
+  # from carrot (carrot-qt-c3-wip): CAN FD platforms (red panda)
+  AZERA_7TH_GEN = "HYUNDAI GRANDEUR GN7 2023"
+  KONA_EV_2ND_GEN = "HYUNDAI KONA EV 2ND GEN"
+  KONA_HEV_2ND_GEN = "HYUNDAI KONA HEV 2ND GEN"
+  SONATA_2024 = "HYUNDAI SONATA 2024"
+  STARIA_4TH_GEN = "HYUNDAI STARIA 4TH GEN"
+  IONIQ_5_N = "HYUNDAI IONIQ 5 N 2024"
+  KIA_K5_DL3_24 = "KIA K5 2024"
+  KIA_K5_DL3_24_HEV = "KIA K5 HEV 2024"
+  KIA_K8_HEV_1ST_GEN = "KIA K8 HEV 1ST GEN"
+  KIA_NIRO_EV_2ND_GEN = "KIA NIRO EV 2ND GEN"
+  KIA_NIRO_HEV_2ND_GEN = "KIA NIRO HEV 2ND GEN"
+  KIA_SORENTO_4TH_GEN = "KIA SORENTO 4TH GEN"
+  KIA_SORENTO_HEV_4TH_GEN = "KIA SORENTO HEV 4TH GEN"
+  KIA_EV4 = "KIA EV4 2025"
+  KIA_CARNIVAL_4TH_GEN = "KIA CARNIVAL 4TH GEN"
+  GENESIS_GV60_EV_1ST_GEN = "GENESIS GV60 EV 1ST GEN"
+  GENESIS_GV70_ELECTRIFIED_1ST_GEN = "GENESIS GV70 ELECTRIFIED 1ST GEN"
+  GENESIS_G80_2ND_GEN_FL = "GENESIS G80 2ND GEN FACELIFT"
+  GENESIS_GV80 = "GENESIS GV80 2023"
+  GENESIS_GV70_EV_1ST_GEN = "GENESIS GV70 EV 1ST GEN"
+  KIA_EV3 = "KIA EV3 2025"
+  KIA_PV5 = "KIA PV5 2025"
 
 
 @dataclass
@@ -281,6 +316,30 @@ CAR_INFO: Dict[str, Optional[Union[HyundaiCarInfo, List[HyundaiCarInfo]]]] = {
   CAR.KIA_K5_HEV_JF: HyundaiCarInfo("Kia K5 Hybrid 2017", "All", harness=Harness.hyundai_c),
   CAR.KIA_K5_HEV_2022: HyundaiCarInfo("Kia K5 Hybrid 2022", "All", harness=Harness.hyundai_c),
   CAR.KIA_K9: HyundaiCarInfo("Kia K9 2016-19", "All", harness=Harness.hyundai_h),
+
+  # from carrot: CAN FD
+  CAR.AZERA_7TH_GEN: HyundaiCarInfo("Hyundai Azera 2023-24", "All", harness=Harness.hyundai_a),
+  CAR.KONA_EV_2ND_GEN: HyundaiCarInfo("Hyundai Kona Electric (with HDA II, Korea only) 2023", "Highway Driving Assist II", harness=Harness.hyundai_q),
+  CAR.KONA_HEV_2ND_GEN: HyundaiCarInfo("Hyundai Kona Hybrid 2024", "All", harness=Harness.hyundai_l),
+  CAR.SONATA_2024: HyundaiCarInfo("Hyundai Sonata 2024-25", "All", harness=Harness.hyundai_a),
+  CAR.STARIA_4TH_GEN: HyundaiCarInfo("Hyundai Staria 2023", "All", harness=Harness.hyundai_k),
+  CAR.IONIQ_5_N: HyundaiCarInfo("Hyundai Ioniq 5 N (with HDA II) 2024", "Highway Driving Assist II", harness=Harness.hyundai_m),
+  CAR.KIA_K5_DL3_24: HyundaiCarInfo("Kia K5 2024", "Highway Driving Assist II", harness=Harness.hyundai_k),
+  CAR.KIA_K5_DL3_24_HEV: HyundaiCarInfo("Kia K5 Hybrid 2024", "Highway Driving Assist II", harness=Harness.hyundai_k),
+  CAR.KIA_K8_HEV_1ST_GEN: HyundaiCarInfo("Kia K8 Hybrid (with HDA II) 2023", "Highway Driving Assist II", harness=Harness.hyundai_q),
+  CAR.KIA_NIRO_EV_2ND_GEN: HyundaiCarInfo("Kia Niro EV 2023", "All", harness=Harness.hyundai_a),
+  CAR.KIA_NIRO_HEV_2ND_GEN: HyundaiCarInfo("Kia Niro Hybrid 2023", "All", harness=Harness.hyundai_a),
+  CAR.KIA_SORENTO_4TH_GEN: HyundaiCarInfo("Kia Sorento 2021-23", "All", harness=Harness.hyundai_k),
+  CAR.KIA_SORENTO_HEV_4TH_GEN: HyundaiCarInfo("Kia Sorento Hybrid 2021-23", "All", harness=Harness.hyundai_a),
+  CAR.KIA_EV4: HyundaiCarInfo("Kia EV4 2025", "All", harness=Harness.hyundai_q),
+  CAR.KIA_CARNIVAL_4TH_GEN: HyundaiCarInfo("Kia Carnival 2022-24", "All", harness=Harness.hyundai_a),
+  CAR.GENESIS_GV60_EV_1ST_GEN: HyundaiCarInfo("Genesis GV60 2022-23", "All", harness=Harness.hyundai_a),
+  CAR.GENESIS_GV70_ELECTRIFIED_1ST_GEN: HyundaiCarInfo("Genesis GV70 Electrified (with HDA II) 2023-24", "Highway Driving Assist II", harness=Harness.hyundai_q),
+  CAR.GENESIS_G80_2ND_GEN_FL: HyundaiCarInfo("Genesis G80 (2.5T Advanced Trim, with HDA II) 2024", "Highway Driving Assist II", harness=Harness.hyundai_p),
+  CAR.GENESIS_GV80: HyundaiCarInfo("Genesis GV80 2023", "All", harness=Harness.hyundai_m),
+  CAR.GENESIS_GV70_EV_1ST_GEN: HyundaiCarInfo("Genesis GV70 EV 2020-23", "All", harness=Harness.hyundai_m),
+  CAR.KIA_EV3: HyundaiCarInfo("Kia EV3 2025", "All", harness=Harness.hyundai_n),
+  CAR.KIA_PV5: HyundaiCarInfo("Kia PV5 2025", "All", harness=Harness.hyundai_n),
 }
 
 class Buttons:
@@ -1683,6 +1742,168 @@ FW_VERSIONS = {
       b'\xf1\x00JFH MFC  AT KOR LHD 1.00 1.01 95895-A8200 180323',
     ],
   },
+  CAR.AZERA_7TH_GEN: {
+    (Ecu.fwdRadar, 0x7d0, None): [
+      b'\xf1\x00GN7_ RDR -----      1.00 1.03 99110-N1000         ',
+      b'\xf1\x8b #\x11\x15',
+    ],
+    (Ecu.fwdCamera, 0x7c4, None): [
+      b'\xf1\x00GN7 MFC  AT KOR LHD 1.00 1.03 99211-N1000 230322',
+      b'\xf1\x8b #\x11\x16',
+    ],
+  },
+  CAR.KONA_EV_2ND_GEN: {
+    (Ecu.fwdRadar, 0x7d0, None): [
+      b'\xf1\x00SXev RDR -----      1.00 1.00 99110-BF000         ',
+    ],
+    (Ecu.fwdCamera, 0x7c4, None): [
+      b'\xf1\x00SX2EMFC  AT KOR LHD 1.00 1.00 99211-BF000 230410',
+    ],
+  },
+  CAR.KONA_HEV_2ND_GEN: {
+    (Ecu.fwdCamera, 0x7c4, None): [
+      b'\xf1\x00SX2HMFC  AT EUR RHD 1.00 1.04 99211-BE000 231010',
+    ],
+    (Ecu.fwdRadar, 0x7d0, None): [
+      b'\xf1\x00SX2_ RDR -----      1.00 1.02 99110-BE500         ',
+    ],
+  },
+  CAR.SONATA_2024: {
+    (Ecu.fwdRadar, 0x7d0, None): [
+      b'\xf1\x00DN8_ RDR -----      1.00 1.00 99110-L1800         ',
+    ],
+    (Ecu.fwdCamera, 0x7c4, None): [
+      b'\xf1\x00DN8 MFC  AT KOR LHD 1.00 1.01 99211-L1800 230512',
+      b'\xf1\x00DN8 MFC  AT USA LHD 1.00 1.01 99211-L1800 230512',
+    ],
+  },
+  CAR.STARIA_4TH_GEN: {
+    (Ecu.fwdCamera, 0x7c4, None): [
+      b'\xf1\x00US4 MFC  AT KOR LHD 1.00 1.06 99211-CG000 230524',
+    ],
+    (Ecu.fwdRadar, 0x7d0, None): [
+      b'\xf1\x00US4_ RDR -----      1.00 1.00 99110-CG000         ',
+    ],
+  },
+  CAR.IONIQ_5_N: {
+    (Ecu.fwdRadar, 0x7d0, None): [
+      b'\xf1\x00NE1N RDR -----      1.00 1.00 99110-NI000         ',
+    ],
+    (Ecu.fwdCamera, 0x7c4, None): [
+      b'\xf1\x00NE1NMFC  AT KOR LHD 1.00 1.04 99211-NI000 231219',
+      b'\xf1\x00NE1NMFC  AT USA LHD 1.00 1.04 99211-NI000 231219',
+    ],
+  },
+  CAR.KIA_K8_HEV_1ST_GEN: {
+    (Ecu.fwdCamera, 0x7c4, None): [
+      b'\xf1\x00GL3HMFC  AT KOR LHD 1.00 1.03 99211-L8000 210907',
+      b'\xf1\x00GL3HMFC  AT KOR LHD 1.00 1.04 99211-L8000 230207',
+    ],
+    (Ecu.fwdRadar, 0x7d0, None): [
+      b'\xf1\x00GL3_ RDR -----      1.00 1.02 99110-L8000         ',
+    ],
+  },
+  CAR.KIA_NIRO_EV_2ND_GEN: {
+    (Ecu.fwdRadar, 0x7d0, None): [
+      b'\xf1\x00SG2_ RDR -----      1.00 1.01 99110-AT000         ',
+    ],
+    (Ecu.fwdCamera, 0x7c4, None): [
+      b'\xf1\x00SG2EMFC  AT EUR LHD 1.01 1.09 99211-AT000 220801',
+      b'\xf1\x00SG2EMFC  AT USA LHD 1.01 1.09 99211-AT000 220801',
+    ],
+  },
+  CAR.KIA_NIRO_HEV_2ND_GEN: {
+    (Ecu.fwdCamera, 0x7c4, None): [
+      b'\xf1\x00SG2HMFC  AT USA LHD 1.01 1.08 99211-AT000 220531',
+      b'\xf1\x00SG2HMFC  AT USA LHD 1.01 1.09 99211-AT000 220801',
+    ],
+    (Ecu.fwdRadar, 0x7d0, None): [
+      b'\xf1\x00SG2_ RDR -----      1.00 1.01 99110-AT000         ',
+    ],
+  },
+  CAR.KIA_SORENTO_4TH_GEN: {
+    (Ecu.fwdCamera, 0x7c4, None): [
+      b'\xf1\x00MQ4 MFC  AT USA LHD 1.00 1.00 99210-R5100 221019',
+      b'\xf1\x00MQ4 MFC  AT USA LHD 1.00 1.03 99210-R5000 200903',
+      b'\xf1\x00MQ4 MFC  AT USA LHD 1.00 1.05 99210-R5000 210623',
+      b'\xf1\x00MQ4 MFC  AT USA LHD 1.00 1.06 99210-R5000 211216',
+    ],
+    (Ecu.fwdRadar, 0x7d0, None): [
+      b'\xf1\x00MQ4_ SCC F-CUP      1.00 1.06 99110-P2000         ',
+      b'\xf1\x00MQ4_ SCC FHCUP      1.00 1.00 99110-R5000         ',
+      b'\xf1\x00MQ4_ SCC FHCUP      1.00 1.06 99110-P2000         ',
+      b'\xf1\x00MQ4_ SCC FHCUP      1.00 1.08 99110-P2000         ',
+    ],
+  },
+  CAR.KIA_SORENTO_HEV_4TH_GEN: {
+    (Ecu.fwdCamera, 0x7c4, None): [
+      b'\xf1\x00MQ4HMFC  AT KOR LHD 1.00 1.04 99210-P2000 200330',
+      b'\xf1\x00MQ4HMFC  AT KOR LHD 1.00 1.12 99210-P2000 230331',
+      b'\xf1\x00MQ4HMFC  AT USA LHD 1.00 1.10 99210-P2000 210406',
+      b'\xf1\x00MQ4HMFC  AT USA LHD 1.00 1.11 99210-P2000 211217',
+    ],
+    (Ecu.fwdRadar, 0x7d0, None): [
+      b'\xf1\x00MQhe SCC FHCUP      1.00 1.04 99110-P4000         ',
+      b'\xf1\x00MQhe SCC FHCUP      1.00 1.06 99110-P4000         ',
+      b'\xf1\x00MQhe SCC FHCUP      1.00 1.07 99110-P4000         ',
+    ],
+  },
+  CAR.KIA_CARNIVAL_4TH_GEN: {
+    (Ecu.fwdCamera, 0x7c4, None): [
+      b'\xf1\x00KA4 MFC  AT EUR LHD 1.00 1.06 99210-R0000 220221',
+      b'\xf1\x00KA4 MFC  AT KOR LHD 1.00 1.05 99210-R0000 201221',
+      b'\xf1\x00KA4 MFC  AT KOR LHD 1.00 1.06 99210-R0000 220221',
+      b'\xf1\x00KA4 MFC  AT USA LHD 1.00 1.00 99210-R0100 230105',
+      b'\xf1\x00KA4 MFC  AT USA LHD 1.00 1.01 99210-R0100 230710',
+      b'\xf1\x00KA4 MFC  AT USA LHD 1.00 1.05 99210-R0000 201221',
+      b'\xf1\x00KA4 MFC  AT USA LHD 1.00 1.06 99210-R0000 220221',
+      b'\xf1\x00KA4CMFC  AT CHN LHD 1.00 1.01 99211-I4000 210525',
+    ],
+    (Ecu.fwdRadar, 0x7d0, None): [
+      b'\xf1\x00KA4_ SCC F-CUP      1.00 1.03 99110-R0000         ',
+      b'\xf1\x00KA4_ SCC FHCUP      1.00 1.00 99110-R0100         ',
+      b'\xf1\x00KA4_ SCC FHCUP      1.00 1.02 99110-R0000         ',
+      b'\xf1\x00KA4_ SCC FHCUP      1.00 1.03 99110-R0000         ',
+      b'\xf1\x00KA4c SCC FHCUP      1.00 1.01 99110-I4000         ',
+    ],
+  },
+  CAR.GENESIS_GV60_EV_1ST_GEN: {
+    (Ecu.fwdCamera, 0x7c4, None): [
+      b'\xf1\x00JW1 MFC  AT AUS RHD 1.00 1.03 99211-CU100 221118',
+      b'\xf1\x00JW1 MFC  AT USA LHD 1.00 1.02 99211-CU000 211215',
+      b'\xf1\x00JW1 MFC  AT USA LHD 1.00 1.02 99211-CU100 211215',
+      b'\xf1\x00JW1 MFC  AT USA LHD 1.00 1.03 99211-CU000 221118',
+    ],
+    (Ecu.fwdRadar, 0x7d0, None): [
+      b'\xf1\x00JW1_ RDR -----      1.00 1.00 99110-CU000         ',
+    ],
+  },
+  CAR.GENESIS_GV70_ELECTRIFIED_1ST_GEN: {
+    (Ecu.fwdCamera, 0x7c4, None): [
+      b'\xf1\x00JK1EMFC  AT AUS RHD 1.00 1.01 99211-DS100 220125',
+      b'\xf1\x00JK1EMFC  AT USA LHD 1.00 1.00 99211-IT100 220919',
+      b'\xf1\x00JK1EMFC  AT USA LHD 1.00 1.01 99211-IT100 230628',
+    ],
+    (Ecu.fwdRadar, 0x7d0, None): [
+      b'\xf1\x00JKev SCC -----      1.00 1.01 99110-DS000         ',
+    ],
+  },
+  CAR.GENESIS_G80_2ND_GEN_FL: {
+    (Ecu.fwdRadar, 0x7d0, None): [
+      b'\xf1\x00RG3_ SCC -----      1.00 1.02 99110-T1120         ',
+    ],
+    (Ecu.fwdCamera, 0x7c4, None): [
+      b'\xf1\x00RG3 MFC  AT USA LHD 1.00 1.01 99211-T1200 230607',
+    ],
+  },
+  CAR.GENESIS_GV80: {
+    (Ecu.fwdCamera, 0x7c4, None): [
+      b'\xf1\x00JX1 MFC  AT USA LHD 1.00 1.02 99211-T6110 220513',
+    ],
+    (Ecu.fwdRadar, 0x7d0, None): [
+      b'\xf1\x00JX1_ SCC FHCUP      1.00 1.01 99110-T6100         ',
+    ],
+  },
 }
 
 CHECKSUM = {
@@ -1707,20 +1928,23 @@ FEATURES = {
 
 }
 
-CANFD_CAR = {CAR.KIA_EV6, CAR.IONIQ_5, CAR.IONIQ_6, CAR.TUCSON_HYBRID_4TH_GEN, CAR.KIA_SPORTAGE_HYBRID_5TH_GEN, CAR.SANTA_CRUZ_1ST_GEN, CAR.KIA_SPORTAGE_5TH_GEN, CAR.GENESIS_GV70_1ST_GEN}
+CANFD_CAR = {CAR.KIA_EV6, CAR.IONIQ_5, CAR.IONIQ_6, CAR.TUCSON_HYBRID_4TH_GEN, CAR.KIA_SPORTAGE_HYBRID_5TH_GEN, CAR.SANTA_CRUZ_1ST_GEN, CAR.KIA_SPORTAGE_5TH_GEN, CAR.GENESIS_GV70_1ST_GEN,
+             CAR.AZERA_7TH_GEN, CAR.KONA_EV_2ND_GEN, CAR.KONA_HEV_2ND_GEN, CAR.SONATA_2024, CAR.STARIA_4TH_GEN, CAR.IONIQ_5_N, CAR.KIA_K5_DL3_24, CAR.KIA_K5_DL3_24_HEV, CAR.KIA_K8_HEV_1ST_GEN, CAR.KIA_NIRO_EV_2ND_GEN, CAR.KIA_NIRO_HEV_2ND_GEN, CAR.KIA_SORENTO_4TH_GEN, CAR.KIA_SORENTO_HEV_4TH_GEN, CAR.KIA_EV4, CAR.KIA_CARNIVAL_4TH_GEN, CAR.GENESIS_GV60_EV_1ST_GEN, CAR.GENESIS_GV70_ELECTRIFIED_1ST_GEN, CAR.GENESIS_G80_2ND_GEN_FL, CAR.GENESIS_GV80, CAR.GENESIS_GV70_EV_1ST_GEN, CAR.KIA_EV3, CAR.KIA_PV5}
 
 # The radar does SCC on these cars when HDA I, rather than the camera
-CANFD_RADAR_SCC_CAR = {CAR.GENESIS_GV70_1ST_GEN, }
+CANFD_RADAR_SCC_CAR = {CAR.GENESIS_GV70_1ST_GEN, CAR.KIA_SORENTO_4TH_GEN, CAR.KIA_SORENTO_HEV_4TH_GEN, CAR.KIA_CARNIVAL_4TH_GEN, CAR.GENESIS_GV80, CAR.GENESIS_GV70_EV_1ST_GEN}
 
 # The radar can't be turned off on these CAN FD cars (carrot-wip CANFD_NO_RADAR_DISABLE): stock SCC only
-CANFD_UNSUPPORTED_LONGITUDINAL_CAR = {CAR.IONIQ_6, }
+CANFD_UNSUPPORTED_LONGITUDINAL_CAR = {CAR.IONIQ_6, CAR.KONA_EV_2ND_GEN}
 
 # The camera does SCC on these cars, rather than the radar
 CAMERA_SCC_CAR = {CAR.KONA_EV_2022, CAR.KONA_2022, CAR.CASPER_EV, }
 
 HYBRID_CAR = {CAR.IONIQ_PHEV, CAR.ELANTRA_HEV_2021, CAR.KIA_NIRO_PHEV, CAR.KIA_NIRO_HEV_2021, CAR.SONATA_HYBRID, CAR.KONA_HEV, CAR.IONIQ, CAR.IONIQ_HEV_2022, CAR.SANTA_FE_HEV_2022, CAR.SANTA_FE_PHEV_2022, CAR.IONIQ_PHEV_2019, CAR.TUCSON_HYBRID_4TH_GEN, CAR.KIA_SPORTAGE_HYBRID_5TH_GEN, CAR.GRANDEUR_IG_HEV, CAR.GRANDEUR_IG_FL_HEV, CAR.K7_HEV, CAR.K7_HEV_PE,
-              CAR.KIA_K5_HEV_2020, CAR.KIA_NIRO_PHEV_2022, CAR.KIA_OPTIMA_H_G4_FL, CAR.KIA_K5_HEV_JF, CAR.KIA_K5_HEV_2022}  # these cars use a different gas signal
-EV_CAR = {CAR.IONIQ_EV_2020, CAR.IONIQ_EV_LTD, CAR.KONA_EV, CAR.KIA_NIRO_EV, CAR.KONA_EV_2022, CAR.KIA_EV6, CAR.IONIQ_5, CAR.IONIQ_6, CAR.NEXO, CAR.KIA_SOUL_EV_SK3, CAR.CASPER_EV}
+              CAR.KIA_K5_HEV_2020, CAR.KIA_NIRO_PHEV_2022, CAR.KIA_OPTIMA_H_G4_FL, CAR.KIA_K5_HEV_JF, CAR.KIA_K5_HEV_2022,
+              CAR.KONA_HEV_2ND_GEN, CAR.KIA_K5_DL3_24_HEV, CAR.KIA_K8_HEV_1ST_GEN, CAR.KIA_NIRO_HEV_2ND_GEN, CAR.KIA_SORENTO_HEV_4TH_GEN}  # these cars use a different gas signal
+EV_CAR = {CAR.IONIQ_EV_2020, CAR.IONIQ_EV_LTD, CAR.KONA_EV, CAR.KIA_NIRO_EV, CAR.KONA_EV_2022, CAR.KIA_EV6, CAR.IONIQ_5, CAR.IONIQ_6, CAR.NEXO, CAR.KIA_SOUL_EV_SK3, CAR.CASPER_EV,
+          CAR.KONA_EV_2ND_GEN, CAR.IONIQ_5_N, CAR.KIA_NIRO_EV_2ND_GEN, CAR.KIA_EV4, CAR.GENESIS_GV60_EV_1ST_GEN, CAR.GENESIS_GV70_ELECTRIFIED_1ST_GEN, CAR.GENESIS_GV70_EV_1ST_GEN, CAR.KIA_EV3, CAR.KIA_PV5}
 
 # these cars require a special panda safety mode due to missing counters and checksums in the messages
 LEGACY_SAFETY_MODE_CAR = {CAR.HYUNDAI_GENESIS, CAR.IONIQ_EV_2020, CAR.IONIQ_EV_LTD, CAR.IONIQ_PHEV, CAR.IONIQ, CAR.KIA_SORENTO, CAR.SONATA_LF, CAR.KIA_OPTIMA_G4, CAR.KIA_OPTIMA_G4_FL, CAR.VELOSTER, CAR.KIA_STINGER, CAR.GENESIS_G70, CAR.GENESIS_G80, CAR.KIA_CEED, CAR.ELANTRA, CAR.IONIQ_HEV_2022, 
@@ -1783,6 +2007,28 @@ DBC = {
   CAR.TUCSON_HYBRID_4TH_GEN: dbc_dict('hyundai_canfd', None),
   CAR.IONIQ_5: dbc_dict('hyundai_canfd', None),
   CAR.IONIQ_6: dbc_dict('hyundai_canfd', None),
+  CAR.AZERA_7TH_GEN: dbc_dict('hyundai_canfd', None),
+  CAR.KONA_EV_2ND_GEN: dbc_dict('hyundai_canfd', None),
+  CAR.KONA_HEV_2ND_GEN: dbc_dict('hyundai_canfd', None),
+  CAR.SONATA_2024: dbc_dict('hyundai_canfd', None),
+  CAR.STARIA_4TH_GEN: dbc_dict('hyundai_canfd', None),
+  CAR.IONIQ_5_N: dbc_dict('hyundai_canfd', None),
+  CAR.KIA_K5_DL3_24: dbc_dict('hyundai_canfd', None),
+  CAR.KIA_K5_DL3_24_HEV: dbc_dict('hyundai_canfd', None),
+  CAR.KIA_K8_HEV_1ST_GEN: dbc_dict('hyundai_canfd', None),
+  CAR.KIA_NIRO_EV_2ND_GEN: dbc_dict('hyundai_canfd', None),
+  CAR.KIA_NIRO_HEV_2ND_GEN: dbc_dict('hyundai_canfd', None),
+  CAR.KIA_SORENTO_4TH_GEN: dbc_dict('hyundai_canfd', None),
+  CAR.KIA_SORENTO_HEV_4TH_GEN: dbc_dict('hyundai_canfd', None),
+  CAR.KIA_EV4: dbc_dict('hyundai_canfd', None),
+  CAR.KIA_CARNIVAL_4TH_GEN: dbc_dict('hyundai_canfd', None),
+  CAR.GENESIS_GV60_EV_1ST_GEN: dbc_dict('hyundai_canfd', None),
+  CAR.GENESIS_GV70_ELECTRIFIED_1ST_GEN: dbc_dict('hyundai_canfd', None),
+  CAR.GENESIS_G80_2ND_GEN_FL: dbc_dict('hyundai_canfd', None),
+  CAR.GENESIS_GV80: dbc_dict('hyundai_canfd', None),
+  CAR.GENESIS_GV70_EV_1ST_GEN: dbc_dict('hyundai_canfd', None),
+  CAR.KIA_EV3: dbc_dict('hyundai_canfd', None),
+  CAR.KIA_PV5: dbc_dict('hyundai_canfd', None),
   CAR.SANTA_CRUZ_1ST_GEN: dbc_dict('hyundai_canfd', None),
   CAR.KIA_SOUL_EV_SK3: dbc_dict('hyundai_kia_generic', 'hyundai_kia_mando_front_radar_generated'),
   CAR.KIA_SPORTAGE_5TH_GEN: dbc_dict('hyundai_canfd', None),

@@ -120,6 +120,10 @@ def fingerprint(logcan, sendcan):
   candidate_cars = {i: all_legacy_fingerprint_cars() for i in [0, 1]}  # attempt fingerprint on both bus 0 and 1
   frame = 0
   frame_fingerprint = 10  # 0.1s
+  # a car chosen in the menu matches no fingerprint, so the loop would stop after 0.1 s; the CAN FD flags
+  # (HDA2, buttons, gear message, BSM) are read from this capture, and 20 Hz messages can be missed in 0.1 s
+  if Params().get("SelectedCar"):
+    frame_fingerprint = 100  # 1 s
   car_fingerprint = None
   done = False
 

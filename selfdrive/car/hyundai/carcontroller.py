@@ -166,7 +166,10 @@ class CarController:
 
       # disable LFA on HDA2
       if self.frame % 5 == 0 and hda2:
-        can_sends.append(hyundaicanfd.create_cam_0x2a4(self.packer, self.CP, CS.cam_0x2a4))
+        if self.CP.flags & HyundaiFlags.CANFD_HDA2_ALT_STEERING:
+          can_sends.append(hyundaicanfd.create_cam_0x362(self.packer, self.CP, CS.cam_0x362))
+        else:
+          can_sends.append(hyundaicanfd.create_cam_0x2a4(self.packer, self.CP, CS.cam_0x2a4))
 
       # LFA and HDA icons
       if self.frame % 5 == 0 and (not hda2 or hda2_long):
@@ -185,7 +188,9 @@ class CarController:
           # cruise cancel
           if CC.cruiseControl.cancel:
             if self.CP.flags & HyundaiFlags.CANFD_ALT_BUTTONS:
-              can_sends.append(hyundaicanfd.create_acc_cancel(self.packer, self.CP, CS.cruise_info))
+              # HDA2 + alt buttons (Carnival 4th gen): no cancel message the panda allows; the driver's own button cancels
+              if not hda2:
+                can_sends.append(hyundaicanfd.create_acc_cancel(self.packer, self.CP, CS.cruise_info))
               self.last_button_frame = self.frame
             else:
               for _ in range(20):

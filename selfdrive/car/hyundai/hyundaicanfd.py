@@ -28,7 +28,21 @@ def create_steering_messages(packer, CP, enabled, lat_active, apply_steer):
   if CP.flags & HyundaiFlags.CANFD_HDA2:
     if CP.openpilotLongitudinalControl:
       ret.append(packer.make_can_msg("LFA", canfd_bus(CP, 1), values))
-    ret.append(packer.make_can_msg("LKAS", canfd_bus(CP, 0), values))
+    if CP.flags & HyundaiFlags.CANFD_HDA2_ALT_STEERING:
+      # LKAS_ALT (0x110) has its own layout; torque/request bits sit where LKAS has them (carrot-wip values)
+      alt = {
+        "LKA_MODE": 2,
+        "LKA_ICON": 2 if enabled else 1,
+        "TORQUE_REQUEST": apply_steer,
+        "DampingGain": 100,
+        "STEER_REQ": 1 if lat_active else 0,
+        "HAS_LANE_SAFETY": 0,
+        "VALUE63": 0,
+        "VALUE64": 100,
+      }
+      ret.append(packer.make_can_msg("LKAS_ALT", canfd_bus(CP, 0), alt))
+    else:
+      ret.append(packer.make_can_msg("LKAS", canfd_bus(CP, 0), values))
   else:
     ret.append(packer.make_can_msg("LFA", canfd_bus(CP, 0), values))
 
@@ -39,6 +53,17 @@ def create_cam_0x2a4(packer, CP, camera_values):
     "BYTE7": 0,
   })
   return packer.make_can_msg("CAM_0x2a4", canfd_bus(CP, 0), camera_values)
+
+def create_cam_0x362(packer, CP, camera_values):
+  # LFA off on alt-steering HDA2 cars: same idea as BYTE7 = 0 in CAM_0x2a4 (lane lines and the bits next to them)
+  values = dict(camera_values)
+  values.update({
+    "LEFT_LANE_LINE": 0,
+    "RIGHT_LANE_LINE": 0,
+    "SET_ME_0": 0,
+    "SET_ME_0_2": 0,
+  })
+  return packer.make_can_msg("CAM_0x362", canfd_bus(CP, 0), values)
 
 def create_buttons(packer, CP, cnt, btn):
   values = {

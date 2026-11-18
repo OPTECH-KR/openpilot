@@ -553,6 +553,59 @@ BO_ 506 CLUSTER_SPEED_LIMIT: 32 XXX
 
 
 
+BO_ 272 LKAS_ALT: 32 XXX
+ SG_ CHECKSUM : 0|16@1+ (1,0) [0|65535] "" XXX
+ SG_ COUNTER : 16|8@1+ (1,0) [0|255] "" XXX
+ SG_ LKA_MODE : 24|3@1+ (1,0) [0|7] "" XXX
+ SG_ LKA_ACTIVE : 27|2@1+ (1,0) [0|3] "" XXX
+ SG_ LKA_WARNING : 32|1@1+ (1,0) [0|1] "" XXX
+ SG_ LKA_ICON : 38|2@1+ (1,0) [0|3] "" XXX
+ SG_ FCA_SYSWARN : 40|1@0+ (1,0) [0|1] "" XXX
+ SG_ TORQUE_REQUEST : 41|11@1+ (1,-1024) [0|4095] "" XXX
+ SG_ STEER_REQ : 52|1@1+ (1,0) [0|1] "" XXX
+ SG_ LFA_BUTTON : 56|1@1+ (1,0) [0|1] "" XXX
+ SG_ VALUE63 : 63|4@0+ (1,0) [0|15] "" XXX
+ SG_ VALUE64 : 64|8@1+ (1,0) [0|255] "" XXX
+ SG_ NEW_SIGNAL_1 : 75|4@0+ (1,0) [0|15] "" XXX
+ SG_ LKAS_ANGLE_ACTIVE : 77|2@0+ (1,0) [0|3] "" XXX
+ SG_ HAS_LANE_SAFETY : 80|1@0+ (1,0) [0|1] "" XXX
+ SG_ LKAS_ANGLE_CMD : 82|14@1- (-0.1,0) [0|511] "" XXX
+ SG_ LKAS_ANGLE_MAX_TORQUE : 96|8@1+ (1,0) [0|255] "" XXX
+ SG_ DampingGain : 104|8@1+ (1,0) [0|255] "" XXX
+ SG_ VALUE231 : 231|8@0+ (1,0) [0|255] "" XXX
+ SG_ VALUE239 : 239|8@0+ (1,0) [0|255] "" XXX
+ SG_ VALUE247 : 247|8@0+ (1,0) [0|255] "" XXX
+ SG_ VALUE255 : 255|8@0+ (1,0) [0|255] "" XXX
+
+BO_ 866 CAM_0x362: 32 CAMERA
+ SG_ CHECKSUM : 0|16@1+ (1,0) [0|65535] "" XXX
+ SG_ COUNTER : 16|8@1+ (1,0) [0|255] "" XXX
+ SG_ LEFT_LANE_PROB : 31|8@0+ (1,0) [0|255] "" XXX
+ SG_ RIGHT_LANE_PROB : 39|8@0+ (1,0) [0|255] "" XXX
+ SG_ LEFT_LANE_TYPE : 43|4@0+ (1,0) [0|15] "" XXX
+ SG_ RIGHT_LANE_TYPE : 47|4@0+ (1,0) [0|15] "" XXX
+ SG_ LEFT_LANE_COLOR : 48|4@1+ (1,0) [0|15] "" XXX
+ SG_ RIGHT_LANE_COLOR : 52|4@1+ (1,0) [0|15] "" XXX
+ SG_ LEFT_LANE_LINE : 56|2@1+ (1,0) [0|3] "" XXX
+ SG_ SET_ME_0 : 58|2@1+ (1,0) [0|3] "" XXX
+ SG_ RIGHT_LANE_LINE : 60|2@1+ (1,0) [0|3] "" XXX
+ SG_ SET_ME_0_2 : 62|2@1+ (1,0) [0|3] "" XXX
+ SG_ NEW_SIGNAL_2 : 67|4@0+ (1,0) [0|15] "" XXX
+ SG_ NEW_SIGNAL_1 : 71|4@0+ (1,0) [0|15] "" XXX
+ SG_ NEW_SIGNAL_4 : 75|4@0+ (1,0) [0|15] "" XXX
+ SG_ NEW_SIGNAL_3 : 79|4@0+ (1,0) [0|15] "" XXX
+ SG_ NEW_SIGNAL_5 : 80|10@1- (1,0) [0|1023] "" XXX
+ SG_ NEW_SIGNAL_6 : 96|10@1- (1,0) [0|1023] "" XXX
+ SG_ NEW_SIGNAL_7 : 112|16@1+ (1,0) [0|65535] "" XXX
+ SG_ NEW_SIGNAL_8 : 128|16@1+ (1,0) [0|65535] "" XXX
+ SG_ NEW_SIGNAL_9 : 144|16@1+ (1,0) [0|65535] "" XXX
+ SG_ NEW_SIGNAL_10 : 160|16@1+ (1,0) [0|65535] "" XXX
+ SG_ NEW_SIGNAL_11 : 176|16@1+ (1,0) [0|65535] "" XXX
+ SG_ NEW_SIGNAL_12 : 192|16@1+ (1,0) [0|65535] "" XXX
+ SG_ NEW_SIGNAL_13 : 208|16@1+ (1,0) [0|65535] "" XXX
+ SG_ NEW_SIGNAL_14 : 224|16@1+ (1,0) [0|65535] "" XXX
+ SG_ NEW_SIGNAL_15 : 240|16@1+ (1,0) [0|65535] "" XXX
+
 CM_ SG_ 96 BRAKE_PRESSURE "User applied brake pedal pressure. Ramps from computer applied pressure on falling edge of cruise. Cruise cancels if !=0";
 CM_ SG_ 101 BRAKE_POSITION "User applied brake pedal position, max is ~700. Signed on some vehicles";
 CM_ SG_ 373 PROBABLY_EQUIP "aeb equip?";
@@ -580,3 +633,10 @@ VAL_ 373 ACCEnable 0 "SCC ready" 1 "SCC temp fault" 2 "SCC permanent fault" 3 "S
 VAL_ 416 ACCMode 0 "off" 1 "enabled" 2 "driver_override" 3 "off_maybe_fault" 4 "cancelled" ;
 VAL_ 426 CRUISE_BUTTONS 0 "none" 1 "res_accel" 2 "set_decel" 3 "gap_distance" 4 "pause_resume" ;
 VAL_ 463 CRUISE_BUTTONS 0 "none" 1 "res_accel" 2 "set_decel" 3 "gap_distance" 4 "pause_resume" ;
+VAL_ 272 LKA_ICON 0 "hidden" 1 "grey" 2 "green" 3 "flashing green" ;
+VAL_ 272 LKA_MODE 1 "warning only" 2 "assist" 6 "off" ;
+VAL_ 272 LKAS_ANGLE_ACTIVE 1 "not active" 2 "active" ;
+VAL_ 866 LEFT_LANE_COLOR 0 "Not Detected" 1 "White" 2 "Yellow" 3 "Blue";
+VAL_ 866 RIGHT_LANE_COLOR 0 "Not Detected" 1 "White" 2 "Yellow" 3 "Blue";
+VAL_ 866 LEFT_LANE_LINE 0 "Not Detected" 1 "Low Confidence" 2 "Medium Confidence" 3 "High Confidence";
+VAL_ 866 RIGHT_LANE_LINE 0 "Not Detected" 1 "Low Confidence" 2 "Medium Confidence" 3 "High Confidence";

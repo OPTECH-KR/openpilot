@@ -3,7 +3,7 @@ from cereal import car
 from panda import Panda
 from common.numpy_fast import interp
 from common.conversions import Conversions as CV
-from selfdrive.car.hyundai.values import HyundaiFlags, CAR, DBC, CANFD_CAR, CAMERA_SCC_CAR, CANFD_RADAR_SCC_CAR, EV_CAR, HYBRID_CAR, LEGACY_SAFETY_MODE_CAR, Buttons, CarControllerParams, \
+from selfdrive.car.hyundai.values import canfd_hybrid, HyundaiFlags, CAR, DBC, CANFD_CAR, CAMERA_SCC_CAR, CANFD_RADAR_SCC_CAR, EV_CAR, HYBRID_CAR, LEGACY_SAFETY_MODE_CAR, Buttons, CarControllerParams, \
   CANFD_UNSUPPORTED_LONGITUDINAL_CAR, canfd_bus
 from selfdrive.car.hyundai.radar_interface import RADAR_START_ADDR
 from selfdrive.car import STD_CARGO_KG, create_button_event, scale_tire_stiffness, get_safety_config
@@ -39,18 +39,37 @@ class CarInterface(CarInterfaceBase):
       on_high = any(a in fingerprint[b] for a in ecan_msgs for b in (4, 5))
       if on_low and not on_high:
         ret.flags |= HyundaiFlags.CANFD_SINGLE_PANDA.value
-      # detect HDA2 with ADAS Driving ECU, or by CAM_0x2a4 on the camera side (HDA2 only) when the FW query missed it
-      if Ecu.adas in [fw.ecu for fw in car_fw] or 0x2a4 in fingerprint[canfd_bus(ret, 2)]:
+      # detect HDA2 with ADAS Driving ECU, or by the camera's steering messages on the camera side when the FW query missed it
+      # (LKAS 0x50 / LKAS_ALT 0x110 / CAM_0x2a4 come from the camera only on HDA2 harnesses)
+      cam_fp = fingerprint[canfd_bus(ret, 2)]
+      if Ecu.adas in [fw.ecu for fw in car_fw] or any(a in cam_fp for a in (0x50, 0x110, 0x2a4)):
         ret.flags |= HyundaiFlags.CANFD_HDA2.value
-      else:
-        # non-HDA2
-        if 0x1cf not in fingerprint[canfd_bus(ret, 0)]:
-          ret.flags |= HyundaiFlags.CANFD_ALT_BUTTONS.value
-        # ICE cars do not have 0x130; GEARS message on 0x40 instead
-        if 0x130 not in fingerprint[canfd_bus(ret, 0)]:
+        # newer HDA2 cars steer with LKAS_ALT (0x110) and carry the lane info in CAM_0x362 instead of CAM_0x2a4 (carrot-wip rule)
+        if 0x110 in cam_fp or 0x2a4 not in cam_fp:
+          ret.flags |= HyundaiFlags.CANFD_HDA2_ALT_STEERING.value
+      elif candidate not in CANFD_RADAR_SCC_CAR:
+        ret.flags |= HyundaiFlags.CANFD_CAMERA_SCC.value
+
+      ecan_fp = fingerprint[canfd_bus(ret, 1 if ret.flags & HyundaiFlags.CANFD_HDA2 else 0)]
+      # no CRUISE_BUTTONS (0x1cf): buttons in CRUISE_BUTTONS_ALT (0x1aa); some HDA2 cars too (Carnival 4th gen)
+      if 0x1cf not in ecan_fp:
+        ret.flags |= HyundaiFlags.CANFD_ALT_BUTTONS.value
+      # gear message: GEAR_SHIFTER (0x130) when present, else GEAR_ALT (0x40), GEAR_ALT_2 (0x70), GEAR (0x45),
+      # and EVs without any of them carry the gear in ACCELERATOR (0x35)
+      if 0x130 not in ecan_fp:
+        if 0x40 in ecan_fp:
           ret.flags |= HyundaiFlags.CANFD_ALT_GEARS.value
-        if candidate not in CANFD_RADAR_SCC_CAR:
-          ret.flags |= HyundaiFlags.CANFD_CAMERA_SCC.value
+        elif 0x70 in ecan_fp:
+          ret.flags |= HyundaiFlags.CANFD_ALT_GEARS_2.value
+        elif 0x45 in ecan_fp:
+          ret.flags |= HyundaiFlags.CANFD_GEARS_69.value
+        elif candidate in EV_CAR:
+          ret.flags |= HyundaiFlags.CANFD_GEARS_ACCEL.value
+        else:
+          ret.flags |= HyundaiFlags.CANFD_ALT_GEARS.value  # what this code always assumed for a car without 0x130
+      # hybrid gas pedal in ACCELERATOR_ALT (0x105)
+      if candidate not in EV_CAR and 0x105 in ecan_fp:
+        ret.flags |= HyundaiFlags.CANFD_HYBRID.value
     else:
       # Send LFA message on cars with HDA
       if 0x485 in fingerprint[2]:
@@ -212,6 +231,116 @@ class CarInterface(CarInterfaceBase):
       ret.wheelbase = 2.9
       ret.steerRatio = 16.
       tire_stiffness_factor = 0.65
+    elif candidate == CAR.AZERA_7TH_GEN:
+      ret.mass = 1700. + STD_CARGO_KG
+      ret.wheelbase = 2.895
+      ret.steerRatio = 16.5
+      tire_stiffness_factor = 1.0
+    elif candidate == CAR.KONA_EV_2ND_GEN:
+      ret.mass = 1740. + STD_CARGO_KG
+      ret.wheelbase = 2.66
+      ret.steerRatio = 13.6
+      tire_stiffness_factor = 0.385
+    elif candidate == CAR.KONA_HEV_2ND_GEN:
+      ret.mass = 1590. + STD_CARGO_KG
+      ret.wheelbase = 2.66
+      ret.steerRatio = 13.6
+      tire_stiffness_factor = 0.385
+    elif candidate == CAR.SONATA_2024:
+      ret.mass = 1556. + STD_CARGO_KG
+      ret.wheelbase = 2.84
+      ret.steerRatio = 12.81
+      tire_stiffness_factor = 1.0
+    elif candidate == CAR.STARIA_4TH_GEN:
+      ret.mass = 2205. + STD_CARGO_KG
+      ret.wheelbase = 3.273
+      ret.steerRatio = 11.94
+      tire_stiffness_factor = 1.0
+    elif candidate == CAR.IONIQ_5_N:
+      ret.mass = 2200. + STD_CARGO_KG
+      ret.wheelbase = 3.0
+      ret.steerRatio = 12.54
+      tire_stiffness_factor = 1.0
+    elif candidate == CAR.KIA_K5_DL3_24:
+      ret.mass = 1553. + STD_CARGO_KG
+      ret.wheelbase = 2.85
+      ret.steerRatio = 13.27
+      tire_stiffness_factor = 0.5
+    elif candidate == CAR.KIA_K5_DL3_24_HEV:
+      ret.mass = 1553. + STD_CARGO_KG
+      ret.wheelbase = 2.85
+      ret.steerRatio = 13.27
+      tire_stiffness_factor = 0.5
+    elif candidate == CAR.KIA_K8_HEV_1ST_GEN:
+      ret.mass = 1630. + STD_CARGO_KG
+      ret.wheelbase = 2.895
+      ret.steerRatio = 13.27
+      tire_stiffness_factor = 1.0
+    elif candidate == CAR.KIA_NIRO_EV_2ND_GEN:
+      ret.mass = 1737. + STD_CARGO_KG
+      ret.wheelbase = 2.7
+      ret.steerRatio = 13.9
+      tire_stiffness_factor = 0.385
+    elif candidate == CAR.KIA_NIRO_HEV_2ND_GEN:
+      ret.mass = 1737. + STD_CARGO_KG
+      ret.wheelbase = 2.7
+      ret.steerRatio = 13.9
+      tire_stiffness_factor = 0.385
+    elif candidate == CAR.KIA_SORENTO_4TH_GEN:
+      ret.mass = 1795. + STD_CARGO_KG
+      ret.wheelbase = 2.81
+      ret.steerRatio = 13.5
+      tire_stiffness_factor = 1.0
+    elif candidate == CAR.KIA_SORENTO_HEV_4TH_GEN:
+      ret.mass = 1994. + STD_CARGO_KG
+      ret.wheelbase = 2.81
+      ret.steerRatio = 13.5
+      tire_stiffness_factor = 1.0
+    elif candidate == CAR.KIA_EV4:
+      ret.mass = 1710. + STD_CARGO_KG
+      ret.wheelbase = 2.83
+      ret.steerRatio = 14.5
+      tire_stiffness_factor = 0.65
+    elif candidate == CAR.KIA_CARNIVAL_4TH_GEN:
+      ret.mass = 2087. + STD_CARGO_KG
+      ret.wheelbase = 3.09
+      ret.steerRatio = 14.23
+      tire_stiffness_factor = 1.0
+    elif candidate == CAR.GENESIS_GV60_EV_1ST_GEN:
+      ret.mass = 2205. + STD_CARGO_KG
+      ret.wheelbase = 2.9
+      ret.steerRatio = 17.6
+      tire_stiffness_factor = 1.0
+    elif candidate == CAR.GENESIS_GV70_ELECTRIFIED_1ST_GEN:
+      ret.mass = 2260. + STD_CARGO_KG
+      ret.wheelbase = 2.87
+      ret.steerRatio = 17.1
+      tire_stiffness_factor = 1.0
+    elif candidate == CAR.GENESIS_G80_2ND_GEN_FL:
+      ret.mass = 2060. + STD_CARGO_KG
+      ret.wheelbase = 3.0
+      ret.steerRatio = 14.0
+      tire_stiffness_factor = 1.0
+    elif candidate == CAR.GENESIS_GV80:
+      ret.mass = 2258. + STD_CARGO_KG
+      ret.wheelbase = 2.95
+      ret.steerRatio = 14.14
+      tire_stiffness_factor = 1.0
+    elif candidate == CAR.GENESIS_GV70_EV_1ST_GEN:
+      ret.mass = 2230. + STD_CARGO_KG
+      ret.wheelbase = 2.87
+      ret.steerRatio = 14.6
+      tire_stiffness_factor = 1.0
+    elif candidate == CAR.KIA_EV3:
+      ret.mass = 2055. + STD_CARGO_KG
+      ret.wheelbase = 2.9
+      ret.steerRatio = 16.0
+      tire_stiffness_factor = 0.65
+    elif candidate == CAR.KIA_PV5:
+      ret.mass = 2600. + STD_CARGO_KG
+      ret.wheelbase = 2.995
+      ret.steerRatio = 16.0
+      tire_stiffness_factor = 0.65
     elif candidate == CAR.IONIQ_6:  # carrot-wip uses the Ioniq 5 specs
       ret.mass = 2012 + STD_CARGO_KG
       ret.wheelbase = 3.0
@@ -321,7 +450,7 @@ class CarInterface(CarInterfaceBase):
     if candidate in CANFD_CAR:
       ret.longitudinalTuning.kpV = [0.1]
       ret.longitudinalTuning.kiV = [0.0]
-      ret.experimentalLongitudinalAvailable = candidate in (HYBRID_CAR | EV_CAR) and candidate not in CANFD_RADAR_SCC_CAR \
+      ret.experimentalLongitudinalAvailable = (canfd_hybrid(ret) or candidate in EV_CAR) and candidate not in CANFD_RADAR_SCC_CAR \
                                               and candidate not in CANFD_UNSUPPORTED_LONGITUDINAL_CAR
     else:
       ret.longitudinalTuning.kpV = [0.5]
@@ -376,7 +505,7 @@ class CarInterface(CarInterfaceBase):
     # *** feature detection ***
     if candidate in CANFD_CAR:
       bus = canfd_bus(ret, 1 if ret.flags & HyundaiFlags.CANFD_HDA2 else 0)
-      ret.enableBsm = 0x1e5 in fingerprint[bus]
+      ret.enableBsm = 0x1ba in fingerprint[bus]  # BLINDSPOTS_REAR_CORNERS, the message carstate reads (carrot-wip)
     else:
       ret.enableBsm = 0x58b in fingerprint[0]
 
@@ -394,6 +523,8 @@ class CarInterface(CarInterfaceBase):
         ret.safetyConfigs[-1].safetyParam |= Panda.FLAG_HYUNDAI_CANFD_ALT_BUTTONS
       if ret.flags & HyundaiFlags.CANFD_CAMERA_SCC:
         ret.safetyConfigs[-1].safetyParam |= Panda.FLAG_HYUNDAI_CAMERA_SCC
+      if ret.flags & HyundaiFlags.CANFD_HDA2_ALT_STEERING:
+        ret.safetyConfigs[-1].safetyParam |= Panda.FLAG_HYUNDAI_CANFD_HDA2_ALT_STEERING
     else:
       if candidate in LEGACY_SAFETY_MODE_CAR:
         # these cars require a special panda safety mode due to missing counters and checksums in the messages
@@ -409,7 +540,7 @@ class CarInterface(CarInterfaceBase):
 
     if ret.openpilotLongitudinalControl:
       ret.safetyConfigs[-1].safetyParam |= Panda.FLAG_HYUNDAI_LONG
-    if candidate in HYBRID_CAR:
+    if canfd_hybrid(ret):
       ret.safetyConfigs[-1].safetyParam |= Panda.FLAG_HYUNDAI_HYBRID_GAS
     elif candidate in EV_CAR:
       ret.safetyConfigs[-1].safetyParam |= Panda.FLAG_HYUNDAI_EV_GAS

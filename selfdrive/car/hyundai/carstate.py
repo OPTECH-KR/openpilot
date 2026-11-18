@@ -6,13 +6,24 @@ from cereal import car
 from common.conversions import Conversions as CV
 from opendbc.can.parser import CANParser
 from opendbc.can.can_define import CANDefine
-from selfdrive.car.hyundai.values import HyundaiFlags, DBC, FEATURES, CAMERA_SCC_CAR, CANFD_CAR, EV_CAR, HYBRID_CAR, Buttons, CarControllerParams, CAR, canfd_bus
+from selfdrive.car.hyundai.values import HyundaiFlags, DBC, FEATURES, CAMERA_SCC_CAR, CANFD_CAR, EV_CAR, HYBRID_CAR, Buttons, CarControllerParams, CAR, canfd_bus, canfd_hybrid
 from selfdrive.car.interfaces import CarStateBase
 from common.realtime import DT_CTRL
 
 PREV_BUTTON_SAMPLES = 8
 CLUSTER_SAMPLE_RATE = 20  # frames
 GearShifter = car.CarState.GearShifter
+
+CAM_0x362_SIGNALS = ['LEFT_LANE_PROB', 'RIGHT_LANE_PROB', 'LEFT_LANE_TYPE', 'RIGHT_LANE_TYPE', 'LEFT_LANE_COLOR', 'RIGHT_LANE_COLOR', 'LEFT_LANE_LINE', 'SET_ME_0', 'RIGHT_LANE_LINE', 'SET_ME_0_2', 'NEW_SIGNAL_2', 'NEW_SIGNAL_1', 'NEW_SIGNAL_4', 'NEW_SIGNAL_3', 'NEW_SIGNAL_5', 'NEW_SIGNAL_6', 'NEW_SIGNAL_7', 'NEW_SIGNAL_8', 'NEW_SIGNAL_9', 'NEW_SIGNAL_10', 'NEW_SIGNAL_11', 'NEW_SIGNAL_12', 'NEW_SIGNAL_13', 'NEW_SIGNAL_14', 'NEW_SIGNAL_15']
+
+
+def canfd_gear_msg(CP):
+  return "GEAR_ALT" if CP.flags & HyundaiFlags.CANFD_ALT_GEARS else \
+         "GEAR_ALT_2" if CP.flags & HyundaiFlags.CANFD_ALT_GEARS_2 else \
+         "GEAR" if CP.flags & HyundaiFlags.CANFD_GEARS_69 else \
+         "ACCELERATOR" if CP.flags & HyundaiFlags.CANFD_GEARS_ACCEL else \
+         "GEAR_SHIFTER"
+
 
 class CarState(CarStateBase):
   def __init__(self, CP):
@@ -22,7 +33,7 @@ class CarState(CarStateBase):
     self.cruise_buttons = deque([Buttons.NONE] * PREV_BUTTON_SAMPLES, maxlen=PREV_BUTTON_SAMPLES)
     self.main_buttons = deque([Buttons.NONE] * PREV_BUTTON_SAMPLES, maxlen=PREV_BUTTON_SAMPLES)
 
-    self.gear_msg_canfd = "GEAR_ALT" if CP.flags & HyundaiFlags.CANFD_ALT_GEARS else "GEAR_SHIFTER"
+    self.gear_msg_canfd = canfd_gear_msg(CP)
     if CP.carFingerprint in CANFD_CAR:
       self.shifter_values = can_define.dv[self.gear_msg_canfd]["GEAR"]
     elif self.CP.carFingerprint in FEATURES["use_cluster_gears"]:
@@ -267,7 +278,7 @@ class CarState(CarStateBase):
   def update_canfd(self, cp, cp_cam):
     ret = car.CarState.new_message()
 
-    if self.CP.carFingerprint in (EV_CAR | HYBRID_CAR):
+    if self.CP.carFingerprint in EV_CAR or canfd_hybrid(self.CP):
       if self.CP.carFingerprint in EV_CAR:
         ret.gas = cp.vl["ACCELERATOR"]["ACCELERATOR_PEDAL"] / 255.
       else:
@@ -324,7 +335,9 @@ class CarState(CarStateBase):
     self.main_buttons.extend(cp.vl_all[cruise_btn_msg]["ADAPTIVE_CRUISE_MAIN_BTN"])
     self.buttons_counter = cp.vl[cruise_btn_msg]["COUNTER"]
 
-    if self.CP.flags & HyundaiFlags.CANFD_HDA2:
+    if self.CP.flags & HyundaiFlags.CANFD_HDA2_ALT_STEERING:
+      self.cam_0x362 = copy.copy(cp_cam.vl["CAM_0x362"])
+    elif self.CP.flags & HyundaiFlags.CANFD_HDA2:
       self.cam_0x2a4 = copy.copy(cp_cam.vl["CAM_0x2a4"])
 
     return ret
@@ -660,7 +673,7 @@ class CarState(CarStateBase):
   def get_can_parser_canfd(CP):
 
     cruise_btn_msg = "CRUISE_BUTTONS_ALT" if CP.flags & HyundaiFlags.CANFD_ALT_BUTTONS else "CRUISE_BUTTONS"
-    gear_msg = "GEAR_ALT" if CP.flags & HyundaiFlags.CANFD_ALT_GEARS else "GEAR_SHIFTER"
+    gear_msg = canfd_gear_msg(CP)
     signals = [
       ("WHEEL_SPEED_1", "WHEEL_SPEEDS"),
       ("WHEEL_SPEED_2", "WHEEL_SPEEDS"),
@@ -692,7 +705,7 @@ class CarState(CarStateBase):
 
     checks = [
       ("WHEEL_SPEEDS", 100),
-      (gear_msg, 100),
+      (gear_msg, 100 if gear_msg in ("GEAR_SHIFTER", "GEAR_ALT", "ACCELERATOR") else 10),  # 0x45 / 0x70 rates unknown: lenient
       ("STEERING_SENSORS", 100),
       ("MDPS", 100),
       ("TCS", 50),
@@ -725,10 +738,11 @@ class CarState(CarStateBase):
       signals += [
         ("ACCELERATOR_PEDAL", "ACCELERATOR"),
       ]
-      checks += [
-        ("ACCELERATOR", 100),
-      ]
-    elif CP.carFingerprint in HYBRID_CAR:
+      if gear_msg != "ACCELERATOR":
+        checks += [
+          ("ACCELERATOR", 100),
+        ]
+    elif canfd_hybrid(CP):
       signals += [
         ("ACCELERATOR_PEDAL", "ACCELERATOR_ALT"),
       ]
@@ -750,7 +764,10 @@ class CarState(CarStateBase):
   def get_cam_can_parser_canfd(CP):
     signals = []
     checks = []
-    if CP.flags & HyundaiFlags.CANFD_HDA2:
+    if CP.flags & HyundaiFlags.CANFD_HDA2_ALT_STEERING:
+      signals += [(s, "CAM_0x362") for s in CAM_0x362_SIGNALS]
+      checks += [("CAM_0x362", 10)]
+    elif CP.flags & HyundaiFlags.CANFD_HDA2:
       signals += [(f"BYTE{i}", "CAM_0x2a4") for i in range(3, 24)]
       checks += [("CAM_0x2a4", 20)]
     elif CP.flags & HyundaiFlags.CANFD_CAMERA_SCC:
