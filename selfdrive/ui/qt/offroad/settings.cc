@@ -760,7 +760,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   startToggles->addItem(updateBtn);
   // 기타 차종: the last item of the start tab; opens its own page
   otherCars = new OtherCars(this);
-  auto other_cars_btn = new ButtonControl("기타 차종 (시험 중)", "열기", "아직 실제 차로 시험하지 않은 기능이 필요한 차종입니다. 핸들을 각도로 움직이는 신형 차(아이오닉 5 PE·EV6 PE 등)를 여기서 고르고, CAN FD 차량의 HDA 방식을 정합니다. 스마트 크루즈(SCC)가 없는 레이 EV·포터 II EV는 apilot-c2-port 브랜치에 있습니다.");
+  auto other_cars_btn = new ButtonControl("기타 차종 (시험 중)", "열기", "아직 실제 차로 시험하지 않은 기능이 필요한 차종입니다. 핸들을 각도로 움직이는 신형 차(아이오닉 5 PE·EV6 PE 등)를 여기서 고르고, CAN FD 차량의 HDA 방식을 정합니다. 스마트 크루즈(SCC)가 없는 레이 EV·포터 II EV는 optech 브랜치에 있습니다.");
   QObject::connect(other_cars_btn, &ButtonControl::clicked, [=]() { main_layout->setCurrentWidget(otherCars); });
   connect(otherCars, &OtherCars::backPress, [=]() { main_layout->setCurrentWidget(homeScreen); });
   connect(otherCars, &OtherCars::selectedCar, [=]() {
@@ -1206,7 +1206,7 @@ SelectCar::SelectCar(QWidget* parent): QWidget(parent) {
 
 // ---- 기타 차종 page ----
 // CAR names must match selfdrive/car/hyundai/values.py (OTHER_CAR_MENU); tests/test_other_cars_c2.py checks them.
-// This branch (apilot-c2-canfd) offers the angle-steering CAN FD cars; the cars without SCC are on apilot-c2-port.
+// This branch (optech-fd) offers the angle-steering CAN FD cars; the cars without SCC are on optech.
 struct OtherCarEntry { const char *car; const char *title; const char *desc; };
 static const OtherCarEntry OTHER_ANGLE_CARS[] = {
   {"HYUNDAI IONIQ 5 PE 2025", "아이오닉 5 PE (2024~)", "LFA2 차량. 레드판다가 필요합니다."},

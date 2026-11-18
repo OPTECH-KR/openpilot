@@ -1,7 +1,10 @@
-APILOT C2 PORT
+OPTECH C2 (optech-fd)
 ------
 
 콤마2(C2) / 이온(EON)용 apilot에 **당근파일럿 기능을 옮겨 오고**, 운전에 꼭 필요한 설정만 남겨 쉽게 정리한 브랜치입니다.
+
+* **optech-fd** (이 브랜치): CAN FD 차량. 레드 판다가 필요합니다.
+* **optech**: 일반 CAN 차량. C2 기본 판다로 동작합니다. 설치할 때 아래 명령의 `-b optech-fd`를 `-b optech`로 바꾸세요.
 
 ### 📖 [설정 가이드 보기 (모든 메뉴 설명 + 추천값 + 상황별 해결)](SETTINGS_KO.md)
 
@@ -14,7 +17,7 @@ APILOT C2 PORT
 
 ## 1. 설치 (SSH로 접속해서 한 줄 붙여넣기)
 ```
-rm -fr /data/openpilot && cd /data/ && GIT_SSL_NO_VERIFY=true git clone https://github.com/OPTECH-KR/openpilot.git -b apilot-c2-port --depth=1 openpilot && echo '#!/usr/bin/bash' > /data/data/com.termux/files/continue.sh && echo "cd /data/openpilot" >> /data/data/com.termux/files/continue.sh && echo "exec ./launch_openpilot.sh" >> /data/data/com.termux/files/continue.sh && chmod u+x /data/data/com.termux/files/continue.sh && reboot
+rm -fr /data/openpilot && cd /data/ && GIT_SSL_NO_VERIFY=true git clone https://github.com/OPTECH-KR/openpilot.git -b optech-fd --depth=1 openpilot && echo '#!/usr/bin/bash' > /data/data/com.termux/files/continue.sh && echo "cd /data/openpilot" >> /data/data/com.termux/files/continue.sh && echo "exec ./launch_openpilot.sh" >> /data/data/com.termux/files/continue.sh && chmod u+x /data/data/com.termux/files/continue.sh && reboot
 ```
 * 첫 부팅은 빌드 때문에 몇 분 걸립니다. 그 다음부터는 빨리 켜집니다.
 
