@@ -2,7 +2,6 @@
 import os
 import math
 import time
-from typing import SupportsFloat
 
 from cereal import car, log
 from common.numpy_fast import clip, interp
@@ -190,6 +189,10 @@ class Controls:
     self.current_alert_types = [ET.PERMANENT]
     self.logged_comm_issue = None
     self.logged_radar_fault = None
+    self.not_running = set()
+    self.last_step_t = 0.
+    self.prof_gap_max = 0.
+    self.prof_gaps = 0
     self.last_actuators = car.CarControl.Actuators.new_message()
     self.steer_limited = False
     self.desired_curvature = 0.0
@@ -476,8 +479,9 @@ class Controls:
         self.events.add(EventName.localizerMalfunction)
 
       # Check if all manager processes are running
-      not_running = {p.name for p in self.sm['managerState'].processes if not p.running}
-      if self.sm.rcv_frame['managerState'] and (not_running - IGNORE_PROCESSES):
+      if self.sm.updated['managerState']:  # 2 Hz; rebuilding the set every frame cost about 0.1 ms
+        self.not_running = {p.name for p in self.sm['managerState'].processes if not p.running}
+      if self.sm.rcv_frame['managerState'] and (self.not_running - IGNORE_PROCESSES):
         self.events.add(EventName.processNotRunning)
 
   def data_sample(self):
@@ -774,7 +778,8 @@ class Controls:
     # Ensure no NaNs/Infs
     for p in ACTUATOR_FIELDS:
       attr = getattr(actuators, p)
-      if not isinstance(attr, SupportsFloat):
+      # plain number check: isinstance(attr, typing.SupportsFloat) took about 0.4 ms per frame on the C2
+      if not isinstance(attr, (int, float)):
         continue
 
       if not math.isfinite(attr):
@@ -1004,6 +1009,11 @@ class Controls:
 
   def step(self):
     start_time = sec_since_boot()
+    if self.last_step_t > 0.:
+      gap = start_time - self.last_step_t
+      self.prof_gap_max = max(self.prof_gap_max, gap)
+      self.prof_gaps += gap > 0.05
+    self.last_step_t = start_time
     self.prof.checkpoint("Ratekeeper", ignore=True)
 
     if self.sm.frame % 100 == 0:  # two param file reads every frame cost about 2% of the C2 CPU; once a second is enough
@@ -1053,13 +1063,16 @@ class Controls:
                if k not in self.prof.cp_ignored]
       cpu = (time.process_time() - self.prof_cpu0) / max(time.monotonic() - self.prof_wall0, 1e-3) * 100.
       diag_write(f"controlsd ms/frame: {', '.join(parts)} | total {self.prof.tot * 1000. / n:.2f} "
-                 f"slowest {self.prof_max * 1000.:.0f} | cpu {cpu:.0f}%")
+                 f"slowest {self.prof_max * 1000.:.0f} | cpu {cpu:.0f}% | "
+                 f"frame gap max {self.prof_gap_max * 1000.:.0f} ms, gaps>50ms {self.prof_gaps}")
     except Exception:  # noqa: BLE001
       pass
     self.prof.reset(True)
     self.prof.tot = 0.
     self.prof_frames = 0
     self.prof_max = 0.
+    self.prof_gap_max = 0.
+    self.prof_gaps = 0
 
   def cprofile_window(self, frame_count):
     """C2 diagnostics, once per start: cProfile frames 4000-5500 (from about 40 s, for about 15 s) and write the
