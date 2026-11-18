@@ -1047,11 +1047,14 @@ class Controls:
     if self.prof_frames < 3000:
       return
     n = self.prof_frames
-    parts = [f"{k} {v * 1000. / n:.2f}" for k, v in sorted(self.prof.cp.items(), key=lambda x: -x[1])
-             if k not in self.prof.cp_ignored]
-    cpu = (time.process_time() - self.prof_cpu0) / max(time.monotonic() - self.prof_wall0, 1e-3) * 100.
-    diag_write(f"controlsd ms/frame: {', '.join(parts)} | total {self.prof.tot * 1000. / n:.2f} "
-               f"slowest {self.prof_max * 1000.:.0f} | cpu {cpu:.0f}% | lagging {self.rk.lagging}")
+    try:  # diagnostics only: must never stop controlsd
+      parts = [f"{k} {v * 1000. / n:.2f}" for k, v in sorted(self.prof.cp.items(), key=lambda x: -x[1])
+               if k not in self.prof.cp_ignored]
+      cpu = (time.process_time() - self.prof_cpu0) / max(time.monotonic() - self.prof_wall0, 1e-3) * 100.
+      diag_write(f"controlsd ms/frame: {', '.join(parts)} | total {self.prof.tot * 1000. / n:.2f} "
+                 f"slowest {self.prof_max * 1000.:.0f} | cpu {cpu:.0f}%")
+    except Exception:  # noqa: BLE001
+      pass
     self.prof.reset(True)
     self.prof.tot = 0.
     self.prof_frames = 0
