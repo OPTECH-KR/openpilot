@@ -626,7 +626,9 @@ class Controls:
             self.state = State.enabled
           self.current_alert_types.append(ET.ENABLE)
           self.v_cruise_helper.initialize_v_cruise(CS)
-          self.cruise_helper.longActiveUser = 1 if self.enableAutoEngage == 2 else 0           
+          # C2 port (one-button use): speed control starts together with steering at the current speed
+          # (apilot started it only with a +/- press or the gas-pedal auto resume, which is forced off here)
+          self.cruise_helper.longActiveUser = 1
 
     # Check if openpilot is engaged and actuators are enabled
     self.enabled = self.state in ENABLED_STATES
