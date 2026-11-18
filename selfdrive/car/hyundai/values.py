@@ -71,6 +71,15 @@ class HyundaiFlags(IntFlag):
   CANFD_ALT_GEARS_2 = 64
   SEND_LFA = 128
   USE_FCA = 256
+  # CAN FD on EON/C2: the red panda is the only panda, so its buses are 0-2 (see canfd_bus)
+  CANFD_SINGLE_PANDA = 512
+
+
+def canfd_bus(CP, bus):
+  """Bus number for a CAN FD car. `bus` is the red panda's own bus: 0 = E-CAN (non-HDA2), 1 = E-CAN on HDA2 harnesses,
+  2 = camera side. With the red panda as the only panda (EON, C2 without its uno) that is the number itself; behind a
+  first panda (C3, or a C2 that keeps its uno) everything is 4 higher, which is what this code originally assumed."""
+  return bus if CP.flags & HyundaiFlags.CANFD_SINGLE_PANDA else bus + 4
 
 
 class CAR:
@@ -110,6 +119,7 @@ class CAR:
   GENESIS_G90_2019 = "GENESIS G90 2019"
 
   IONIQ_5 = "HYUNDAI IONIQ 5 2022"
+  IONIQ_6 = "HYUNDAI IONIQ 6 2023"  # CAN FD, HDA II; also used for the 2025 facelift (PE) until its own messages are known
   TUCSON_4TH_GEN = "HYUNDAI TUCSON 4TH GEN"
   TUCSON_HYBRID_4TH_GEN = "HYUNDAI TUCSON HYBRID 4TH GEN"
   SANTA_CRUZ_1ST_GEN = "HYUNDAI SANTA CRUZ 1ST GEN"
@@ -1591,16 +1601,19 @@ FEATURES = {
 
 }
 
-CANFD_CAR = {CAR.KIA_EV6, CAR.IONIQ_5, CAR.TUCSON_HYBRID_4TH_GEN, CAR.KIA_SPORTAGE_HYBRID_5TH_GEN, CAR.SANTA_CRUZ_1ST_GEN, CAR.KIA_SPORTAGE_5TH_GEN, CAR.GENESIS_GV70_1ST_GEN}
+CANFD_CAR = {CAR.KIA_EV6, CAR.IONIQ_5, CAR.IONIQ_6, CAR.TUCSON_HYBRID_4TH_GEN, CAR.KIA_SPORTAGE_HYBRID_5TH_GEN, CAR.SANTA_CRUZ_1ST_GEN, CAR.KIA_SPORTAGE_5TH_GEN, CAR.GENESIS_GV70_1ST_GEN}
 
 # The radar does SCC on these cars when HDA I, rather than the camera
 CANFD_RADAR_SCC_CAR = {CAR.GENESIS_GV70_1ST_GEN, }
+
+# The radar can't be turned off on these CAN FD cars (carrot-wip CANFD_NO_RADAR_DISABLE): stock SCC only
+CANFD_UNSUPPORTED_LONGITUDINAL_CAR = {CAR.IONIQ_6, }
 
 # The camera does SCC on these cars, rather than the radar
 CAMERA_SCC_CAR = {CAR.KONA_EV_2022, }
 
 HYBRID_CAR = {CAR.IONIQ_PHEV, CAR.ELANTRA_HEV_2021, CAR.KIA_NIRO_PHEV, CAR.KIA_NIRO_HEV_2021, CAR.SONATA_HYBRID, CAR.KONA_HEV, CAR.IONIQ, CAR.IONIQ_HEV_2022, CAR.SANTA_FE_HEV_2022, CAR.SANTA_FE_PHEV_2022, CAR.IONIQ_PHEV_2019, CAR.TUCSON_HYBRID_4TH_GEN, CAR.KIA_SPORTAGE_HYBRID_5TH_GEN, CAR.GRANDEUR_IG_HEV, CAR.GRANDEUR_IG_FL_HEV, CAR.K7_HEV, CAR.K7_HEV_PE}  # these cars use a different gas signal
-EV_CAR = {CAR.IONIQ_EV_2020, CAR.IONIQ_EV_LTD, CAR.KONA_EV, CAR.KIA_NIRO_EV, CAR.KONA_EV_2022, CAR.KIA_EV6, CAR.IONIQ_5, CAR.NEXO, CAR.KIA_SOUL_EV_SK3}
+EV_CAR = {CAR.IONIQ_EV_2020, CAR.IONIQ_EV_LTD, CAR.KONA_EV, CAR.KIA_NIRO_EV, CAR.KONA_EV_2022, CAR.KIA_EV6, CAR.IONIQ_5, CAR.IONIQ_6, CAR.NEXO, CAR.KIA_SOUL_EV_SK3}
 
 # these cars require a special panda safety mode due to missing counters and checksums in the messages
 LEGACY_SAFETY_MODE_CAR = {CAR.HYUNDAI_GENESIS, CAR.IONIQ_EV_2020, CAR.IONIQ_EV_LTD, CAR.IONIQ_PHEV, CAR.IONIQ, CAR.KIA_SORENTO, CAR.SONATA_LF, CAR.KIA_OPTIMA_G4, CAR.KIA_OPTIMA_G4_FL, CAR.VELOSTER, CAR.KIA_STINGER, CAR.GENESIS_G70, CAR.GENESIS_G80, CAR.KIA_CEED, CAR.ELANTRA, CAR.IONIQ_HEV_2022, 
@@ -1661,6 +1674,7 @@ DBC = {
   CAR.SONATA_HYBRID: dbc_dict('hyundai_kia_generic', 'hyundai_kia_mando_front_radar_generated'),
   CAR.TUCSON_HYBRID_4TH_GEN: dbc_dict('hyundai_canfd', None),
   CAR.IONIQ_5: dbc_dict('hyundai_canfd', None),
+  CAR.IONIQ_6: dbc_dict('hyundai_canfd', None),
   CAR.SANTA_CRUZ_1ST_GEN: dbc_dict('hyundai_canfd', None),
   CAR.KIA_SOUL_EV_SK3: dbc_dict('hyundai_kia_generic', 'hyundai_kia_mando_front_radar_generated'),
   CAR.KIA_SPORTAGE_5TH_GEN: dbc_dict('hyundai_canfd', None),

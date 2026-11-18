@@ -5,7 +5,7 @@ from common.realtime import DT_CTRL
 from opendbc.can.packer import CANPacker
 from selfdrive.car import apply_driver_steer_torque_limits
 from selfdrive.car.hyundai import hyundaicanfd, hyundaican
-from selfdrive.car.hyundai.values import HyundaiFlags, Buttons, CarControllerParams, CANFD_CAR, CAR, FEATURES, LEGACY_SAFETY_MODE_CAR
+from selfdrive.car.hyundai.values import HyundaiFlags, Buttons, CarControllerParams, CANFD_CAR, CAR, FEATURES, LEGACY_SAFETY_MODE_CAR, canfd_bus
 import random
 from random import randint
 from common.params import Params
@@ -133,7 +133,7 @@ class CarController:
     if self.frame % 100 == 0 and not (self.CP.flags & HyundaiFlags.CANFD_CAMERA_SCC.value) and self.CP.openpilotLongitudinalControl:
       addr, bus = 0x7d0, 0
       if self.CP.flags & HyundaiFlags.CANFD_HDA2.value:
-        addr, bus = 0x730, 5
+        addr, bus = 0x730, canfd_bus(self.CP, 1)
       can_sends.append([addr, 0, b"\x02\x3E\x80\x00\x00\x00\x00\x00", bus])
 
     # >90 degree steering fault prevention

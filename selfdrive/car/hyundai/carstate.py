@@ -6,7 +6,7 @@ from cereal import car
 from common.conversions import Conversions as CV
 from opendbc.can.parser import CANParser
 from opendbc.can.can_define import CANDefine
-from selfdrive.car.hyundai.values import HyundaiFlags, DBC, FEATURES, CAMERA_SCC_CAR, CANFD_CAR, EV_CAR, HYBRID_CAR, Buttons, CarControllerParams, CAR
+from selfdrive.car.hyundai.values import HyundaiFlags, DBC, FEATURES, CAMERA_SCC_CAR, CANFD_CAR, EV_CAR, HYBRID_CAR, Buttons, CarControllerParams, CAR, canfd_bus
 from selfdrive.car.interfaces import CarStateBase
 from common.realtime import DT_CTRL
 
@@ -743,7 +743,7 @@ class CarState(CarStateBase):
         ("ACCELERATOR_BRAKE_ALT", 100),
       ]
 
-    bus = 5 if CP.flags & HyundaiFlags.CANFD_HDA2 else 4
+    bus = canfd_bus(CP, 1 if CP.flags & HyundaiFlags.CANFD_HDA2 else 0)
     return CANParser(DBC[CP.carFingerprint]["pt"], signals, checks, bus)
 
   @staticmethod
@@ -759,7 +759,6 @@ class CarState(CarStateBase):
         ("NEW_SIGNAL_1", "SCC_CONTROL"),
         ("MainMode_ACC", "SCC_CONTROL"),
         ("ACCMode", "SCC_CONTROL"),
-        ("CRUISE_INACTIVE", "SCC_CONTROL"),
         ("ZEROS_9", "SCC_CONTROL"),
         ("CRUISE_STANDSTILL", "SCC_CONTROL"),
         ("ZEROS_5", "SCC_CONTROL"),
@@ -771,4 +770,4 @@ class CarState(CarStateBase):
         ("SCC_CONTROL", 50),
       ]
 
-    return CANParser(DBC[CP.carFingerprint]["pt"], signals, checks, 6)
+    return CANParser(DBC[CP.carFingerprint]["pt"], signals, checks, canfd_bus(CP, 2))
