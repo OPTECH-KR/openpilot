@@ -79,7 +79,7 @@ cd /data/openpilot && GIT_SSL_NO_VERIFY=true git pull && reboot
 ## 6. 더 알아보기
 
 * 메뉴 전체 설명, 추천값, 폰 내비 연동(APM): [설정 가이드](SETTINGS_KO.md)
-* 바뀐 내용: [커밋 기록](https://github.com/OPTECH-KR/openpilot/commits/optech-fd)
+* 바뀐 내용: [배포 기록](https://github.com/OPTECH-KR/openpilot/commits/optech-fd) (자세한 작업 기록은 [optech-fd-dev](https://github.com/OPTECH-KR/openpilot/commits/optech-fd-dev))
 
 ## 만든 사람과 출처
 
