@@ -870,8 +870,16 @@ static void carrot_hud_lower(const UIState* s, int bx, int by, int my_driving_mo
         carrot_round_box(s, mx - 55, my - 38, 110, 48, mode_color, COLOR_WHITE, 6, 2);
         ui_draw_text(s, mx, my - 2, mode_text, 32, COLOR_WHITE, BOLD, 2.0f, 4.0f);
         if (mode_last != -1 && mode_last != my_driving_mode) ui_draw_text_a(s, mx, my, mode_text, 30, COLOR_WHITE, BOLD);
-        if (sm.alive("gpsLocationExternal") && (sm["gpsLocationExternal"].getGpsLocationExternal().getFlags() & 1)) {
-            ui_draw_text(s, mx, my - 45, "GPS", 30, nvgRGBA(0, 255, 0, 255), BOLD, 2.0f, 4.0f);
+        // GPS speed (the dashboard speed reads a few % high): green with a fix, gray "GPS --" while searching
+        if (sm.alive("gpsLocationExternal")) {
+            const auto gps = sm["gpsLocationExternal"].getGpsLocationExternal();
+            if (gps.getFlags() & 1) {
+                const float gps_speed = gps.getSpeed() * (s->scene.is_metric ? MS_TO_KPH : MS_TO_MPH);
+                snprintf(str, sizeof(str), "GPS %d", (int)(std::max(gps_speed, 0.0f) + 0.5f));
+                ui_draw_text(s, mx, my - 45, str, 30, nvgRGBA(0, 255, 0, 255), BOLD, 2.0f, 4.0f);
+            } else {
+                ui_draw_text(s, mx, my - 45, "GPS --", 30, nvgRGBA(170, 170, 170, 255), BOLD, 2.0f, 4.0f);
+            }
         }
     }
 
