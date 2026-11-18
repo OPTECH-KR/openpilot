@@ -14,5 +14,15 @@ LOCAL_HASH=$(git rev-parse HEAD)
 /usr/bin/git fetch
 REMOTE_HASH=$(git rev-parse --verify origin/$CURRENT_BRANCH)
 echo -n "$REMOTE_HASH" > /data/params/d/GitCommitRemote
-# list what the update changes (newest first), shown in the update dialog
-git log --no-merges --format='• %s' HEAD..origin/$CURRENT_BRANCH 2>/dev/null | head -n 12 > /tmp/update_changelog.txt
+# list what the update changes (newest first), shown in the update dialog.
+# A release commit carries its change list in the message body ("• ..." lines); after a rewritten
+# release (history not continuing from ours) only the newest release is described.
+if git merge-base --is-ancestor HEAD origin/$CURRENT_BRANCH 2>/dev/null; then
+  RANGE="HEAD..origin/$CURRENT_BRANCH"
+else
+  RANGE="-1 origin/$CURRENT_BRANCH"
+fi
+git log --no-merges --format='%b' $RANGE 2>/dev/null | grep '^•' | head -n 12 > /tmp/update_changelog.txt
+if [ ! -s /tmp/update_changelog.txt ]; then
+  git log --no-merges --format='• %s' $RANGE 2>/dev/null | head -n 12 > /tmp/update_changelog.txt
+fi
