@@ -1973,7 +1973,7 @@ OTHER_CAR = ANGLE_CONTROL_CAR | NON_SCC_CAR
 OTHER_CAR_MENU = ANGLE_CONTROL_CAR
 
 # The camera does SCC on these cars, rather than the radar
-CAMERA_SCC_CAR = {CAR.KONA_EV_2022, CAR.KONA_2022, CAR.CASPER_EV, }
+CAMERA_SCC_CAR = {CAR.KONA_EV_2022, CAR.KONA_2022, CAR.CASPER_EV, CAR.CASPER, }
 
 HYBRID_CAR = {CAR.IONIQ_PHEV, CAR.ELANTRA_HEV_2021, CAR.KIA_NIRO_PHEV, CAR.KIA_NIRO_HEV_2021, CAR.SONATA_HYBRID, CAR.KONA_HEV, CAR.IONIQ, CAR.IONIQ_HEV_2022, CAR.SANTA_FE_HEV_2022, CAR.SANTA_FE_PHEV_2022, CAR.IONIQ_PHEV_2019, CAR.TUCSON_HYBRID_4TH_GEN, CAR.KIA_SPORTAGE_HYBRID_5TH_GEN, CAR.GRANDEUR_IG_HEV, CAR.GRANDEUR_IG_FL_HEV, CAR.K7_HEV, CAR.K7_HEV_PE,
               CAR.KIA_K5_HEV_2020, CAR.KIA_NIRO_PHEV_2022, CAR.KIA_OPTIMA_H_G4_FL, CAR.KIA_K5_HEV_JF, CAR.KIA_K5_HEV_2022,
@@ -2095,17 +2095,26 @@ DBC = {
   CAR.KIA_K5_HEV_JF: dbc_dict('hyundai_kia_generic', None),
   CAR.KIA_K5_HEV_2022: dbc_dict('hyundai_kia_generic', None),
   CAR.KIA_K9: dbc_dict('hyundai_kia_generic', None),
+  # was missing: choosing the Casper stopped openpilot at start (carrot: camera SCC, CRC8)
+  CAR.CASPER: dbc_dict('hyundai_kia_generic', None),
   CAR.GENESIS_GV70_1ST_GEN: dbc_dict('hyundai_canfd', None),
 }
 
 
 
+import sys
+
+
 def main():
   # the car menu list (manager writes it to /data/params/d/SupportedCars): this branch is for the red panda, so only
   # CAN FD cars; CAN cars are on apilot-c2-port. 기타 차종 have their own page
-  for member, value in vars(CAR).items():
-    if not member.startswith("_") and value in CANFD_CAR and value not in OTHER_CAR:
-      print(value)
+  cars = [value for member, value in vars(CAR).items()
+          if not member.startswith("_") and value in CANFD_CAR and value not in OTHER_CAR
+          and value in DBC]  # a name without a DBC entry (TUCSON_4TH_GEN) cannot start
+  # grouped by brand / model / year with Korean names (car_menu.py); utf-8 whatever the locale
+  from selfdrive.car.hyundai.car_menu import menu_lines
+  for line in menu_lines(cars):
+    sys.stdout.buffer.write(line.encode("utf-8") + b"\n")
 
 
 if __name__ == "__main__":
