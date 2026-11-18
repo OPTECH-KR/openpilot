@@ -25,7 +25,8 @@ const CanMsg GM_ASCM_TX_MSGS[] = {{384, 0, 4}, {1033, 0, 7}, {1034, 0, 7}, {715,
 
 // camera harness (Bolt EUV 2022-23): LKAS, the cancel button and PSCMStatus; stock ACC does longitudinal
 const CanMsg GM_CAM_TX_MSGS[] = {{384, 0, 4},  // pt bus
-                                 {481, 2, 7}, {388, 2, 8}};  // camera bus
+                                 {481, 2, 7}, {388, 2, 8},  // camera bus
+                                 {0x200, 0, 6}};  // comma pedal GAS_COMMAND: Bolt EV without ACC with the pedal param only (tx hook)
 
 // TODO: do checksum and counter checks. Add correct timestep, 0.1s for now.
 AddrCheckStruct gm_addr_checks[] = {
@@ -41,6 +42,14 @@ addr_checks gm_rx_checks = {gm_addr_checks, GM_RX_CHECK_LEN};
 
 // camera harness (Bolt EUV 2022-23), backported from comma panda 0.8.16 via sunnystar-c2
 const int16_t GM_PARAM_HW_CAM = 1;
+// 2 is comma's HW_CAM_LONG (not here)
+// Bolt EV 2017-21 without ACC on the camera harness (ds5ajd/openpilot 0814): openpilot does not spoof PSCMStatus for it,
+// so the camera keeps getting the car's own
+const int16_t GM_PARAM_CC_ONLY = 4;
+// ... and with a comma pedal the pedal does the longitudinal: SET/RESUME engage like the ASCM cars
+const int16_t GM_PARAM_PEDAL = 8;
+bool gm_cc_only = false;
+bool gm_pedal = false;
 enum {GM_ASCM, GM_CAM} gm_hw = GM_ASCM;
 int gm_cruise_button_prev = 0;
 
@@ -72,7 +81,7 @@ static int gm_rx_hook(CANPacket_t *to_push) {
     }
 
     // ACC steering wheel buttons (GM_CAM is tied to the PCM)
-    if ((addr == 481) && (gm_hw == GM_ASCM)) {
+    if ((addr == 481) && ((gm_hw == GM_ASCM) || gm_pedal)) {
       int button = (GET_BYTE(to_push, 5) & 0x70U) >> 4;
 
       // exit controls on cancel press
@@ -95,11 +104,21 @@ static int gm_rx_hook(CANPacket_t *to_push) {
       brake_pressed = GET_BYTE(to_push, 1) >= 10U;
     }
 
-    if (addr == 452) {
-      gas_pressed = GET_BYTE(to_push, 5) != 0U;
+    // comma pedal: the driver's own pedal shows in GAS_SENSOR (average of the two tracks, comma GM threshold)
+    if (gm_pedal && (addr == 0x201)) {
+      gas_interceptor_detected = 1;
+      int gas_interceptor = (((GET_BYTE(to_push, 0) << 8) + GET_BYTE(to_push, 1)) + ((GET_BYTE(to_push, 2) << 8) + GET_BYTE(to_push, 3))) / 2;
+      gas_pressed = gas_interceptor > 458;
+      gas_interceptor_prev = gas_interceptor;
+    }
 
-      // camera harness: enter controls on rising edge of stock ACC, exit when ACC is off
-      if (gm_hw == GM_CAM) {
+    if ((addr == 452) && !(gm_pedal && gas_interceptor_detected)) {
+      gas_pressed = GET_BYTE(to_push, 5) != 0U;
+    }
+    if (addr == 452) {
+
+      // camera harness: enter controls on rising edge of stock ACC, exit when ACC is off (not with the pedal: no stock ACC)
+      if ((gm_hw == GM_CAM) && !gm_pedal) {
         bool cruise_engaged = (GET_BYTE(to_push, 1) >> 5) != 0U;
         if (cruise_engaged && !cruise_engaged_prev) {
           controls_allowed = 1;
@@ -241,6 +260,19 @@ static int gm_tx_hook(CANPacket_t *to_send, bool longitudinal_allowed) {
     }
   }
 
+  // GAS: comma pedal (Bolt EV without ACC with the pedal param only): no throttle without controls allowed or with the brake on
+  if (addr == 0x200) {
+    if (!gm_pedal) {
+      tx = 0;
+    } else if (!current_controls_allowed || !longitudinal_allowed) {
+      if ((GET_BYTE(to_send, 0) != 0U) || (GET_BYTE(to_send, 1) != 0U) || (GET_BYTE(to_send, 2) != 0U) || (GET_BYTE(to_send, 3) != 0U)) {
+        tx = 0;
+      }
+    } else {
+      // allowed: the pedal's own checksum/counter guard the command
+    }
+  }
+
   // BUTTONS: only cruise cancellation with stock longitudinal (camera harness)
   if ((addr == 481) && (gm_hw == GM_CAM)) {
     int button = (GET_BYTE(to_send, 5) >> 4) & 0x7U;
@@ -261,7 +293,7 @@ static int gm_fwd_hook(int bus_num, CANPacket_t *to_fwd) {
   if (gm_hw == GM_CAM) {
     if (bus_num == 0) {
       // block PSCMStatus; openpilot forwards it with the hands-off detection set, hiding the camera's alert
-      bool is_pscm_msg = (addr == 388);
+      bool is_pscm_msg = (addr == 388) && !gm_cc_only;
       if (!is_pscm_msg) {
         bus_fwd = 2;
       }
@@ -281,6 +313,8 @@ static int gm_fwd_hook(int bus_num, CANPacket_t *to_fwd) {
 
 static const addr_checks* gm_init(int16_t param) {
   gm_hw = GET_FLAG(param, GM_PARAM_HW_CAM) ? GM_CAM : GM_ASCM;
+  gm_cc_only = (gm_hw == GM_CAM) && GET_FLAG(param, GM_PARAM_CC_ONLY);
+  gm_pedal = gm_cc_only && GET_FLAG(param, GM_PARAM_PEDAL);
   gm_cruise_button_prev = 0;
   controls_allowed = false;
   relay_malfunction_reset();

@@ -7,7 +7,9 @@ from common.realtime import DT_CTRL, sec_since_boot
 from opendbc.can.packer import CANPacker
 from selfdrive.car import apply_driver_steer_torque_limits, create_gas_interceptor_command
 from selfdrive.car.gm import gmcan
-from selfdrive.car.gm.values import DBC, CanBus, CarControllerParams, CruiseButtons, CC_ONLY_CAR
+from selfdrive.car.gm import bolt_pedal
+from common.params import Params
+from selfdrive.car.gm.values import CAR, DBC, CanBus, CarControllerParams, CruiseButtons, CC_ONLY_CAR
 
 VisualAlert = car.CarControl.HUDControl.VisualAlert
 NetworkLocation = car.CarParams.NetworkLocation
@@ -49,6 +51,9 @@ class CarController:
     self.last_button_frame = 0
     self.cancel_counter = 0
     self.pedal_steady = 0.
+    # Bolt EV without ACC: ds5ajd pedal model, capped by the Bolt EV settings page
+    self.bolt_pedal = CP.carFingerprint == CAR.BOLT_CC and CP.enableGasInterceptor
+    self.bolt_pedal_max = bolt_pedal.pedal_max(Params().get(bolt_pedal.PEDAL_MAX_PARAM)) if self.bolt_pedal else 0.
 
     self.lka_steering_cmd_counter = 0
     self.lka_icon_status_last = (False, False)
@@ -145,9 +150,13 @@ class CarController:
           else:
             pedal_gas = clip(actuators.accel, 0., 1.)
 
-          # apply pedal hysteresis and clip the final output to valid values.
-          pedal_final, self.pedal_steady = actuator_hystereses(pedal_gas, self.pedal_steady)
-          pedal_gas = clip(pedal_final, 0., 1.)
+          if not self.bolt_pedal:
+            # apply pedal hysteresis and clip the final output to valid values.
+            pedal_final, self.pedal_steady = actuator_hystereses(pedal_gas, self.pedal_steady)
+            pedal_gas = clip(pedal_final, 0., 1.)
+          else:
+            pedal_gas, self.pedal_steady = bolt_pedal.pedal_command(actuators.accel, CS.out.vEgo, self.pedal_steady,
+                                                                    self.bolt_pedal_max)
 
           if not CC.longActive:
             pedal_gas = 0.0  # May not be needed with the enable param

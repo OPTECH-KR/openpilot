@@ -3,9 +3,12 @@ from cereal import car
 from math import fabs
 from panda import Panda
 
+from common.params import Params
+
 from common.conversions import Conversions as CV
 from selfdrive.car import STD_CARGO_KG, create_button_event, scale_tire_stiffness, get_safety_config
 from selfdrive.car.gm.radar_interface import RADAR_HEADER_MSG
+from selfdrive.car.gm.bolt_pedal import PEDAL_PARAM
 from selfdrive.car.gm.values import CAR, CruiseButtons, CarControllerParams, EV_CAR, CAMERA_ACC_CAR, CanBus, CC_ONLY_CAR
 from selfdrive.car.interfaces import CarInterfaceBase, TorqueFromLateralAccelCallbackType, FRICTION_THRESHOLD
 from selfdrive.controls.lib.drive_helpers import get_friction
@@ -77,6 +80,9 @@ class CarInterface(CarInterfaceBase):
 
     # comma pedal: not with the camera harness yet (this panda's GM_CAM mode has no pedal command)
     ret.enableGasInterceptor = 0x201 in fingerprint[0] and candidate not in CAMERA_ACC_CAR
+    # Bolt EV 2017-21 without ACC: the pedal only with its toggle on the Bolt EV settings page (ds5ajd/openpilot 0814)
+    if candidate == CAR.BOLT_CC:
+      ret.enableGasInterceptor = 0x201 in fingerprint[0] and Params().get_bool(PEDAL_PARAM)
 
     if candidate in EV_CAR:
       ret.transmissionType = TransmissionType.direct
@@ -96,6 +102,10 @@ class CarInterface(CarInterfaceBase):
       ret.radarUnavailable = True  # no radar
       ret.pcmCruise = True
       ret.safetyConfigs[0].safetyParam |= Panda.FLAG_GM_HW_CAM
+      if candidate in CC_ONLY_CAR:  # no ACC: openpilot does not spoof PSCMStatus, the panda forwards the car's
+        ret.safetyConfigs[0].safetyParam |= Panda.FLAG_GM_CC_ONLY
+        if ret.enableGasInterceptor:
+          ret.safetyConfigs[0].safetyParam |= Panda.FLAG_GM_PEDAL
       ret.minEnableSpeed = 5 * CV.KPH_TO_MS
       ret.minSteerSpeed = 10 * CV.KPH_TO_MS
 
@@ -214,7 +224,16 @@ class CarInterface(CarInterfaceBase):
       ret.lateralTuning.pid.kf = 0.000045
       tire_stiffness_factor = 1.0
 
-    elif candidate in (CAR.BOLT_EUV, CAR.BOLT_CC):
+    elif candidate == CAR.BOLT_CC:  # Bolt EV 2017-21, ds5ajd/openpilot 0814
+      ret.mass = 1616. + STD_CARGO_KG
+      ret.wheelbase = 2.60096
+      ret.steerRatio = 16.8
+      ret.centerToFront = ret.wheelbase * 0.4
+      tire_stiffness_factor = 1.0
+      ret.steerActuatorDelay = 0.25
+      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+
+    elif candidate == CAR.BOLT_EUV:
       ret.mass = 1669. + STD_CARGO_KG
       ret.wheelbase = 2.63779
       ret.steerRatio = 16.8

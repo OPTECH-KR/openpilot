@@ -65,6 +65,9 @@ def manager_init() -> None:
     ("PorterSpeedButtons", "0"),
     ("PorterPedal", "0"),
     ("PorterPedalMax", "40"),      # no Porter calibration yet: lower cap
+    # Chevrolet Bolt EV 2017-21 without ACC (ds5ajd/openpilot 0814)
+    ("BoltPedal", "0"),            # comma pedal: openpilot long through the accelerator
+    ("BoltPedalMax", "33"),        # pedal command cap, % (ds5ajd pedalMaxValue 0.331)
     ("ShowConnInfo", "1"),
     ("ShowLaneInfo", "1"),
     ("ShowBlindSpot", "1"),

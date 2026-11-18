@@ -185,6 +185,8 @@ class Panda(object):
   # GM camera harness (Bolt EUV 2022-23), panda/board/safety/safety_gm.h
   FLAG_GM_HW_CAM = 1
   FLAG_GM_HW_CAM_LONG = 2
+  FLAG_GM_CC_ONLY = 4  # Bolt EV 2017-21 without ACC on the camera harness
+  FLAG_GM_PEDAL = 8    # ... with the comma pedal
   FLAG_HONDA_BOSCH_LONG = 2
   FLAG_HONDA_NIDEC_ALT = 4
 

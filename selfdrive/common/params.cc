@@ -231,6 +231,8 @@ std::unordered_map<std::string, uint32_t> keys = {
     { "PorterSpeedButtons", PERSISTENT },
     { "PorterPedal", PERSISTENT },
     { "PorterPedalMax", PERSISTENT },
+    { "BoltPedal", PERSISTENT },
+    { "BoltPedalMax", PERSISTENT },
     { "ShowConnInfo", PERSISTENT },
     { "ShowLaneInfo", PERSISTENT },
     { "ShowBlindSpot", PERSISTENT },
