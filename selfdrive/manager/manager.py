@@ -365,10 +365,21 @@ def main() -> None:
   manager_init()
   # car lists for the car select menu: each run is a full python start (a few seconds on C2),
   # so only rebuild them when the code changed (just built) or a list is missing
-  carLists = ('/data/params/d/SupportedCars', '/data/params/d/SupportedCars_gm')
-  if just_built or not all(os.path.isfile(f) and os.path.getsize(f) > 0 for f in carLists):
-    os.system("python /data/openpilot/selfdrive/car/hyundai/values.py > /data/params/d/SupportedCars")
-    os.system("python /data/openpilot/selfdrive/car/gm/values.py > /data/params/d/SupportedCars_gm")
+  carList = '/data/params/d/SupportedCars'
+  if just_built or not (os.path.isfile(carList) and os.path.getsize(carList) > 0):
+    os.system("python /data/openpilot/selfdrive/car/hyundai/values.py > " + carList)
+  # GM is not offered: this branch has no GM CAN definition files (opendbc gm_global_a_*), so a GM car cannot run.
+  # Hyundai/Kia only (CAN FD models stay in the list). A GM car chosen earlier is cleared so the car is fingerprinted.
+  gmList = '/data/params/d/SupportedCars_gm'
+  if os.path.isfile(gmList):
+    try:
+      params = Params()
+      selected = params.get("SelectedCar", encoding="utf8")
+      if selected and selected in open(gmList, encoding="utf8").read().splitlines():
+        params.remove("SelectedCar")
+      os.remove(gmList)
+    except Exception:
+      pass
 
   # Start UI early so prepare can happen in the background
   if not prepare_only:
