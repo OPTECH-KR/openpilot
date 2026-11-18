@@ -225,6 +225,8 @@ std::unordered_map<std::string, uint32_t> keys = {
     { "GpsCheck", CLEAR_ON_MANAGER_START },
     { "GpsSource", PERSISTENT },
     { "EngageWithLong", PERSISTENT },
+    { "AngleSteerMaxGain", PERSISTENT },
+    { "CcOnlySpeedButtons", PERSISTENT },
     { "ShowConnInfo", PERSISTENT },
     { "ShowLaneInfo", PERSISTENT },
     { "ShowBlindSpot", PERSISTENT },

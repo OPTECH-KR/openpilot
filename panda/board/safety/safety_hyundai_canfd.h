@@ -121,6 +121,7 @@ const CanMsg HYUNDAI_CANFD_HDA2_LONG_TX_MSGS[] = {
 
 const CanMsg HYUNDAI_CANFD_HDA1_TX_MSGS[] = {
   {0x12A, 0, 16}, // LFA
+  {0xCB, 0, 24},  // ADAS_CMD_35_10ms, angle steering only (checked in the tx hook)
   {0x1A0, 0, 32}, // CRUISE_INFO
   {0x1CF, 2, 8},  // CRUISE_BUTTON
   {0x1E0, 0, 16}, // LFAHDA_CLUSTER
@@ -182,6 +183,65 @@ const int HYUNDAI_PARAM_CANFD_HDA2_ALT_STEERING = 256;
 bool hyundai_canfd_hda2 = false;
 bool hyundai_canfd_alt_buttons = false;
 bool hyundai_canfd_hda2_alt_steering = false;
+
+// LFA2 angle steering ("other cars" menu), adapted from StarPilot (firestar5683/StarPilot) which takes it from sunnypilot/opendbc's
+// hkg-angle-steering-2025 branch: the car gets a wheel angle and a torque reduction gain. The angle is checked against a
+// simple vehicle model (StarPilot's baseline car) with ISO-style lateral accel / jerk limits, as steer_angle_cmd_checks_vm.
+const int HYUNDAI_PARAM_CANFD_ANGLE_STEERING = 512;
+bool hyundai_canfd_angle_steering = false;
+struct sample_t hyundai_canfd_speed;  // vehicle speed, 0.01 m/s
+
+#define HKG_ANGLE_DEG_TO_CAN 10
+#define HKG_ANGLE_MAX_CAN 3600
+#define HKG_ANGLE_FREQUENCY 100.0f
+static const float HKG_SLIP_FACTOR = -0.0006085930193026732f;
+static const float HKG_STEER_RATIO = 13.7f;
+static const float HKG_WHEELBASE = 2.756f;
+static const float HKG_MAX_LATERAL_ACCEL = 3.0f + (9.81f * 0.06f);  // ISO 11270 accel + average road roll
+static const float HKG_MAX_LATERAL_JERK = 3.0f + (9.81f * 0.06f);   // below the ISO 5.0 m/s^3
+
+static float hkg_angle_from_curvature(float curvature, float speed) {
+  const float curvature_factor = 1.0f / (1.0f - (HKG_SLIP_FACTOR * speed * speed)) / HKG_WHEELBASE;
+  return curvature * HKG_STEER_RATIO / curvature_factor * 57.29577951308232f;
+}
+
+static int hkg_clamp_angle(int angle) {
+  return MIN(MAX(angle, -HKG_ANGLE_MAX_CAN), HKG_ANGLE_MAX_CAN);
+}
+
+static bool hyundai_canfd_angle_cmd_checks(int desired_angle, bool steer_req) {
+  bool violation = false;
+  // slowest recent speed minus 1 m/s, so the limits are never tighter than the car's real speed allows
+  const float speed = MAX(((float)hyundai_canfd_speed.min / 100.0f) - 1.0f, 1.0f);
+
+  if (controls_allowed && steer_req) {
+    // lateral jerk -> largest angle change per message
+    const float max_delta = hkg_angle_from_curvature(HKG_MAX_LATERAL_JERK / (speed * speed), speed) / HKG_ANGLE_FREQUENCY;
+    const int max_delta_can = (int)(max_delta * (float)HKG_ANGLE_DEG_TO_CAN) + 1;
+    violation |= max_limit_check(desired_angle, desired_angle_last + max_delta_can, desired_angle_last - max_delta_can);
+
+    // lateral accel -> largest angle
+    const float max_angle = hkg_angle_from_curvature(HKG_MAX_LATERAL_ACCEL / (speed * speed), speed);
+    const int max_angle_can = (int)(max_angle * (float)HKG_ANGLE_DEG_TO_CAN) + 1;
+    violation |= max_limit_check(desired_angle, max_angle_can, -max_angle_can);
+  }
+  desired_angle_last = desired_angle;
+
+  // not steering: the angle sent must be the wheel's own angle
+  if (!steer_req) {
+    violation |= max_limit_check(desired_angle, hkg_clamp_angle(angle_meas.max) + 1, hkg_clamp_angle(angle_meas.min) - 1);
+  }
+
+  // no steering without controls allowed
+  if (!controls_allowed) {
+    violation |= steer_req;
+  }
+
+  if (violation || !controls_allowed) {
+    desired_angle_last = hkg_clamp_angle(angle_meas.values[0]);
+  }
+  return violation;
+}
 
 static int hyundai_canfd_get_lka_addr(void) {
   return hyundai_canfd_hda2_alt_steering ? 0x110 : 0x50;
@@ -249,6 +309,10 @@ static int hyundai_canfd_rx_hook(CANPacket_t *to_push) {
       int torque_driver_new = ((GET_BYTE(to_push, 11) & 0x1fU) << 8U) | GET_BYTE(to_push, 10);
       torque_driver_new -= 4095;
       update_sample(&torque_driver, torque_driver_new);
+
+      // MDPS STEERING_ANGLE (bytes 12-13, 0.1 deg): what the angle commands are compared with
+      int angle_meas_new = (GET_BYTE(to_push, 13) << 8U) | GET_BYTE(to_push, 12);
+      update_sample(&angle_meas, to_signed(angle_meas_new, 16));
     }
 
     // cruise buttons
@@ -288,6 +352,8 @@ static int hyundai_canfd_rx_hook(CANPacket_t *to_push) {
         speed += GET_BYTE(to_push, i) | (GET_BYTE(to_push, i + 1) << 8U);
       }
       vehicle_moving = (speed / 4U) > HYUNDAI_STANDSTILL_THRSLD;
+      // WHEEL_SPEED_n are 0.03125 km/h: average in 0.01 m/s
+      update_sample(&hyundai_canfd_speed, (int)((speed / 4U) * 3125U / 3600U));
     }
   }
 
@@ -326,6 +392,40 @@ static int hyundai_canfd_tx_hook(CANPacket_t *to_send, bool longitudinal_allowed
     tx = msg_allowed(to_send, HYUNDAI_CANFD_HDA2_LONG_TX_MSGS, sizeof(HYUNDAI_CANFD_HDA2_LONG_TX_MSGS)/sizeof(HYUNDAI_CANFD_HDA2_LONG_TX_MSGS[0]));
   } else {
     tx = msg_allowed(to_send, HYUNDAI_CANFD_HDA1_TX_MSGS, sizeof(HYUNDAI_CANFD_HDA1_TX_MSGS)/sizeof(HYUNDAI_CANFD_HDA1_TX_MSGS[0]));
+  }
+
+  // LFA2 angle steering: LKAS / LKAS_ALT (HDA2) or LFA (HDA1) carry LKAS_ANGLE_ACTIVE, the angle and the torque gain
+  // at the same bits; HDA1 cars whose camera sends 0xCB get them in ADAS_CMD_35_10ms instead
+  if (hyundai_canfd_angle_steering) {
+    const int angle_addr = hyundai_canfd_hda2 ? hyundai_canfd_get_lka_addr() : 0x12a;
+    if (addr == angle_addr) {
+      const int active = (GET_BYTE(to_send, 9) >> 4) & 0x3U;
+      if (active != 0) {  // 0: an LFA that only carries the status (the angle is in 0xCB)
+        const bool steer_req = active != 1;
+        int desired_angle = (GET_BYTE(to_send, 11) << 6U) | (GET_BYTE(to_send, 10) >> 2U);
+        desired_angle = to_signed(desired_angle, 14);
+        const int gain = GET_BYTE(to_send, 12);
+        const bool gain_violation = (gain > 250) || (!steer_req && (gain != 0));
+        if (hyundai_canfd_angle_cmd_checks(desired_angle, steer_req) || gain_violation) {
+          tx = 0;
+        }
+      } else if (GET_BYTE(to_send, 12) != 0U) {
+        tx = 0;
+      }
+    }
+    if (addr == 0xcb) {
+      const int active = (GET_BYTE(to_send, 3) >> 4) & 0xFU;
+      const bool steer_req = active == 2;
+      int desired_angle = ((GET_BYTE(to_send, 5) & 0x3FU) << 8) | GET_BYTE(to_send, 4);
+      desired_angle = to_signed(desired_angle, 14);
+      const int gain = GET_BYTE(to_send, 6);
+      const bool gain_violation = (gain > 250) || (!steer_req && (gain != 0));
+      if (hyundai_canfd_angle_cmd_checks(desired_angle, steer_req) || gain_violation) {
+        tx = 0;
+      }
+    }
+  } else if (addr == 0xcb) {
+    tx = 0;
   }
 
   // steering
@@ -402,7 +502,10 @@ static int hyundai_canfd_fwd_hook(int bus_num, CANPacket_t *to_fwd) {
     // CRUISE_INFO for non-HDA2, we send our own longitudinal commands
     int is_scc_msg = ((addr == 0x1a0) && hyundai_longitudinal && !hyundai_canfd_hda2);
 
-    int block_msg = is_lkas_msg || is_lfa_msg || is_lfahda_msg || is_scc_msg;
+    // ADAS_CMD_35_10ms: ours replaces the camera's on HDA1 angle-steering cars
+    int is_angle_cmd_msg = ((addr == 0xcb) && hyundai_canfd_angle_steering && !hyundai_canfd_hda2);
+
+    int block_msg = is_lkas_msg || is_lfa_msg || is_lfahda_msg || is_scc_msg || is_angle_cmd_msg;
     if (!block_msg) {
       bus_fwd = 0;
     }
@@ -418,6 +521,12 @@ static const addr_checks* hyundai_canfd_init(int16_t param) {
   hyundai_canfd_hda2 = GET_FLAG(param, HYUNDAI_PARAM_CANFD_HDA2);
   hyundai_canfd_alt_buttons = GET_FLAG(param, HYUNDAI_PARAM_CANFD_ALT_BUTTONS);
   hyundai_canfd_hda2_alt_steering = hyundai_canfd_hda2 && GET_FLAG(param, HYUNDAI_PARAM_CANFD_HDA2_ALT_STEERING);
+  hyundai_canfd_angle_steering = GET_FLAG(param, HYUNDAI_PARAM_CANFD_ANGLE_STEERING);
+  hyundai_canfd_speed.min = 0;
+  hyundai_canfd_speed.max = 0;
+  for (int i = 0; i < 6; i++) {
+    hyundai_canfd_speed.values[i] = 0;
+  }
 
   // no long for ICE yet
   if (!hyundai_ev_gas_signal && !hyundai_hybrid_gas_signal) {

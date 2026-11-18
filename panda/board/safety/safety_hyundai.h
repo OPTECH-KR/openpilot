@@ -101,6 +101,14 @@ AddrCheckStruct hyundai_legacy_addr_checks[] = {
 };
 #define HYUNDAI_LEGACY_ADDR_CHECK_LEN (sizeof(hyundai_legacy_addr_checks) / sizeof(hyundai_legacy_addr_checks[0]))
 
+// cars without SCC (Kia Ray EV, Porter II EV): no SCC message to wait for, and TCS13 may be missing (Porter)
+AddrCheckStruct hyundai_non_scc_addr_checks[] = {
+  {.msg = {{608, 0, 8, .check_checksum = true, .max_counter = 3U, .expected_timestep = 10000U},
+           {881, 0, 8, .expected_timestep = 10000U}, { 0 }}},
+  {.msg = {{902, 0, 8, .expected_timestep = 10000U}, { 0 }, { 0 }}},
+};
+#define HYUNDAI_NON_SCC_ADDR_CHECK_LEN (sizeof(hyundai_non_scc_addr_checks) / sizeof(hyundai_non_scc_addr_checks[0]))
+
 bool hyundai_legacy = false;
 
 addr_checks hyundai_rx_checks = {hyundai_addr_checks, HYUNDAI_ADDR_CHECK_LEN};
@@ -194,6 +202,11 @@ static int hyundai_rx_hook(CANPacket_t *to_push) {
     int cruise_engaged = (GET_BYTES(to_push, 0, 4) >> 13) & 0x3U;
     hyundai_common_cruise_state_check(cruise_engaged);
   }*/
+
+  // no SCC: like the SCC cars here (apilot keeps controls allowed), the wheel speed message stands in for SCC11
+  if (valid && hyundai_non_scc && (bus == 0) && (addr == 902)) {
+    hyundai_common_cruise_state_check(1);
+  }
 
   if (valid && (addr == 1056)) { //  MainMode_ACC
     // 1 bits: 0
@@ -431,7 +444,11 @@ static const addr_checks* hyundai_legacy_init(int16_t param) {
   hyundai_longitudinal = false;
   hyundai_camera_scc = false;
 
-  hyundai_rx_checks = (addr_checks){hyundai_legacy_addr_checks, HYUNDAI_LEGACY_ADDR_CHECK_LEN};
+  if (hyundai_non_scc) {
+    hyundai_rx_checks = (addr_checks){hyundai_non_scc_addr_checks, HYUNDAI_NON_SCC_ADDR_CHECK_LEN};
+  } else {
+    hyundai_rx_checks = (addr_checks){hyundai_legacy_addr_checks, HYUNDAI_LEGACY_ADDR_CHECK_LEN};
+  }
   return &hyundai_rx_checks;
 }
 

@@ -752,6 +752,16 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     }
   });
   startToggles->addItem(updateBtn);
+  // 기타 차종: the last item of the start tab; opens its own page
+  otherCars = new OtherCars(this);
+  auto other_cars_btn = new ButtonControl("기타 차종 (시험 중)", "열기", "아직 실제 차로 시험하지 않은 기능이 필요한 차종입니다. 핸들을 각도로 움직이는 신형 차(아이오닉 5 PE·EV6 PE 등, 레드판다 필요)와 스마트 크루즈(SCC)가 없는 차(레이 EV·포터 II EV)를 여기서 고르고 설정합니다.");
+  QObject::connect(other_cars_btn, &ButtonControl::clicked, [=]() { main_layout->setCurrentWidget(otherCars); });
+  connect(otherCars, &OtherCars::backPress, [=]() { main_layout->setCurrentWidget(homeScreen); });
+  connect(otherCars, &OtherCars::selectedCar, [=]() {
+    QString car = QString::fromStdString(Params().get("SelectedCar"));
+    selectCarBtn->setText(car.length() ? car : tr("차종 선택"));
+  });
+  startToggles->addItem(other_cars_btn);
   auto tmuxlog_btn = new ButtonControl("오류 로그 (Tmux)", "보기");
   QObject::connect(tmuxlog_btn, &ButtonControl::clicked, [=]() {
     const std::string txt = util::read_file("/data/tmux_error.log");
@@ -912,6 +922,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   homeScreen->setLayout(carrotLayout);
   main_layout->addWidget(homeScreen);
   main_layout->addWidget(selectCar);
+  main_layout->addWidget(otherCars);
   main_layout->setCurrentWidget(homeScreen);
 
   togglesCarrot(0);
@@ -1170,4 +1181,90 @@ SelectCar::SelectCar(QWidget* parent): QWidget(parent) {
     });
 
   main_layout->addWidget(list);
+}
+
+// ---- 기타 차종 page ----
+// CAR names must match selfdrive/car/hyundai/values.py (OTHER_CAR); tests/test_other_cars_c2.py checks them.
+struct OtherCarEntry { const char *car; const char *title; const char *desc; };
+static const OtherCarEntry OTHER_ANGLE_CARS[] = {
+  {"HYUNDAI IONIQ 5 PE 2025", "아이오닉 5 PE (2024~)", "LFA2 차량. 레드판다가 필요합니다."},
+  {"HYUNDAI IONIQ 6 PE 2025", "아이오닉 6 PE (2025~)", "LFA2 차량으로 보고 각도 방식으로 조향합니다. 2023~24년식은 일반 차종 목록의 'HYUNDAI IONIQ 6 2023'을 고르세요. 레드판다가 필요합니다."},
+  {"KIA EV6 PE 2025", "EV6 PE (2025~)", "LFA2 차량. 레드판다가 필요합니다."},
+  {"HYUNDAI IONIQ 9 2025", "아이오닉 9", "LFA2 차량. 레드판다가 필요합니다."},
+  {"HYUNDAI SANTA FE MX5 2024", "싼타페 MX5 (가솔린)", "LFA2 차량. 레드판다가 필요합니다."},
+  {"HYUNDAI SANTA FE MX5 HEV 2024", "싼타페 MX5 하이브리드", "LFA2 차량. 레드판다가 필요합니다."},
+  {"KIA EV9 2024", "EV9", "LFA2 차량. 레드판다가 필요합니다."},
+};
+static const OtherCarEntry OTHER_NON_SCC_CARS[] = {
+  {"KIA RAY EV 2024", "레이 EV", "스마트 크루즈(SCC)가 없는 차량입니다. openpilot은 조향만 하고, 속도는 차의 크루즈 컨트롤이 유지합니다."},
+  {"HYUNDAI PORTER II EV 2024", "포터 II EV", "스마트 크루즈(SCC)가 없는 차량입니다. openpilot은 조향만 하고, 속도는 차의 크루즈 컨트롤이 유지합니다."},
+};
+
+OtherCars::OtherCars(QWidget* parent): QWidget(parent) {
+  QVBoxLayout* main_layout = new QVBoxLayout(this);
+  main_layout->setMargin(20);
+  main_layout->setSpacing(20);
+
+  QPushButton* back = new QPushButton(tr("Back"));
+  back->setObjectName("back_btn");
+  back->setFixedSize(500, 100);
+  connect(back, &QPushButton::clicked, [=]() { emit backPress(); });
+  main_layout->addWidget(back, 0, Qt::AlignLeft);
+
+  ListWidget* list = new ListWidget(this);
+  QLabel* intro = new QLabel("아직 실제 차로 시험하지 않은 차종입니다. 처음에는 'openpilot 사용'을 끄고(읽기 전용) 짧게 달려 본 뒤, 기록을 확인하고 조향을 켜 주세요. 차종을 바꾸면 재부팅해야 적용됩니다.");
+  intro->setWordWrap(true);
+  intro->setStyleSheet("font-size: 38px; color: #E0E0E0; padding: 10px;");
+  list->addItem(intro);
+
+  auto add_car = [=](const OtherCarEntry &e) {
+    ButtonControl* btn = new ButtonControl(e.title, "선택", QString(e.desc) + "\n(차종 이름: " + e.car + ")");
+    const QString car = e.car;
+    QObject::connect(btn, &ButtonControl::clicked, [=]() {
+      Params().put("SelectedCar", car.toStdString());
+      refresh();
+      emit selectedCar();
+    });
+    car_btns.append(qMakePair(car, btn));
+    list->addItem(btn);
+  };
+
+  list->addItem(carrot_section("핸들을 각도로 움직이는 차 (LFA2)"));
+  for (const auto &e : OTHER_ANGLE_CARS) add_car(e);
+  list->addItem(new CValueControl("AngleSteerMaxGain", "각도 조향 최대 힘",
+    "각도 방식 차에서 openpilot이 쓸 수 있는 핸들 힘의 상한(%)입니다. 운전자가 핸들을 잡으면 이 값과 상관없이 힘이 자동으로 줄어듭니다. 커브에서 힘이 모자라면 올리고, 핸들이 너무 세게 느껴지면 내리세요. 30~100, 기본 100", ROAD_ICON, 30, 100, 5));
+
+  list->addItem(carrot_section("스마트 크루즈(SCC)가 없는 차"));
+  for (const auto &e : OTHER_NON_SCC_CARS) add_car(e);
+  list->addItem(new ParamControl("CcOnlySpeedButtons", "크루즈 속도 자동 조절",
+    "켜면 openpilot이 크루즈 버튼을 대신 눌러 설정 속도를 바꿉니다(커브·과속카메라 감속 등). 이 차들은 앞차를 감지하는 레이더가 없고 크루즈가 브레이크를 세게 걸지 못하므로, 앞차와의 거리는 항상 운전자가 직접 지켜야 합니다. 기본은 꺼짐(조향만).", SHELL_ICON, this));
+
+  auto clear_btn = new ButtonControl("기타 차종 선택 해제", "해제", "여기서 고른 차종을 지우고, 차를 자동으로 인식하게 되돌립니다.");
+  QObject::connect(clear_btn, &ButtonControl::clicked, [=]() {
+    const QString cur = QString::fromStdString(Params().get("SelectedCar"));
+    for (const auto &p : car_btns) {
+      if (p.first == cur) {
+        Params().remove("SelectedCar");
+        break;
+      }
+    }
+    refresh();
+    emit selectedCar();
+  });
+  list->addItem(clear_btn);
+
+  main_layout->addWidget(new ScrollView(list, this));
+  refresh();
+}
+
+void OtherCars::refresh() {
+  const QString cur = QString::fromStdString(Params().get("SelectedCar"));
+  for (const auto &p : car_btns) {
+    p.second->setText(p.first == cur ? "사용 중" : "선택");
+  }
+}
+
+void OtherCars::showEvent(QShowEvent *event) {
+  QWidget::showEvent(event);
+  refresh();
 }

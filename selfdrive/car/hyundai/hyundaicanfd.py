@@ -9,9 +9,23 @@ def get_e_can_bus(CP):
   return canfd_bus(CP, 1 if CP.flags & HyundaiFlags.CANFD_HDA2 else 0)
 
 
-def create_steering_messages(packer, CP, enabled, lat_active, apply_steer):
+ANGLE_VALUES = ("LKAS_ANGLE_ACTIVE", "ADAS_StrAnglReqVal", "ADAS_ACIAnglTqRedcGainVal")
+
+
+def _angle(lat_active, apply_angle, gain):
+  # LKAS_ANGLE_ACTIVE 2 = steering by angle, 1 = available; the gain must be 0 while not steering (panda checks it)
+  return {
+    "LKAS_ANGLE_ACTIVE": 2 if lat_active else 1,
+    "ADAS_StrAnglReqVal": apply_angle,
+    "ADAS_ACIAnglTqRedcGainVal": gain if lat_active else 0.0,
+  }
+
+
+def create_steering_messages(packer, CP, enabled, lat_active, apply_steer, apply_angle=0., angle_gain=0.):
 
   ret = []
+  if CP.flags & HyundaiFlags.CANFD_ANGLE_STEERING:
+    return create_angle_steering_messages(packer, CP, enabled, lat_active, apply_angle, angle_gain)
 
   values = {
     "LKA_MODE": 2,
@@ -46,6 +60,38 @@ def create_steering_messages(packer, CP, enabled, lat_active, apply_steer):
   else:
     ret.append(packer.make_can_msg("LFA", canfd_bus(CP, 0), values))
 
+  return ret
+
+def create_angle_steering_messages(packer, CP, enabled, lat_active, apply_angle, gain):
+  """LFA2 cars (StarPilot / sunnypilot hkg-angle-steering-2025): torque request and its bit stay 0, the wheel angle and the
+  torque reduction gain carry the command. HDA2: LKAS or LKAS_ALT on the camera side; HDA1: in LFA, or plain LFA plus
+  ADAS_CMD_35_10ms (0xCB) when the camera sends that message."""
+  base = {
+    "LKA_MODE": 2,
+    "LKA_ICON": 2 if enabled else 1,
+    "TORQUE_REQUEST": 0,
+    "STEER_REQ": 0,
+  }
+  ret = []
+  if CP.flags & HyundaiFlags.CANFD_HDA2:
+    if CP.flags & HyundaiFlags.CANFD_HDA2_ALT_STEERING:
+      values = dict(base, DampingGain=100, HAS_LANE_SAFETY=0, VALUE63=0, VALUE64=100, **_angle(lat_active, apply_angle, gain))
+      ret.append(packer.make_can_msg("LKAS_ALT", canfd_bus(CP, 0), values))
+    else:
+      values = dict(base, LKA_ASSIST=0, STEER_MODE=0, **_angle(lat_active, apply_angle, gain))
+      ret.append(packer.make_can_msg("LKAS", canfd_bus(CP, 0), values))
+  elif CP.flags & HyundaiFlags.CANFD_ANGLE_ADAS_CMD:
+    ret.append(packer.make_can_msg("LFA", canfd_bus(CP, 0), dict(base, LKA_ASSIST=0, STEER_MODE=0)))
+    ret.append(packer.make_can_msg("ADAS_CMD_35_10ms", canfd_bus(CP, 0), {
+      "ADAS_ActvACISta": 0,
+      "ADAS_ActvACILvl2Sta": 2 if lat_active else 1,
+      "ADAS_StrAnglReqVal": apply_angle,
+      "ADAS_ACIAnglTqRedcGainVal": gain if lat_active else 0.0,
+      "FCA_ESA_ActvSta": 0,
+      "FCA_ESA_TqBstGainVal": 0.0,
+    }))
+  else:
+    ret.append(packer.make_can_msg("LFA", canfd_bus(CP, 0), dict(base, LKA_ASSIST=0, STEER_MODE=0, **_angle(lat_active, apply_angle, gain))))
   return ret
 
 def create_cam_0x2a4(packer, CP, camera_values):

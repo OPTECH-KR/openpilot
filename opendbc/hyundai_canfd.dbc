@@ -68,6 +68,9 @@ BO_ 80 LKAS: 16 XXX
  SG_ SET_ME_1 : 80|1@0+ (1,0) [0|1] "" XXX
  SG_ NEW_SIGNAL_3 : 111|8@0+ (1,0) [0|255] "" XXX
  SG_ FCA_SYSWARN : 40|1@0+ (1,0) [0|1] "" XXX
+ SG_ LKAS_ANGLE_ACTIVE : 77|2@0+ (1,0) [0|3] "" XXX
+ SG_ ADAS_StrAnglReqVal : 82|14@1- (0.1,0) [-819.2|819.1] "deg" XXX
+ SG_ ADAS_ACIAnglTqRedcGainVal : 96|8@1+ (0.004,0) [0|1] "" XXX
 
 BO_ 81 ADRV_0x51: 32 ADRV
  SG_ COUNTER : 16|8@1+ (1,0) [0|255] "" XXX
@@ -108,6 +111,7 @@ BO_ 234 MDPS: 24 XXX
  SG_ STEERING_COL_TORQUE : 80|13@1+ (1,-4095) [0|4095] "" XXX
  SG_ STEERING_ANGLE : 96|16@1- (-0.1,0) [0|255] "deg" XXX
  SG_ STEERING_ANGLE_2 : 128|16@1- (-0.1,0) [0|65535] "deg" XXX
+ SG_ LKA_ANGLE_FAULT : 149|1@0+ (1,0) [0|1] "" XXX
 
 BO_ 256 ACCELERATOR_BRAKE_ALT: 32 XXX
  SG_ CHECKSUM : 0|16@1+ (1,0) [0|65535] "" XXX
@@ -141,6 +145,9 @@ BO_ 298 LFA: 16 ADRV
  SG_ NEW_SIGNAL_2 : 70|2@0+ (1,0) [0|3] "" XXX
  SG_ SET_ME_1 : 80|1@0+ (1,0) [0|1] "" XXX
  SG_ NEW_SIGNAL_3 : 111|8@0+ (1,0) [0|255] "" XXX
+ SG_ LKAS_ANGLE_ACTIVE : 77|2@0+ (1,0) [0|3] "" XXX
+ SG_ ADAS_StrAnglReqVal : 82|14@1- (0.1,0) [-819.2|819.1] "deg" XXX
+ SG_ ADAS_ACIAnglTqRedcGainVal : 96|8@1+ (0.004,0) [0|1] "" XXX
 
 BO_ 304 GEAR_SHIFTER: 16 XXX
  SG_ CHECKSUM : 0|16@1+ (1,0) [0|65535] "" XXX
@@ -569,8 +576,8 @@ BO_ 272 LKAS_ALT: 32 XXX
  SG_ NEW_SIGNAL_1 : 75|4@0+ (1,0) [0|15] "" XXX
  SG_ LKAS_ANGLE_ACTIVE : 77|2@0+ (1,0) [0|3] "" XXX
  SG_ HAS_LANE_SAFETY : 80|1@0+ (1,0) [0|1] "" XXX
- SG_ LKAS_ANGLE_CMD : 82|14@1- (-0.1,0) [0|511] "" XXX
- SG_ LKAS_ANGLE_MAX_TORQUE : 96|8@1+ (1,0) [0|255] "" XXX
+ SG_ ADAS_StrAnglReqVal : 82|14@1- (0.1,0) [-819.2|819.1] "deg" XXX
+ SG_ ADAS_ACIAnglTqRedcGainVal : 96|8@1+ (0.004,0) [0|1] "" XXX
  SG_ DampingGain : 104|8@1+ (1,0) [0|255] "" XXX
  SG_ VALUE231 : 231|8@0+ (1,0) [0|255] "" XXX
  SG_ VALUE239 : 239|8@0+ (1,0) [0|255] "" XXX
@@ -605,6 +612,16 @@ BO_ 866 CAM_0x362: 32 CAMERA
  SG_ NEW_SIGNAL_13 : 208|16@1+ (1,0) [0|65535] "" XXX
  SG_ NEW_SIGNAL_14 : 224|16@1+ (1,0) [0|65535] "" XXX
  SG_ NEW_SIGNAL_15 : 240|16@1+ (1,0) [0|65535] "" XXX
+
+BO_ 203 ADAS_CMD_35_10ms: 24 XXX
+ SG_ CHECKSUM : 0|16@1+ (1,0) [0|65535] "" XXX
+ SG_ COUNTER : 16|8@1+ (1,0) [0|255] "" XXX
+ SG_ ADAS_ActvACISta : 24|4@1+ (1,0) [0|15] "" XXX
+ SG_ ADAS_ActvACILvl2Sta : 28|4@1+ (1,0) [0|15] "" XXX
+ SG_ ADAS_StrAnglReqVal : 32|14@1- (0.1,0) [-819.2|819.1] "deg" XXX
+ SG_ ADAS_ACIAnglTqRedcGainVal : 48|8@1+ (0.004,0) [0|1] "" XXX
+ SG_ FCA_ESA_ActvSta : 56|2@1+ (1,0) [0|3] "" XXX
+ SG_ FCA_ESA_TqBstGainVal : 64|8@1+ (0.004,0) [0|1] "" XXX
 
 CM_ SG_ 96 BRAKE_PRESSURE "User applied brake pedal pressure. Ramps from computer applied pressure on falling edge of cruise. Cruise cancels if !=0";
 CM_ SG_ 101 BRAKE_POSITION "User applied brake pedal position, max is ~700. Signed on some vehicles";

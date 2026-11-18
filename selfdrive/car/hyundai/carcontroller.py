@@ -5,6 +5,7 @@ from common.realtime import DT_CTRL
 from opendbc.can.packer import CANPacker
 from selfdrive.car import apply_driver_steer_torque_limits
 from selfdrive.car.hyundai import hyundaicanfd, hyundaican
+from selfdrive.car.hyundai.angle_steer import apply_steer_angle_limits, torque_reduction_gain
 from selfdrive.car.hyundai.values import HyundaiFlags, Buttons, CarControllerParams, CANFD_CAR, CAR, FEATURES, LEGACY_SAFETY_MODE_CAR, canfd_bus
 import random
 from random import randint
@@ -54,6 +55,12 @@ class CarController:
 
     self.accel_last = 0
     self.apply_steer_last = 0
+    # LFA2 angle steering (기타 차종)
+    self.angle_steering = bool(CP.flags & HyundaiFlags.CANFD_ANGLE_STEERING)
+    self.apply_angle_last = 0.
+    self.angle_gain_last = 0.
+    self.angle_max_gain = 1.0
+    self.non_scc_speed_buttons = False
     self.car_fingerprint = CP.carFingerprint
     #self.send_lfa_mfa_lkas = True if self.car_fingerprint in FEATURES["send_lfa_mfa"] and self.car_fingerprint not in [CAR.HYUNDAI_GENESIS] else False
     self.send_lfa_mfa_lkas = CP.flags & HyundaiFlags.SEND_LFA.value
@@ -128,6 +135,10 @@ class CarController:
       self.softHoldMode = int(Params().get("SoftHoldMode", encoding="utf8"))
       self.steerDeltaUp = int(Params().get("SteerDeltaUp", encoding="utf8"))
       self.steerDeltaDown = int(Params().get("SteerDeltaDown", encoding="utf8"))
+      if self.angle_steering:
+        self.angle_max_gain = min(max(int(Params().get("AngleSteerMaxGain", encoding="utf8") or 100), 30), 100) / 100.
+      if self.CP.flags & HyundaiFlags.NON_SCC:
+        self.non_scc_speed_buttons = Params().get_bool("CcOnlySpeedButtons")
       if self.CP.carFingerprint in CANFD_CAR:
         # the CAN FD panda safety allows torque rate up 2 / down 3 per frame and at least 89 valid frames
         # (HYUNDAI_CANFD_STEERING_LIMITS); the menu defaults (3 / 7) would make the panda drop every steering message
@@ -162,7 +173,16 @@ class CarController:
       hda2_long = hda2 and self.CP.openpilotLongitudinalControl
 
       # steering control
-      can_sends.extend(hyundaicanfd.create_steering_messages(self.packer, self.CP, CC.enabled, lat_active, apply_steer))
+      apply_angle = gain = 0.
+      if self.angle_steering:
+        # the angle the model wants, inside the panda's lateral accel/jerk limits; inactive = the wheel's own angle
+        apply_angle = apply_steer_angle_limits(actuators.steeringAngleDeg, self.apply_angle_last, CS.out.vEgoRaw,
+                                               CS.out.steeringAngleDeg, CC.latActive)
+        apply_angle = round(apply_angle, 1)
+        gain = torque_reduction_gain(CS.out.steeringTorque, CS.out.vEgoRaw, CC.latActive, self.angle_gain_last, self.angle_max_gain)
+        self.apply_angle_last = apply_angle
+        self.angle_gain_last = gain
+      can_sends.extend(hyundaicanfd.create_steering_messages(self.packer, self.CP, CC.enabled, lat_active, apply_steer, apply_angle, gain))
 
       # disable LFA on HDA2
       if self.frame % 5 == 0 and hda2:
@@ -240,7 +260,9 @@ class CarController:
           current = int(CS.out.cruiseState.speed*CV.MS_TO_KPH + 0.5)
 
           #CC.debugTextCC = "BTN:00,T:{:.1f},C:{:.1f},{},{}".format(target, current, self.wait_timer, self.alive_timer)
-          if (self.frame - self.last_button_frame) > self.button_wait:
+          if self.CP.flags & HyundaiFlags.NON_SCC and not self.non_scc_speed_buttons:
+            pass  # cruise-control-only car: the driver sets the speed unless '크루즈 속도 자동 조절' is on
+          elif (self.frame - self.last_button_frame) > self.button_wait:
             if (self.frame - self.button_alive_frame) > self.button_alive:
               self.button_wait = randint(8,15)
               self.last_button_frame = self.frame

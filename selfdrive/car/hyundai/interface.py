@@ -3,7 +3,7 @@ from cereal import car
 from panda import Panda
 from common.numpy_fast import interp
 from common.conversions import Conversions as CV
-from selfdrive.car.hyundai.values import canfd_hybrid, HyundaiFlags, CAR, DBC, CANFD_CAR, CAMERA_SCC_CAR, CANFD_RADAR_SCC_CAR, EV_CAR, HYBRID_CAR, LEGACY_SAFETY_MODE_CAR, Buttons, CarControllerParams, \
+from selfdrive.car.hyundai.values import ANGLE_CONTROL_CAR, NON_SCC_CAR, canfd_hybrid, HyundaiFlags, CAR, DBC, CANFD_CAR, CAMERA_SCC_CAR, CANFD_RADAR_SCC_CAR, EV_CAR, HYBRID_CAR, LEGACY_SAFETY_MODE_CAR, Buttons, CarControllerParams, \
   CANFD_UNSUPPORTED_LONGITUDINAL_CAR, canfd_bus
 from selfdrive.car.hyundai.radar_interface import RADAR_START_ADDR
 from selfdrive.car import STD_CARGO_KG, create_button_event, scale_tire_stiffness, get_safety_config
@@ -67,6 +67,12 @@ class CarInterface(CarInterfaceBase):
           ret.flags |= HyundaiFlags.CANFD_GEARS_ACCEL.value
         else:
           ret.flags |= HyundaiFlags.CANFD_ALT_GEARS.value  # what this code always assumed for a car without 0x130
+      # 기타 차종: LFA2 angle steering. HDA1 cars whose camera sends ADAS_CMD_35_10ms (0xCB) get the angle there
+      if candidate in ANGLE_CONTROL_CAR:
+        ret.flags |= HyundaiFlags.CANFD_ANGLE_STEERING.value
+        ret.steerControlType = car.CarParams.SteerControlType.angle
+        if not ret.flags & HyundaiFlags.CANFD_HDA2 and 0xcb in cam_fp:
+          ret.flags |= HyundaiFlags.CANFD_ANGLE_ADAS_CMD.value
       # hybrid gas pedal in ACCELERATOR_ALT (0x105)
       if candidate not in EV_CAR and 0x105 in ecan_fp:
         ret.flags |= HyundaiFlags.CANFD_HYBRID.value
@@ -74,6 +80,15 @@ class CarInterface(CarInterfaceBase):
       # Send LFA message on cars with HDA
       if 0x485 in fingerprint[2]:
         ret.flags |= HyundaiFlags.SEND_LFA.value
+      # 기타 차종 without SCC (Ray EV, Porter II EV): stock cruise control only (StarPilot / carrot)
+      if candidate in NON_SCC_CAR:
+        ret.flags |= HyundaiFlags.NON_SCC.value
+        if 916 not in fingerprint[0]:  # TCS13
+          ret.flags |= HyundaiFlags.NON_SCC_NO_TCS.value
+        # the Ray EV's LFAHDA_MFC (0x485) is 8 bytes; ours is the 4-byte one, so do not send it there (StarPilot keeps a
+        # separate Ray DBC for it)
+        if fingerprint[2].get(0x485) != 4:
+          ret.flags &= ~HyundaiFlags.SEND_LFA.value
 
       # These cars use the FCA11 message for the AEB and FCW signals, all others use SCC12
       if 0x38d in fingerprint[0] or 0x38d in fingerprint[2]:
@@ -341,6 +356,51 @@ class CarInterface(CarInterfaceBase):
       ret.wheelbase = 2.995
       ret.steerRatio = 16.0
       tire_stiffness_factor = 0.65
+    elif candidate == CAR.IONIQ_5_PE:
+      ret.mass = 1948. + STD_CARGO_KG
+      ret.wheelbase = 2.97
+      ret.steerRatio = 14.26
+      tire_stiffness_factor = 0.65
+    elif candidate == CAR.IONIQ_6_PE:
+      ret.mass = 1948. + STD_CARGO_KG
+      ret.wheelbase = 2.95
+      ret.steerRatio = 14.26
+      tire_stiffness_factor = 0.65
+    elif candidate == CAR.KIA_EV6_PE:
+      ret.mass = 2055. + STD_CARGO_KG
+      ret.wheelbase = 2.9
+      ret.steerRatio = 14.26
+      tire_stiffness_factor = 0.65
+    elif candidate == CAR.IONIQ_9:
+      ret.mass = 2700. + STD_CARGO_KG
+      ret.wheelbase = 3.13
+      ret.steerRatio = 16.02
+      tire_stiffness_factor = 0.65
+    elif candidate == CAR.SANTA_FE_MX5:
+      ret.mass = 1910. + STD_CARGO_KG
+      ret.wheelbase = 2.815
+      ret.steerRatio = 15.8
+      tire_stiffness_factor = 0.65
+    elif candidate == CAR.SANTA_FE_MX5_HEV:
+      ret.mass = 2035. + STD_CARGO_KG
+      ret.wheelbase = 2.815
+      ret.steerRatio = 13.72
+      tire_stiffness_factor = 0.65
+    elif candidate == CAR.KIA_EV9:
+      ret.mass = 2664. + STD_CARGO_KG
+      ret.wheelbase = 3.1
+      ret.steerRatio = 16.0
+      tire_stiffness_factor = 0.65
+    elif candidate == CAR.KIA_RAY_EV:
+      ret.mass = 1295. + STD_CARGO_KG
+      ret.wheelbase = 2.52
+      ret.steerRatio = 14.5
+      tire_stiffness_factor = 0.65
+    elif candidate == CAR.PORTER_II_EV:
+      ret.mass = 1970. + STD_CARGO_KG
+      ret.wheelbase = 2.64
+      ret.steerRatio = 14.5
+      tire_stiffness_factor = 0.65
     elif candidate == CAR.IONIQ_6:  # carrot-wip uses the Ioniq 5 specs
       ret.mass = 2012 + STD_CARGO_KG
       ret.wheelbase = 3.0
@@ -466,7 +526,7 @@ class CarInterface(CarInterfaceBase):
       ret.naviCluster = 1 if 1348 in fingerprint[0] else 0
 
       ret.sccBus = 0
-      if Params().get_bool("SccConnectedBus2"):
+      if Params().get_bool("SccConnectedBus2") and candidate not in NON_SCC_CAR:
         ret.sccBus = 2
       
       print("***************************************************************************")
@@ -487,6 +547,9 @@ class CarInterface(CarInterfaceBase):
 
       ret.experimentalLongitudinalAvailable = candidate not in (LEGACY_SAFETY_MODE_CAR | CAMERA_SCC_CAR)
       ret.experimentalLongitudinalAvailable = True
+      if candidate in NON_SCC_CAR:  # no SCC to command: steering only, the car's cruise control keeps the speed
+        experimental_long = False
+        ret.experimentalLongitudinalAvailable = False
     ret.openpilotLongitudinalControl = experimental_long and ret.experimentalLongitudinalAvailable
     ret.pcmCruise = not ret.openpilotLongitudinalControl
 
@@ -525,8 +588,14 @@ class CarInterface(CarInterfaceBase):
         ret.safetyConfigs[-1].safetyParam |= Panda.FLAG_HYUNDAI_CAMERA_SCC
       if ret.flags & HyundaiFlags.CANFD_HDA2_ALT_STEERING:
         ret.safetyConfigs[-1].safetyParam |= Panda.FLAG_HYUNDAI_CANFD_HDA2_ALT_STEERING
+      if ret.flags & HyundaiFlags.CANFD_ANGLE_STEERING:
+        ret.safetyConfigs[-1].safetyParam |= Panda.FLAG_HYUNDAI_CANFD_ANGLE_STEERING
     else:
-      if candidate in LEGACY_SAFETY_MODE_CAR:
+      if candidate in NON_SCC_CAR:
+        # no SCC12/TCS checks to wait for: the legacy mode with the non-SCC flag (panda safety_hyundai.h)
+        ret.safetyConfigs = [get_safety_config(car.CarParams.SafetyModel.hyundaiLegacy)]
+        ret.safetyConfigs[0].safetyParam |= Panda.FLAG_HYUNDAI_NON_SCC
+      elif candidate in LEGACY_SAFETY_MODE_CAR:
         # these cars require a special panda safety mode due to missing counters and checksums in the messages
         ret.safetyConfigs = [get_safety_config(car.CarParams.SafetyModel.hyundaiLegacy)]
       else:
