@@ -1715,9 +1715,10 @@ CANFD_RADAR_SCC_CAR = {CAR.GENESIS_GV70_1ST_GEN, }
 # The camera does SCC on these cars, rather than the radar
 CAMERA_SCC_CAR = {CAR.KONA_EV_2022, CAR.KONA_2022, CAR.CASPER_EV, CAR.CASPER, }
 
-# 기타 차종: chosen on their own menu page (not in the normal car list), not driven on this code yet
+# cars without SCC (stock cruise control only): in the normal car list; choosing one shows '레이·포터 설정' on the
+# start tab (selfdrive/ui/qt/offroad/settings.cc). This branch has no 기타 차종 page.
 NON_SCC_CAR = {CAR.KIA_RAY_EV, CAR.PORTER_II_EV}
-OTHER_CAR = NON_SCC_CAR
+OTHER_CAR = set()
 
 HYBRID_CAR = {CAR.IONIQ_PHEV, CAR.ELANTRA_HEV_2021, CAR.KIA_NIRO_PHEV, CAR.KIA_NIRO_HEV_2021, CAR.SONATA_HYBRID, CAR.KONA_HEV, CAR.IONIQ, CAR.IONIQ_HEV_2022, CAR.SANTA_FE_HEV_2022, CAR.SANTA_FE_PHEV_2022, CAR.IONIQ_PHEV_2019, CAR.TUCSON_HYBRID_4TH_GEN, CAR.KIA_SPORTAGE_HYBRID_5TH_GEN, CAR.GRANDEUR_IG_HEV, CAR.GRANDEUR_IG_FL_HEV, CAR.K7_HEV, CAR.K7_HEV_PE,
               CAR.KIA_K5_HEV_2020, CAR.KIA_NIRO_PHEV_2022, CAR.KIA_OPTIMA_H_G4_FL, CAR.KIA_K5_HEV_JF, CAR.KIA_K5_HEV_2022}  # these cars use a different gas signal

@@ -123,23 +123,16 @@ signals:
 
 };
 
-// 기타 차종: cars that need a feature still being tried (angle steering LFA2 cars, cars without SCC).
-// Not in the normal car list; picked and set up on this page (start tab, last item).
-class OtherCars : public QWidget {
+// '레이·포터 설정': settings for the cars without SCC (Kia Ray EV, Porter II EV). Its start-tab item shows only while
+// one of them is the chosen car.
+class CcOnlyCarPage : public QWidget {
   Q_OBJECT
 public:
-  explicit OtherCars(QWidget* parent = 0);
-
-protected:
-  void showEvent(QShowEvent *event) override;
-
-private:
-  void refresh();
-  QList<QPair<QString, ButtonControl*>> car_btns;
+  explicit CcOnlyCarPage(QWidget* parent = 0);
+  static bool isCcOnlyCar(const QString &car);
 
 signals:
   void backPress();
-  void selectedCar();
 };
 
 // carrot (C3X) style "CarrotPilot" panel: Start / Cruise / Speed / Tuning / Disp / Path tabs
@@ -150,7 +143,7 @@ private:
   QStackedLayout* main_layout = nullptr;
   QWidget* homeScreen = nullptr;
   SelectCar* selectCar = nullptr;
-  OtherCars* otherCars = nullptr;
+  CcOnlyCarPage* ccOnlyPage = nullptr;
   int currentCarrotIndex = 0;
 
   QVBoxLayout* carrotLayout;
