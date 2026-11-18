@@ -57,6 +57,7 @@ def manager_init() -> None:
     ("ShowGpsInfo", "1"),
     ("AutoShutdown", "1"),
     ("GpsSource", "1"),
+    ("EngageWithLong", "1"),
     ("ShowConnInfo", "1"),
     ("ShowLaneInfo", "1"),
     ("ShowBlindSpot", "1"),

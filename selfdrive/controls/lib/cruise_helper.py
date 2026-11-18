@@ -159,6 +159,7 @@ class CruiseHelper:
     self.cruiseOnDist = float(int(Params().get("CruiseOnDist", encoding="utf8"))) / 100.
     self.steerRatioApply = float(int(Params().get("SteerRatioApply", encoding="utf8"))) / 10.
     self.lateralTorqueCustom = int(Params().get("LateralTorqueCustom", encoding="utf8") or 0) > 0
+    self.engageWithLong = Params().get_bool("EngageWithLong")
     self.auto_cruise_control = True
 
   def update_params(self, frame):
@@ -168,6 +169,7 @@ class CruiseHelper:
 
       if self.update_params_count == 0:
         self.autoCurveSpeedCtrlUse = int(Params().get("AutoCurveSpeedCtrlUse"))
+        self.engageWithLong = Params().get_bool("EngageWithLong")
         self.autoCurveSpeedFactor = float(int(Params().get("AutoCurveSpeedFactor", encoding="utf8")))*0.01
         self.autoCurveSpeedFactorIn = float(int(Params().get("AutoCurveSpeedFactorIn", encoding="utf8")))*0.01
       elif self.update_params_count == 1:
@@ -722,11 +724,12 @@ class CruiseHelper:
         pass  # driving mode is fixed to 일반; long-pressing the gap button no longer cycles modes
     else:
       self.cruiseButtons = button
+      # C2 port: +/- only change the set speed while speed control is on; they never turn it on or off
+      # (speed control starts with the cruise button, see controlsd EngageWithLong)
       if button == ButtonType.accelCruise:   
         controls.cruiseButtonCounter += 1
         if self.longActiveUser <= 0:
-          longActiveUser = 1
-          v_cruise_kph = max(v_cruise_kph, self.v_cruise_kph_backup, self.v_ego_kph_set) #브레이크를 밟기전 속도로 복원..
+          pass
         else:
           if self.xState == XState.softHold:
             longActiveUser = 1
@@ -739,8 +742,7 @@ class CruiseHelper:
       elif button == ButtonType.decelCruise:
         controls.cruiseButtonCounter -= 1
         if self.longActiveUser <= 0:
-          v_cruise_kph = self.v_ego_kph_set  ## 현재속도도 크루즈세트
-          longActiveUser = 1
+          pass
         else:
           if self.xState == XState.softHold:
             longActiveUser = 1
@@ -748,19 +750,12 @@ class CruiseHelper:
             v_cruise_kph = self.v_ego_kph_set
           elif self.xState == XState.softHold:
             pass
-          elif self.xState == XState.e2eStop and self.v_ego_kph < 5: #5km/h 미만, 신호감속중.. (-)를 누르면 크루즈해제... 이러면 설설가겠지? 다시누르면 정지..
-            v_cruise_kph = 3
-            longActiveUser = -1
-            pass
+          elif self.xState == XState.e2eStop and self.v_ego_kph < 5: # C2 port: no longer turns speed control off here
+            v_cruise_kph = buttonSpeed
           elif v_cruise_kph > self.v_ego_kph_set+2 and self.cruiseButtonMode in [1,2]:
             v_cruise_kph = self.v_ego_kph_set
           else:
-            if self.cruiseButtonMode==2:
-              self.userCruisePaused = True
-              longActiveUser = -1
-              controls.events.add(EventName.audioPrompt)
-            else:
-              v_cruise_kph = buttonSpeed
+            v_cruise_kph = buttonSpeed  # C2 port: CruiseButtonMode 2 pause - removed (buttons never turn speed control off)
 
     return longActiveUser, v_cruise_kph
 
@@ -922,6 +917,9 @@ class CruiseHelper:
           if self.cruiseOnDist > 0.0:
             longActiveUser = 3
 
+      # C2 port: steering only (시작 탭 '가감속도 함께 켜기' off) -> speed control never starts
+      if not self.engageWithLong:
+        longActiveUser = min(longActiveUser, 0)
       self.cruise_control(controls, CS, longActiveUser, v_cruise_kph)
 
 
