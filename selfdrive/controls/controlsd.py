@@ -1074,39 +1074,12 @@ class Controls:
     self.prof_gap_max = 0.
     self.prof_gaps = 0
 
-  def cprofile_window(self, frame_count):
-    """C2 diagnostics, once per start: cProfile frames 4000-5500 (from about 40 s, for about 15 s) and write the
-    functions using the most time per frame to /data/drivelog/diag.txt. controlsd runs slower inside the window,
-    so warnings can show then. Never raises."""
-    try:
-      if frame_count == 4000:
-        import cProfile
-        self.cprof = cProfile.Profile()
-        self.cprof.enable()
-      elif frame_count == 5500 and getattr(self, "cprof", None) is not None:
-        self.cprof.disable()
-        import pstats
-        st = pstats.Stats(self.cprof).stats
-        self.cprof = None
-        n = 1500.
-        rows = [(f"{os.path.basename(k[0])}:{k[2]}", v[1], v[2], v[3]) for k, v in st.items()]
-        diag_write("controlsd cprofile (ms per frame, x2-3 slower than normal while profiling)")
-        for title, idx in (("self", 2), ("incl", 3)):
-          for name, calls, tt, ct in sorted(rows, key=lambda r: -r[idx])[:30]:
-            diag_write(f"cprof {title} {name} self {tt * 1000. / n:.3f} incl {ct * 1000. / n:.3f} calls/frame {calls / n:.1f}")
-    except Exception:  # noqa: BLE001
-      self.cprof = None
-
   def controlsd_thread(self):
-    frame_count = 0
     while True:
       initialized_prev = self.initialized
       self.step()
       self.rk.monitor_time()
       self.write_profile()
-      frame_count += 1
-      if frame_count <= 5500:
-        self.cprofile_window(frame_count)
 
       # ajouatom: CI.init()할때  lag가 disable_ecu(), enable_radar_tracks()로 인해 발생함... 초기화가 필요함. 
       if self.initialized and not initialized_prev:
