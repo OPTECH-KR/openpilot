@@ -136,6 +136,7 @@ class CruiseHelper:
     # brake release resume while moving: 0 = set speed becomes the current speed, 1 = back to the set speed before braking
     self.brakeResumeSpeedMode = int(Params().get("BrakeResumeSpeedMode", encoding="utf8") or 1)
     self.v_cruise_before_brake = 0.0
+    self.brake_paused = False  # speed control paused by the brake (resumes when the brake is off, see below)
     self.autoSyncCruiseSpeedMax = int(Params().get("AutoSyncCruiseSpeedMax"))
     self.autoResumeFromBrakeReleaseDist = float(int(Params().get("AutoResumeFromBrakeReleaseDist", encoding="utf8")))
     self.autoResumeFromBrakeReleaseLeadCar = Params().get_bool("AutoResumeFromBrakeReleaseLeadCar")
@@ -303,6 +304,7 @@ class CruiseHelper:
           ButtonPrev = b.type
         elif not b.pressed and ButtonCnt > 0:
           if b.type == ButtonType.cancel:
+            self.brake_paused = False  # a cancel press is the driver's choice: no automatic resume after it
             self.cruise_control(controls, CS, 0, v_cruise_kph)
             self.auto_cruise_control = False
           elif not LongPressed and b.type == ButtonType.accelCruise:
@@ -891,7 +893,11 @@ class CruiseHelper:
     if controls.enabled:      
 
       if brakePressed and not self.preBrakePressed:
-        self.v_cruise_before_brake = v_cruise_kph if self.longActiveUser > 0 else 0.0
+        if self.longActiveUser > 0:
+          self.v_cruise_before_brake = v_cruise_kph
+          self.brake_paused = True
+        elif not self.brake_paused:  # braking again while still paused keeps the set speed from before the first press
+          self.v_cruise_before_brake = 0.0
       if brakePressed:
         longActiveUser = -2
         self.longActiveUserReady, v_cruise_kph = self.check_brake_cruise_on(CS, v_cruise_kph)
@@ -916,6 +922,16 @@ class CruiseHelper:
           self.send_apilot_event(controls, EventName.stopStop, 10.0)
           if self.cruiseOnDist > 0.0:
             longActiveUser = 3
+
+      # C2 port ('가감속도 함께 켜기' on): speed control paused by the brake comes back, at the set speed from before
+      # braking, as soon as the brake is off: right away when moving (>= 10 km/h) or behind a lead within 10 m; from a
+      # stop without a lead, once the driver has driven off past 10 km/h and is off the gas (no launch from a stop)
+      if self.engageWithLong and self.brake_paused and longActiveUser <= 0 and not brakePressed and not CS.gasPressed:
+        if self.v_ego_kph >= 10 or 0 < self.dRel < 10:
+          longActiveUser = 3
+          v_cruise_kph = self.v_cruise_before_brake if self.v_cruise_before_brake > 0 else self.v_ego_kph_set
+      if longActiveUser > 0:
+        self.brake_paused = False
 
       # C2 port: steering only (시작 탭 '가감속도 함께 켜기' off) -> speed control never starts
       if not self.engageWithLong:
@@ -964,6 +980,8 @@ class CruiseHelper:
         else:
           self.v_cruise_kph_apply = min(self.v_cruise_kph_apply, self.curveSpeed)
 
+    if not controls.enabled:
+      self.brake_paused = False
     self.preBrakePressed = brakePressed
     self.xState_prev = self.xState
     if self.v_ego_kph < 20.0:
