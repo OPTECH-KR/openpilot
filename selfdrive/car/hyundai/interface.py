@@ -81,7 +81,7 @@ class CarInterface(CarInterfaceBase):
       #ret.steerRatio = 15.6 * 1.15
       ret.steerRatio = 13.96 # 지구별.
       tire_stiffness_factor = 0.63
-    elif candidate == CAR.ELANTRA:
+    elif candidate in (CAR.ELANTRA, CAR.ELANTRA_GT_I30):
       ret.mass = 1275. + STD_CARGO_KG
       ret.wheelbase = 2.7
       ret.steerRatio = 15.4            # 14 is Stock | Settled Params Learner values are steerRatio: 15.401566348670535
@@ -102,6 +102,11 @@ class CarInterface(CarInterfaceBase):
       ret.wheelbase = 3.01
       ret.steerRatio = 16.5
       #ret.minSteerSpeed = 60 * CV.KPH_TO_MS
+    elif candidate == CAR.KONA_2022:
+      ret.mass = 1491. + STD_CARGO_KG
+      ret.wheelbase = 2.6
+      ret.steerRatio = 13.42
+      tire_stiffness_factor = 0.385
     elif candidate in (CAR.KONA, CAR.KONA_EV, CAR.KONA_HEV, CAR.KONA_EV_2022):
       ret.mass = {CAR.KONA_EV: 1685., CAR.KONA_HEV: 1425., CAR.KONA_EV_2022: 1743.}.get(candidate, 1275.) + STD_CARGO_KG
       ret.wheelbase = 2.6
@@ -151,7 +156,7 @@ class CarInterface(CarInterfaceBase):
       ret.mass = 1985. + STD_CARGO_KG
       ret.wheelbase = 2.78
       ret.steerRatio = 14.4 * 1.1   # 10% higher at the center seems reasonable
-    elif candidate in (CAR.KIA_NIRO_EV, CAR.KIA_NIRO_PHEV, CAR.KIA_NIRO_HEV_2021):
+    elif candidate in (CAR.KIA_NIRO_EV, CAR.KIA_NIRO_PHEV, CAR.KIA_NIRO_HEV_2021, CAR.KIA_NIRO_PHEV_2022):
       ret.mass = 1737. + STD_CARGO_KG
       ret.wheelbase = 2.7
       ret.steerRatio = 13.9 if CAR.KIA_NIRO_HEV_2021 else 13.73  # Spec
@@ -168,7 +173,7 @@ class CarInterface(CarInterfaceBase):
       ret.mass = 1700. + STD_CARGO_KG  # weight from SX and above trims, average of FWD and AWD versions
       ret.wheelbase = 2.756
       ret.steerRatio = 13.6  # steering ratio according to Kia News https://www.kiamedia.com/us/en/models/sportage/2023/specifications
-    elif candidate in (CAR.KIA_OPTIMA_G4, CAR.KIA_OPTIMA_G4_FL, CAR.KIA_OPTIMA_H):
+    elif candidate in (CAR.KIA_OPTIMA_G4, CAR.KIA_OPTIMA_G4_FL, CAR.KIA_OPTIMA_H, CAR.KIA_OPTIMA_H_G4_FL):
       ret.mass = 3558. * CV.LB_TO_KG
       ret.wheelbase = 2.80
       ret.steerRatio = 13.75
@@ -189,7 +194,7 @@ class CarInterface(CarInterfaceBase):
       ret.wheelbase = 2.65
       ret.steerRatio = 13.75
       tire_stiffness_factor = 0.5
-    elif candidate == CAR.KIA_K5_2021:
+    elif candidate in (CAR.KIA_K5_2021, CAR.KIA_K5_HEV_2020):
       ret.mass = 3228. * CV.LB_TO_KG
       ret.wheelbase = 2.85
       ret.steerRatio = 13.27  # 2021 Kia K5 Steering Ratio (all trims)
@@ -258,6 +263,29 @@ class CarInterface(CarInterfaceBase):
       ret.wheelbase = 2.4
       ret.steerRatio = 14.3
       #tire_stiffness_factor = 0.385
+    elif candidate == CAR.CASPER_EV:
+      ret.mass = 1355. + STD_CARGO_KG
+      ret.wheelbase = 2.58
+      ret.steerRatio = 14.3
+    elif candidate == CAR.CUSTIN_1ST_GEN:
+      ret.mass = 1690. + STD_CARGO_KG
+      ret.wheelbase = 3.055
+      ret.steerRatio = 17.
+    elif candidate == CAR.KIA_MOHAVE:
+      ret.mass = 2285. + STD_CARGO_KG
+      ret.wheelbase = 2.895
+      ret.steerRatio = 16.
+      tire_stiffness_factor = 0.7
+    elif candidate in (CAR.KIA_K5_JF, CAR.KIA_K5_HEV_JF, CAR.KIA_K5_HEV_2022):
+      ret.mass = {CAR.KIA_K5_HEV_JF: 1705.}.get(candidate, 1515.) + STD_CARGO_KG
+      ret.wheelbase = 2.85 if candidate == CAR.KIA_K5_HEV_2022 else 2.80
+      ret.steerRatio = 15.5
+      tire_stiffness_factor = 0.7
+    elif candidate == CAR.KIA_K9:
+      ret.mass = 2075. + STD_CARGO_KG
+      ret.wheelbase = 3.15
+      ret.steerRatio = 14.5
+      tire_stiffness_factor = 0.7
     elif candidate in [CAR.K7, CAR.K7_HEV, CAR.K7_PE, CAR.K7_HEV_PE]:
       ret.mass = 1850. + STD_CARGO_KG
       ret.wheelbase = 2.855
