@@ -72,7 +72,7 @@ class HyundaiFlags(IntFlag):
   CANFD_ALT_GEARS_2 = 64
   SEND_LFA = 128
   USE_FCA = 256
-  # 기타 차종 without SCC (same values as on apilot-c2-canfd)
+  # 기타 차종 without SCC (same values as on optech-fd)
   NON_SCC = 65536                # no SCC, stock cruise control only (Kia Ray EV, Porter II EV)
   NON_SCC_NO_TCS = 131072        # ... and no TCS13 (brake from E_EMS11)
   NON_SCC_PEDAL = 262144         # ... with a comma pedal: openpilot long through the accelerator (selfdrive/car/hyundai/pedal.py)
@@ -1820,7 +1820,7 @@ import sys
 
 def main():
   # the car menu list (manager writes it to /data/params/d/SupportedCars): this branch runs on the C2's own panda,
-  # so only CAN cars; CAN FD cars need a red panda and are on apilot-c2-canfd. 기타 차종 have their own page
+  # so only CAN cars; CAN FD cars need a red panda and are on optech-fd. 기타 차종 have their own page
   cars = [value for member, value in vars(CAR).items()
           if not member.startswith("_") and value not in CANFD_CAR and value not in OTHER_CAR
           and value in DBC]  # a name without a DBC entry (TUCSON_4TH_GEN) cannot start

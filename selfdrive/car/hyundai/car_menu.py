@@ -3,7 +3,7 @@
 The menu shows the CAR string itself (English, in this order); the value saved in the SelectedCar param stays the CAR string from values.py, so a car
 chosen before keeps working. values.py main() prints the list the manager stores in /data/params/d/SupportedCars, one
 car per line as "CAR string|brand|display text" (the UI also accepts an old plain "CAR string" line).
-The same file is used on apilot-c2-port (CAN cars) and apilot-c2-canfd (CAN FD cars); each branch lists its own cars.
+The same file is used on optech (CAN cars) and optech-fd (CAN FD cars); each branch lists its own cars.
 """
 
 BRANDS = ("현대", "기아", "제네시스", "쉐보레")

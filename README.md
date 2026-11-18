@@ -1,7 +1,10 @@
-APILOT C2 PORT
+OPTECH C2 (optech)
 ------
 
 콤마2(C2) / 이온(EON)용 apilot에 **당근파일럿 기능을 옮겨 오고**, 운전에 꼭 필요한 설정만 남겨 쉽게 정리한 브랜치입니다.
+
+* **optech** (이 브랜치): 일반 CAN 차량. C2 기본 판다로 동작합니다.
+* **optech-fd**: CAN FD 차량. 레드 판다가 필요합니다. 설치할 때 아래 명령의 `-b optech`를 `-b optech-fd`로 바꾸세요.
 
 ### 📖 [설정 가이드 보기 (모든 메뉴 설명 + 추천값 + 상황별 해결)](SETTINGS_KO.md)
 
@@ -14,7 +17,7 @@ APILOT C2 PORT
 
 ## 1. 설치 (SSH로 접속해서 한 줄 붙여넣기)
 ```
-rm -fr /data/openpilot && cd /data/ && GIT_SSL_NO_VERIFY=true git clone https://github.com/OPTECH-KR/openpilot.git -b apilot-c2-port --depth=1 openpilot && echo '#!/usr/bin/bash' > /data/data/com.termux/files/continue.sh && echo "cd /data/openpilot" >> /data/data/com.termux/files/continue.sh && echo "exec ./launch_openpilot.sh" >> /data/data/com.termux/files/continue.sh && chmod u+x /data/data/com.termux/files/continue.sh && reboot
+rm -fr /data/openpilot && cd /data/ && GIT_SSL_NO_VERIFY=true git clone https://github.com/OPTECH-KR/openpilot.git -b optech --depth=1 openpilot && echo '#!/usr/bin/bash' > /data/data/com.termux/files/continue.sh && echo "cd /data/openpilot" >> /data/data/com.termux/files/continue.sh && echo "exec ./launch_openpilot.sh" >> /data/data/com.termux/files/continue.sh && chmod u+x /data/data/com.termux/files/continue.sh && reboot
 ```
 * 첫 부팅은 빌드 때문에 몇 분 걸립니다. 그 다음부터는 빨리 켜집니다.
 
@@ -26,11 +29,11 @@ cd /data/openpilot && GIT_SSL_NO_VERIFY=true git pull && reboot
 ```
 
 ## 3. 처음 설정 (이것만 하면 됩니다)
-1. 당근파일럿 → 시작 → **차종 선택**
+1. OPTECH → 시작 → **차종 선택**
 2. 토글 → **롱컨** (SCC 배선 개조를 했으면 켜기 → 재부팅)
-3. 당근파일럿 → 화면 → **화면 모드 6**
-4. 당근파일럿 → 주행 → **내장 카메라 DB 1** (내비 앱을 안 쓰면)
-5. 당근파일럿 → 조향 → **NNFF** 또는 **NNFF 라이트** 켜기
+3. OPTECH → 화면 → **화면 모드 6**
+4. OPTECH → 주행 → **내장 카메라 DB 1** (내비 앱을 안 쓰면)
+5. OPTECH → 조향 → **NNFF** 또는 **NNFF 라이트** 켜기
 
 나머지는 기본값 그대로 두세요. 불편한 점이 있으면 [설정 가이드의 상황별 해결](SETTINGS_KO.md#상황별-해결)을 보세요.
 
