@@ -25,14 +25,20 @@
 
 ## 1. 설치
 
-SSH로 기기에 접속해서 아래 한 줄을 붙여 넣으세요. (optech-fd를 쓰려면 `-b optech`를 `-b optech-fd`로 바꾸세요.)
+SSH로 기기에 접속해서 아래 명령을 통째로 붙여 넣으세요. (optech-fd를 쓰려면 `-b optech`를 `-b optech-fd`로 바꾸세요.)
 
 ```
-rm -fr /data/openpilot && cd /data/ && GIT_SSL_NO_VERIFY=true git clone https://github.com/OPTECH-KR/openpilot.git -b optech --depth=1 openpilot && echo '#!/usr/bin/bash' > /data/data/com.termux/files/continue.sh && echo "cd /data/openpilot" >> /data/data/com.termux/files/continue.sh && echo "exec ./launch_openpilot.sh" >> /data/data/com.termux/files/continue.sh && chmod u+x /data/data/com.termux/files/continue.sh && reboot
+rm -fr /data/openpilot
+cd /data/ && git clone https://github.com/OPTECH-KR/openpilot.git -b optech --depth=1 openpilot &&
+touch /data/data/com.termux/files/continue.sh &&
+echo "#!/usr/bin/bash" >> /data/data/com.termux/files/continue.sh &&
+echo "cd /data/openpilot" >> /data/data/com.termux/files/continue.sh &&
+echo "exec ./launch_openpilot.sh" >> /data/data/com.termux/files/continue.sh &&chmod u+x /data/data/com.termux/files/continue.sh &&
+reboot
 ```
 
 * 첫 부팅은 빌드 때문에 몇 분 걸립니다. 그다음부터는 빨리 켜집니다.
-* NEOS가 오래돼서 git 명령에는 `GIT_SSL_NO_VERIFY=true`가 필요하고, 설치 화면에서 Continue 버튼이 안 뜰 수 있습니다. 그래서 SSH로 설치합니다.
+* 설치 화면에서 Continue 버튼이 안 뜰 수 있어서 SSH로 설치합니다.
 
 ## 2. 업데이트
 
