@@ -450,12 +450,12 @@ static QStringList get_list_utf8(const char* path) {
   return stringList;
 }
 
-// the menu name of a CAR string ("기아 · K5 DL3 (2020~2023)"), or the CAR string itself when the list does not have it
+// the menu name of a CAR string (the CAR string itself, kept in the list file for later use)
 static QString car_menu_name(const QString &car) {
   if (car.isEmpty()) return QString();
   for (const QString &line : get_list_utf8("/data/params/d/SupportedCars")) {
     const QStringList parts = line.split('|');
-    if (parts.size() >= 3 && parts[0] == car) return parts[1] + " · " + parts[2];
+    if (parts.size() >= 3 && parts[0] == car) return parts[2];
   }
   return car;
 }
