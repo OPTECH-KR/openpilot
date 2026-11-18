@@ -57,6 +57,7 @@ if not os.path.exists("/EON"):
       "-mhard-float",
       "-DSTM32H7",
       "-DSTM32H725xx",
+      "-DCANFD",  # Hyundai/Kia CAN FD safety (safety.h); the F4 panda build does not get it
       "-mfpu=fpv5-d16",
       "-fsingle-precision-constant",
       "-Os",

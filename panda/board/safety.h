@@ -17,6 +17,11 @@
 #include "safety/safety_elm327.h"
 //#include "safety/safety_body.h"
 
+// CAN-FD only safety modes (red panda / H7 firmware only, see board/SConscript)
+#ifdef CANFD
+#include "safety/safety_hyundai_canfd.h"
+#endif
+
 // from cereal.car.CarParams.SafetyModel
 #define SAFETY_SILENT 0U
 #define SAFETY_HONDA_NIDEC 1U
@@ -43,6 +48,7 @@
 #define SAFETY_STELLANTIS 25U
 #define SAFETY_FAW 26U
 #define SAFETY_BODY 27U
+#define SAFETY_HYUNDAI_CANFD 28U
 
 uint16_t current_safety_mode = SAFETY_SILENT;
 int16_t current_safety_param = 0;
@@ -246,6 +252,9 @@ const safety_hook_config safety_hook_registry[] = {
   {SAFETY_HYUNDAI, &hyundai_hooks},
   {SAFETY_NOOUTPUT, &nooutput_hooks},
   {SAFETY_HYUNDAI_LEGACY, &hyundai_legacy_hooks},
+#ifdef CANFD
+  {SAFETY_HYUNDAI_CANFD, &hyundai_canfd_hooks},
+#endif
 #ifdef ALLOW_DEBUG
   //{SAFETY_TESLA, &tesla_hooks},
   //{SAFETY_SUBARU_LEGACY, &subaru_legacy_hooks},
