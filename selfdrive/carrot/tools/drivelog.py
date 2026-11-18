@@ -34,7 +34,7 @@ NORMAL_EVENTS = {
 LAG_EVENT_MS = 100  # controlsd frame late by more than this -> event (at most every 10 s)
 
 HEADER = ("# time | v km/h | set | en act lat lon | gas brk str | angle torque | steerCmd accel | "
-          "lead d/vrel | cpu% temp mem% freeGB | lag ms | gps fix sats strong cno accm")
+          "lead d/vrel | cpu% temp mem% freeGB | lag ms | gps fix sats strong cno accm | fdrop% radarlag")
 
 
 DIAG_FILE = os.path.join(LOG_DIR, "diag.txt")
@@ -75,6 +75,11 @@ class DriveLog:
     self.gnss_t = self.loc_t = -100.
     self.prev_fix = None
     self.gps_ant = None
+    # read once a second (not in SERVICES: modelV2 is big, procLog only comes every 2 s)
+    self.model_sock = messaging.sub_sock("modelV2", conflate=True)
+    self.proc_sock = messaging.sub_sock("procLog", conflate=True)
+    self.proc_prev = None  # (time, {pid: (name, cpu seconds)})
+    self.next_cpu_event = time.monotonic() + 30.
 
   def event(self, text):
     self.out.write(f"{datetime.datetime.now():%H:%M:%S} ** {text}\n")
@@ -180,7 +185,29 @@ class DriveLog:
       parts.append(f"{b(fix)} {self.gps_sats:2d} {self.gps_strong:2d} {self.gps_cno:2d} {acc}")
     else:
       parts.append("- - - - -")
+    md = messaging.recv_one_or_none(self.model_sock)
+    rs_lag = f"{rs.cumLagMs:5.0f}" if rs is not None else "-"
+    parts.append((f"{md.modelV2.frameDropPerc:4.1f} " if md is not None else "- ") + rs_lag)
     self.out.write(" | ".join(parts) + "\n")
+    self.cpu_top(now)
+
+  def cpu_top(self, now):
+    """Every 60 s: the processes using the most CPU since the last snapshot (percent of one core)."""
+    pl = messaging.recv_one_or_none(self.proc_sock)
+    if pl is None:
+      return
+    snap = {p.pid: (p.name, p.cpuUser + p.cpuSystem) for p in pl.procLog.procs}
+    if self.proc_prev is None:
+      self.proc_prev = (now, snap)
+      return
+    if now >= self.next_cpu_event:
+      dt = now - self.proc_prev[0]
+      old = self.proc_prev[1]
+      use = [(name, (t - old[pid][1]) / dt * 100.) for pid, (name, t) in snap.items() if pid in old and dt > 0]
+      top = sorted(use, key=lambda x: -x[1])[:6]
+      self.event("cpu top: " + ", ".join(f"{n} {u:.0f}%" for n, u in top))
+      self.next_cpu_event = now + 60.
+      self.proc_prev = (now, snap)
 
 
 def main():
