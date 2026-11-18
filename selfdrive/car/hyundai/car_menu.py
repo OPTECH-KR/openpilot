@@ -1,6 +1,6 @@
-"""Car select menu: Hyundai / Kia / Genesis cars grouped by brand, model and model year, with Korean names.
+"""Car select menu order: Hyundai / Kia / Genesis cars grouped by brand, then model, then model year.
 
-The menu shows the display text; the value saved in the SelectedCar param stays the CAR string from values.py, so a car
+The menu shows the CAR string itself (English, in this order); the value saved in the SelectedCar param stays the CAR string from values.py, so a car
 chosen before keeps working. values.py main() prints the list the manager stores in /data/params/d/SupportedCars, one
 car per line as "CAR string|brand|display text" (the UI also accepts an old plain "CAR string" line).
 The same file is used on apilot-c2-port (CAN cars) and apilot-c2-canfd (CAN FD cars); each branch lists its own cars.
@@ -136,10 +136,14 @@ def _brand_guess(car):
   return "제네시스" if car.startswith("GENESIS") else "기아" if car.startswith("KIA") else "현대" if car.startswith("HYUNDAI") else "기타"
 
 
+BRAND_EN = {"현대": "HYUNDAI", "기아": "KIA", "제네시스": "GENESIS"}
+
+
 def menu_lines(cars):
-  """menu file lines for these CAR strings, sorted by brand, model family and year"""
+  """menu file lines for these CAR strings, sorted by brand, model family and year. The menu shows the CAR string
+  itself (the user wants the original English names); the Korean texts above only set the order."""
   lines = []
   for car in sorted(cars, key=_key):
-    brand, _, display, _ = MENU.get(car, (_brand_guess(car), car, car, 0))
-    lines.append(f"{car}|{brand}|{display}")
+    brand = MENU.get(car, (_brand_guess(car),))[0]
+    lines.append(f"{car}|{BRAND_EN.get(brand, brand)}|{car}")
   return lines
