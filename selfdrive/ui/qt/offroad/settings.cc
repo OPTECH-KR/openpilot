@@ -640,8 +640,8 @@ static QString gps_check_text(int elapsed_s) {
   if (!panda) {
     t += "<p>판다(uno 보드)가 연결되지 않았어요. C2에 차량 하네스 전원이 들어와야 GPS가 켜집니다.</p>";
   } else if (!gnss_alive && elapsed_s >= 20) {
-    t += phone ? "<p>폰 내장 GPS에서 데이터가 오지 않아요. 이 기기는 내장 GPS가 동작하지 않을 수 있어요. GPS가 있는 판다라면 'GPS 종류'를 판다(uno) GPS로 바꿔 보세요.</p>"
-               : "<p>GPS 칩에서 데이터가 오지 않아요. GPS가 없는 판다라면 'GPS 종류'를 폰 내장 GPS로 바꿔 보세요.</p>";
+    t += phone ? "<p>폰 내장 GPS에서 데이터가 오지 않아요. 이 기기는 내장 GPS(모뎀)가 동작하지 않는 상태일 수 있어요.</p>"
+               : "<p>GPS 칩에서 데이터가 오지 않아요. GPS 안테나가 연결돼 있는지 확인해 주세요.</p>";
   } else if (!fixed) {
     t += "<p>처음 켜면 위성을 찾는 데 1~3분 걸릴 수 있어요. 하늘이 잘 보이는 곳에서 확인하세요.</p>";
   }
@@ -697,7 +697,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     main_layout->setCurrentWidget(homeScreen);
   });
   startToggles->addItem(selectCarBtn);
-  auto gps_btn = new ButtonControl("GPS 확인", "확인", "시동을 걸지 않아도 GPS를 켜서 잡힘 여부, 신호 세기, 위성 수, 위치 오차를 실시간으로 보여 줍니다. 창을 닫으면 GPS는 다시 꺼집니다. 판다(uno) GPS는 차량 하네스 전원이 연결돼 있어야 합니다.");
+  auto gps_btn = new ButtonControl("GPS 확인", "확인", "시동을 걸지 않아도 GPS를 켜서 잡힘 여부, 신호 세기, 위성 수, 위치 오차를 실시간으로 보여 줍니다. 창을 닫으면 GPS는 다시 꺼집니다. 기기 내장 GPS를 사용합니다.");
   QObject::connect(gps_btn, &ButtonControl::clicked, [=]() {
     Params().putBool("GpsCheck", true);  // boardd powers the uBlox while this is set (read about once a second)
     ConfirmationDialog d(gps_check_text(0), "닫기", "", true, this);
@@ -714,22 +714,6 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     Params().putBool("GpsCheck", false);
   });
   startToggles->addItem(gps_btn);
-  auto gps_source_btn = new ButtonControl("GPS 종류", "", "어느 GPS를 쓸지 고릅니다. 판다(uno) GPS: GPS가 들어 있는 판다나 완전체 C2의 uno 보드. 폰 내장 GPS: 판다에 GPS가 없을 때 기기(르프로) 안의 GPS. 바꾸면 재부팅해야 적용됩니다.");
-  auto gps_source_name = []() {
-    return QString::fromStdString(Params().get("GpsSource")) == "1" ? QString("폰 내장 GPS") : QString("판다(uno) GPS");
-  };
-  gps_source_btn->setText(gps_source_name());
-  QObject::connect(gps_source_btn, &ButtonControl::clicked, [=]() {
-    const QStringList names = {"판다(uno) GPS", "폰 내장 GPS"};
-    const QString sel = MultiOptionDialog::getSelection("GPS 종류를 고르세요", names, gps_source_name(), this);
-    if (sel.isEmpty() || sel == gps_source_name()) return;
-    Params().put("GpsSource", sel == names[1] ? "1" : "0");
-    gps_source_btn->setText(gps_source_name());
-    if (ConfirmationDialog::confirm("GPS 종류를 바꿨어요. 재부팅해야 적용됩니다. 지금 재부팅할까요?", "재부팅", this)) {
-      Params().putBool("DoReboot", true);
-    }
-  });
-  startToggles->addItem(gps_source_btn);
   startToggles->addItem(new ParamControl("AutoShutdown", "자동 꺼짐", "켜 두면(초록색) 차량이나 충전기 전원 없이 배터리로만 켜져 있고 주행 중이 아닐 때, 약 10분 뒤 기기가 스스로 꺼져 배터리를 보호합니다. 끄면 배터리가 다 닳을 때까지 켜져 있습니다. 주행 중이거나 전원이 연결돼 있으면 이 설정과 상관없이 꺼지지 않습니다.", SHELL_ICON, this));
   startToggles->addItem(new ParamControl("OpkrHotspotOnBoot", "부팅 시 핫스팟 켜기", "켜 두면 기기가 켜질 때 핫스팟(테더링)이 자동으로 켜집니다.", SHELL_ICON, this));
   auto updateBtn = new ButtonControl("업데이트 확인 후 적용", "업데이트");

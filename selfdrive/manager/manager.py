@@ -56,7 +56,7 @@ def manager_init() -> None:
     ("ShowDeviceState", "1"),
     ("ShowGpsInfo", "1"),
     ("AutoShutdown", "1"),
-    ("GpsSource", "0"),
+    ("GpsSource", "1"),
     ("ShowConnInfo", "1"),
     ("ShowLaneInfo", "1"),
     ("ShowBlindSpot", "1"),
@@ -220,7 +220,8 @@ def manager_init() -> None:
                ("LateralMotionCost", "11"), ("LateralJerkCost", "5"), ("MaxAngleFrames", "89"),
                ("SteerDeltaUp", "3"), ("SteerDeltaDown", "7"), ("UseLaneLineSpeed", "0"),
                ("CruiseButtonMode", "0"), ("CruiseSpeedMin", "10"),
-               ("ShowHudMode", "6")):  # screen mode fixed to the carrot HUD box; the selector is removed
+               ("ShowHudMode", "6"),
+               ("GpsSource", "1")):  # GPS is always the phone built-in one; the selector is removed  # screen mode fixed to the carrot HUD box; the selector is removed
     params.put(k, v)
 
   # is this dashcam?

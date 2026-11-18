@@ -15,9 +15,10 @@ else:
   dp_dm = True
   Params().put("ShowDmInfo", "1")
 
-# GpsSource (시작 탭 'GPS 종류', reboot to apply): 0 = panda/uno uBlox (ubloxd), 1 = phone built-in GPS (gpsd).
+# GPS: always the phone built-in GPS on the C2/EON (gpsd). The panda/uno uBlox (ubloxd) path stays in the code but is
+# not used: with the selector removed, GpsSource is pinned to "1" in manager.py.
 # Only one of them runs, since both publish gpsLocationExternal and ubloxGnss.
-gps_phone = EON and Params().get("GpsSource", encoding="utf8") == "1"
+gps_phone = EON  # not read from GpsSource: process_config is imported before manager pins the params
 
 def isdriverview(started: bool, params: Params, CP: car.CarParams) -> bool:
   return dp_dm and params.get_bool("IsDriverViewEnabled")  # type: ignore
