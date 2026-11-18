@@ -10,6 +10,7 @@ from common.params import Params
 from common.realtime import Ratekeeper, Priority, config_realtime_process, sec_since_boot
 from selfdrive.controls.lib.radar_helpers import Cluster, Track, RADAR_TO_CAMERA
 from selfdrive.swaglog import cloudlog
+from selfdrive.carrot.tools.drivelog import diag_write
 from third_party.cluster.fastcluster_py import cluster_points_centroid
 from selfdrive.hardware import TICI
 from common.params import Params
@@ -319,6 +320,7 @@ def radard_thread(sm=None, pm=None, can_sock=None):
 
   rk = Ratekeeper(1.0 / CP.radarTimeStep, print_delay_threshold=None)
   RD = RadarD(CP.radarTimeStep, RI.delay)
+  last_diag = None
 
   while 1:
     can_strings = messaging.drain_sock_raw(can_sock, wait_for_one=True)
@@ -341,6 +343,14 @@ def radard_thread(sm=None, pm=None, can_sock=None):
     else:
       dat = RD.update(sm, rr)
     dat.radarState.cumLagMs = -rk.remaining*1000.
+
+    # diagnostics for radarFault / commIssue: which radard input made radarState invalid (only on a change)
+    diag = None if dat.valid else (sorted(s for s, v in sm.valid.items() if not v),
+                                   sorted(s for s, a in sm.alive.items() if not a), list(rr.errors))
+    if diag != last_diag:
+      if diag is not None:
+        diag_write(f"radard invalid: inputs_invalid={diag[0]} not_alive={diag[1]} radar_errors={diag[2]}")
+      last_diag = diag
 
     pm.send('radarState', dat)
 

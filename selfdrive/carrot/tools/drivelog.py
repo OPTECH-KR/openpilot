@@ -37,6 +37,22 @@ HEADER = ("# time | v km/h | set | en act lat lon | gas brk str | angle torque |
           "lead d/vrel | cpu% temp mem% freeGB | lag ms | gps fix sats strong cno accm")
 
 
+DIAG_FILE = os.path.join(LOG_DIR, "diag.txt")
+DIAG_MAX_BYTES = 2_000_000
+
+
+def diag_write(text):
+  """Append one diagnostic line (controlsd: which services made commIssue / radarFault). Only called on a change,
+  never raises, and starts over when the file passes DIAG_MAX_BYTES."""
+  try:
+    os.makedirs(LOG_DIR, exist_ok=True)
+    mode = "w" if os.path.isfile(DIAG_FILE) and os.path.getsize(DIAG_FILE) > DIAG_MAX_BYTES else "a"
+    with open(DIAG_FILE, mode, encoding="utf8") as f:
+      f.write(f"{datetime.datetime.now():%m-%d %H:%M:%S.%f}"[:-3] + f" {text}\n")
+  except Exception:  # noqa: BLE001
+    pass
+
+
 def b(x):
   return "1" if x else "0"
 
@@ -58,6 +74,7 @@ class DriveLog:
     self.gps_sats = self.gps_strong = self.gps_cno = 0
     self.gnss_t = self.loc_t = -100.
     self.prev_fix = None
+    self.gps_ant = None
 
   def event(self, text):
     self.out.write(f"{datetime.datetime.now():%H:%M:%S} ** {text}\n")
@@ -77,6 +94,12 @@ class DriveLog:
         self.gps_sats, self.gps_strong = len(cnos), sum(c >= 30 for c in cnos)
         self.gps_cno = sum(cnos[:4]) // len(cnos[:4]) if cnos else 0
         self.gnss_t = now
+      elif msg.ubloxGnss.which() == "hwStatus":
+        hw = msg.ubloxGnss.hwStatus
+        ant = (str(hw.aStatus), str(hw.aPower))
+        if ant != self.gps_ant:  # uBlox antenna supervisor: ok / short / open / dontknow
+          self.event(f"gps antenna {ant[0]} power {ant[1]} (noise {hw.noisePerMS}, agc {hw.agcCnt}, jam {hw.jamInd})")
+          self.gps_ant = ant
     loc = self.last.get("gpsLocationExternal")
     if "gpsLocationExternal" in self.last and loc is not self.last.get("_loc_seen"):
       self.last["_loc_seen"] = loc

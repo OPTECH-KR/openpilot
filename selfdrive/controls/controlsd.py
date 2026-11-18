@@ -12,6 +12,7 @@ import cereal.messaging as messaging
 from common.conversions import Conversions as CV
 from panda import ALTERNATIVE_EXPERIENCE
 from selfdrive.swaglog import cloudlog
+from selfdrive.carrot.tools.drivelog import diag_write
 from selfdrive.version import is_tested_branch, get_short_branch
 from selfdrive.boardd.boardd import can_list_to_can_capnp
 from selfdrive.car.car_helpers import get_car, get_startup_event, get_one_can
@@ -187,6 +188,7 @@ class Controls:
     self.events_prev = []
     self.current_alert_types = [ET.PERMANENT]
     self.logged_comm_issue = None
+    self.logged_radar_fault = None
     self.last_actuators = car.CarControl.Actuators.new_message()
     self.steer_limited = False
     self.desired_curvature = 0.0
@@ -378,6 +380,12 @@ class Controls:
     if len(self.sm['radarState'].radarErrors) or not self.sm.all_checks(['radarState']):
       #print("radarFault: ######################")
       self.events.add(EventName.radarFault)
+      radar_diag = (list(self.sm['radarState'].radarErrors), self.sm.valid['radarState'], self.sm.alive['radarState'])
+      if radar_diag != self.logged_radar_fault:
+        diag_write(f"radarFault errors={radar_diag[0]} valid={radar_diag[1]} alive={radar_diag[2]}")
+        self.logged_radar_fault = radar_diag
+    else:
+      self.logged_radar_fault = None
     if not self.sm.valid['pandaStates']:
       self.events.add(EventName.usbError)
     if CS.canTimeout:
@@ -404,6 +412,7 @@ class Controls:
       }
       if logs != self.logged_comm_issue:
         cloudlog.event("commIssue", error=True, **logs)
+        diag_write("commIssue " + " ".join(f"{k}={v}" for k, v in logs.items() if v))
         self.logged_comm_issue = logs
     else:
       self.logged_comm_issue = None
