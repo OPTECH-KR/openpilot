@@ -375,8 +375,8 @@ def main() -> None:
   carList = '/data/params/d/SupportedCars'
   if just_built or not (os.path.isfile(carList) and os.path.getsize(carList) > 0):
     os.system("python /data/openpilot/selfdrive/car/hyundai/values.py > " + carList)
-  # GM is not offered: this branch has no GM CAN definition files (opendbc gm_global_a_*), so a GM car cannot run.
-  # Hyundai/Kia only (CAN FD models stay in the list). A GM car chosen earlier is cleared so the car is fingerprinted.
+  # The old separate GM list file is gone: GM cars that run on this branch (Bolt EUV) are in SupportedCars itself
+  # (selfdrive/car/hyundai/values.py main). A car chosen from that old file is cleared so the car is fingerprinted.
   gmList = '/data/params/d/SupportedCars_gm'
   if os.path.isfile(gmList):
     try:

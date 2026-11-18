@@ -6,7 +6,7 @@ car per line as "CAR string|brand|display text" (the UI also accepts an old plai
 The same file is used on apilot-c2-port (CAN cars) and apilot-c2-canfd (CAN FD cars); each branch lists its own cars.
 """
 
-BRANDS = ("현대", "기아", "제네시스")
+BRANDS = ("현대", "기아", "제네시스", "쉐보레")
 
 # CAR string: (brand, model family, display text, first model year). Family + year give the order inside a brand.
 MENU = {
@@ -123,6 +123,9 @@ MENU = {
   "GENESIS GV70 EV 1ST GEN": ("제네시스", "GV70", "GV70 전동화 (2022~2023, 레이더 SCC)", 2022),
   "GENESIS GV70 ELECTRIFIED 1ST GEN": ("제네시스", "GV70", "GV70 전동화 (2023~2024, HDA2)", 2023),
   "GENESIS GV80 2023": ("제네시스", "GV80", "GV80 JX1 (2020~2023)", 2020),
+
+  # ---------------- 쉐보레 (GM, selfdrive/car/gm) ----------------
+  "CHEVROLET BOLT EUV 2022": ("쉐보레", "볼트", "볼트 EUV (2022~2023)", 2022),
 }
 
 
@@ -133,10 +136,10 @@ def _key(car):
 
 
 def _brand_guess(car):
-  return "제네시스" if car.startswith("GENESIS") else "기아" if car.startswith("KIA") else "현대" if car.startswith("HYUNDAI") else "기타"
+  return "쉐보레" if car.startswith("CHEVROLET") else "제네시스" if car.startswith("GENESIS") else "기아" if car.startswith("KIA") else "현대" if car.startswith("HYUNDAI") else "기타"
 
 
-BRAND_EN = {"현대": "HYUNDAI", "기아": "KIA", "제네시스": "GENESIS"}
+BRAND_EN = {"현대": "HYUNDAI", "기아": "KIA", "제네시스": "GENESIS", "쉐보레": "CHEVROLET"}
 
 
 def menu_lines(cars):

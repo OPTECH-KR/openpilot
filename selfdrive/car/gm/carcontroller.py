@@ -3,7 +3,7 @@ import math
 from cereal import car
 from common.conversions import Conversions as CV
 from common.numpy_fast import interp, clip
-from common.realtime import DT_CTRL
+from common.realtime import DT_CTRL, sec_since_boot
 from opendbc.can.packer import CANPacker
 from selfdrive.car import apply_driver_steer_torque_limits, create_gas_interceptor_command
 from selfdrive.car.gm import gmcan
@@ -59,7 +59,9 @@ class CarController:
     self.packer_obj = CANPacker(DBC[self.CP.carFingerprint]['radar'])
     self.packer_ch = CANPacker(DBC[self.CP.carFingerprint]['chassis'])
 
-  def update(self, CC, CS):
+  def update(self, CC, CS, now_nanos=None):
+    if now_nanos is None:  # this base calls update(CC, CS)
+      now_nanos = int(sec_since_boot() * 1e9)
     actuators = CC.actuators
     hud_control = CC.hudControl
     hud_alert = hud_control.visualAlert

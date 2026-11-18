@@ -69,13 +69,14 @@ class CarInterface(CarInterfaceBase):
       return self.torque_from_lateral_accel_linear
 
   @staticmethod
-  def _get_params(ret, candidate, fingerprint, car_fw, experimental_long, docs):
+  def _get_params(ret, candidate, fingerprint, car_fw, experimental_long, docs=False):  # this base passes no docs
     ret.carName = "gm"
     ret.safetyConfigs = [get_safety_config(car.CarParams.SafetyModel.gm)]
     ret.autoResumeSng = False
     use_off_car_defaults = len(fingerprint[0]) == 0  # Pick sensible carParams during offline doc generation/CI jobs
 
-    ret.enableGasInterceptor = 0x201 in fingerprint[0]
+    # comma pedal: not with the camera harness yet (this panda's GM_CAM mode has no pedal command)
+    ret.enableGasInterceptor = 0x201 in fingerprint[0] and candidate not in CAMERA_ACC_CAR
 
     if candidate in EV_CAR:
       ret.transmissionType = TransmissionType.direct
@@ -89,7 +90,8 @@ class CarInterface(CarInterfaceBase):
     ret.longitudinalTuning.kiBP = [0.]
 
     if candidate in CAMERA_ACC_CAR:
-      ret.experimentalLongitudinalAvailable = candidate not in CC_ONLY_CAR
+      # stock ACC only: this panda's GM_CAM mode has no camera longitudinal (comma's HW_CAM_LONG)
+      ret.experimentalLongitudinalAvailable = False
       ret.networkLocation = NetworkLocation.fwdCamera
       ret.radarUnavailable = True  # no radar
       ret.pcmCruise = True
@@ -104,7 +106,7 @@ class CarInterface(CarInterfaceBase):
       ret.vEgoStopping = 0.25
       ret.vEgoStarting = 0.25
 
-      if experimental_long:
+      if experimental_long and ret.experimentalLongitudinalAvailable:
         ret.pcmCruise = False
         ret.openpilotLongitudinalControl = True
         ret.safetyConfigs[0].safetyParam |= Panda.FLAG_GM_HW_CAM_LONG

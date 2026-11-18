@@ -4,6 +4,7 @@ from common.conversions import Conversions as CV
 from common.numpy_fast import mean
 from opendbc.can.can_define import CANDefine
 from opendbc.can.parser import CANParser
+from common.realtime import DT_CTRL, sec_since_boot
 from selfdrive.car.interfaces import CarStateBase
 from selfdrive.car.gm.values import DBC, AccState, CanBus, STEER_THRESHOLD, CC_ONLY_CAR
 
@@ -41,7 +42,9 @@ class CarState(CarStateBase):
     # Variables used for avoiding LKAS faults
     self.loopback_lka_steering_cmd_updated = len(loopback_cp.vl_all["ASCMLKASteeringCmd"]["RollingCounter"]) > 0
     if self.loopback_lka_steering_cmd_updated:
-      self.loopback_lka_steering_cmd_ts_nanos = loopback_cp.ts_nanos["ASCMLKASteeringCmd"]["RollingCounter"]
+      # this base's CANParser has no ts_nanos: the loopback shows up the cycle after our message went out, so date it
+      # one control cycle back (keeps the carcontroller's 15 ms minimum between steering messages at the real gap)
+      self.loopback_lka_steering_cmd_ts_nanos = int((sec_since_boot() - DT_CTRL) * 1e9)
     if self.CP.networkLocation == NetworkLocation.fwdCamera:
       self.pt_lka_steering_cmd_counter = pt_cp.vl["ASCMLKASteeringCmd"]["RollingCounter"]
       self.cam_lka_steering_cmd_counter = cam_cp.vl["ASCMLKASteeringCmd"]["RollingCounter"]

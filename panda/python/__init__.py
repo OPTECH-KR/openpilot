@@ -181,6 +181,10 @@ class Panda(object):
   CLOCK_SOURCE_MODE_FREE_RUNNING = 1
 
   FLAG_HONDA_ALT_BRAKE = 1
+
+  # GM camera harness (Bolt EUV 2022-23), panda/board/safety/safety_gm.h
+  FLAG_GM_HW_CAM = 1
+  FLAG_GM_HW_CAM_LONG = 2
   FLAG_HONDA_BOSCH_LONG = 2
   FLAG_HONDA_NIDEC_ALT = 4
 

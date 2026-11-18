@@ -1824,6 +1824,9 @@ def main():
   cars = [value for member, value in vars(CAR).items()
           if not member.startswith("_") and value not in CANFD_CAR and value not in OTHER_CAR
           and value in DBC]  # a name without a DBC entry (TUCSON_4TH_GEN) cannot start
+  # Chevrolet (selfdrive/car/gm): the Bolt EUV 2022-23 with the camera harness, stock ACC
+  from selfdrive.car.gm.values import CAR as GM_CAR
+  cars.append(GM_CAR.BOLT_EUV)
   # grouped by brand / model / year with Korean names (car_menu.py); utf-8 whatever the locale
   from selfdrive.car.hyundai.car_menu import menu_lines
   for line in menu_lines(cars):
