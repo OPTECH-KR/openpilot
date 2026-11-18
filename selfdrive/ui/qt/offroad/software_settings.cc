@@ -152,12 +152,14 @@ void SoftwarePanel::updateLabels() {
   targetBranchBtn->setValue(QString::fromStdString(params.get("UpdaterTargetBranch")));
 
   // current version and git info (C2 updater often cannot reach the server, so show what is on the device)
-  versionLbl->setText(getBrand() + " v" + QString::fromStdString(params.get("Version")) + "-c2");
+  versionLbl->setText("openpilot-c2");
   versionLbl->setDescription(QString::fromStdString(params.get("UpdaterCurrentReleaseNotes")));
   auto last_tm = params.get("LastUpdateTime");
   lastUpdateLbl->setText(last_tm.empty() ? "없음" : timeAgo(QDateTime::fromString(QString::fromStdString(last_tm + "Z"), Qt::ISODate)));
   branchLbl->setText(QString::fromStdString(params.get("GitBranch")));
-  commitLbl->setText(QString::fromStdString(params.get("GitCommit")).left(10));
+  // when this code was released (date and time to the second); the hash when the date is not known yet
+  const QString commit_date = QString::fromStdString(params.get("GitCommitDate"));
+  commitLbl->setText(commit_date.isEmpty() ? QString::fromStdString(params.get("GitCommit")).left(10) : commit_date);
 
   installBtn->setVisible(false);  // needs selfdrive.updated (off on C2)
   installBtn->setValue(QString::fromStdString(params.get("UpdaterNewDescription")));
