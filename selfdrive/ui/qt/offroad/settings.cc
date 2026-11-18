@@ -1239,6 +1239,26 @@ OtherCars::OtherCars(QWidget* parent): QWidget(parent) {
   list->addItem(new ParamControl("CcOnlySpeedButtons", "크루즈 속도 자동 조절",
     "켜면 openpilot이 크루즈 버튼을 대신 눌러 설정 속도를 바꿉니다(커브·과속카메라 감속 등). 이 차들은 앞차를 감지하는 레이더가 없고 크루즈가 브레이크를 세게 걸지 못하므로, 앞차와의 거리는 항상 운전자가 직접 지켜야 합니다. 기본은 꺼짐(조향만).", SHELL_ICON, this));
 
+  // CanfdHdaMode: selfdrive/car/hyundai/interface.py reads it at start (reboot to apply)
+  list->addItem(carrot_section("CAN FD 차량 공통 (레드판다)"));
+  auto hda_mode_btn = new ButtonControl("", "선택",
+    "CAN FD 차량이 HDA1인지 HDA2(고속도로 주행 보조 2)인지 정합니다. 기본은 자동 인식으로, 시동을 걸 때 카메라 쪽 신호를 보고 정합니다. "
+    "자동 인식이 틀려서 핸들이 움직이지 않을 때만 직접 고르세요. 기타 차종뿐 아니라 일반 목록의 CAN FD 차량에도 적용되고, 재부팅해야 적용됩니다.");
+  const QStringList hda_names = {"HDA 방식: 자동 인식", "HDA 방식: HDA1", "HDA 방식: HDA2"};
+  auto hda_mode = []() {
+    const int m = QString::fromStdString(Params().get("CanfdHdaMode")).toInt();
+    return (m >= 0 && m <= 2) ? m : 0;
+  };
+  hda_mode_btn->setTitle(hda_names[hda_mode()]);
+  QObject::connect(hda_mode_btn, &ButtonControl::clicked, [=]() {
+    const QString sel = MultiOptionDialog::getSelection("HDA 방식을 고르세요", hda_names, hda_names[hda_mode()], this);
+    const int idx = hda_names.indexOf(sel);
+    if (idx < 0 || idx == hda_mode()) return;
+    Params().put("CanfdHdaMode", std::to_string(idx));
+    hda_mode_btn->setTitle(hda_names[idx]);
+  });
+  list->addItem(hda_mode_btn);
+
   auto clear_btn = new ButtonControl("기타 차종 선택 해제", "해제", "여기서 고른 차종을 지우고, 차를 자동으로 인식하게 되돌립니다.");
   QObject::connect(clear_btn, &ButtonControl::clicked, [=]() {
     const QString cur = QString::fromStdString(Params().get("SelectedCar"));

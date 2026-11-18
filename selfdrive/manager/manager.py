@@ -59,6 +59,7 @@ def manager_init() -> None:
     ("GpsSource", "1"),
     ("EngageWithLong", "1"),
     ("AngleSteerMaxGain", "100"),  # 기타 차종 (angle steering): max torque reduction gain, %
+    ("CanfdHdaMode", "0"),         # CAN FD: 0 auto HDA1/HDA2, 1 HDA1, 2 HDA2 (기타 차종 page)
     ("CcOnlySpeedButtons", "0"),   # 기타 차종 (no SCC): let openpilot press the cruise buttons to set the speed
     ("ShowConnInfo", "1"),
     ("ShowLaneInfo", "1"),

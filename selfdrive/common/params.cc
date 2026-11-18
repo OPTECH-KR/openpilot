@@ -227,6 +227,7 @@ std::unordered_map<std::string, uint32_t> keys = {
     { "EngageWithLong", PERSISTENT },
     { "AngleSteerMaxGain", PERSISTENT },
     { "CcOnlySpeedButtons", PERSISTENT },
+    { "CanfdHdaMode", PERSISTENT },
     { "ShowConnInfo", PERSISTENT },
     { "ShowLaneInfo", PERSISTENT },
     { "ShowBlindSpot", PERSISTENT },

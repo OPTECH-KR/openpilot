@@ -42,7 +42,15 @@ class CarInterface(CarInterfaceBase):
       # detect HDA2 with ADAS Driving ECU, or by the camera's steering messages on the camera side when the FW query missed it
       # (LKAS 0x50 / LKAS_ALT 0x110 / CAM_0x2a4 come from the camera only on HDA2 harnesses)
       cam_fp = fingerprint[canfd_bus(ret, 2)]
-      if Ecu.adas in [fw.ecu for fw in car_fw] or any(a in cam_fp for a in (0x50, 0x110, 0x2a4)):
+      hda2 = Ecu.adas in [fw.ecu for fw in car_fw] or any(a in cam_fp for a in (0x50, 0x110, 0x2a4))
+      # 기타 차종 page 'HDA 방식': 0 = automatic (above), 1 = always HDA1, 2 = always HDA2, for when the capture misleads it
+      try:
+        hda_mode = int(Params().get("CanfdHdaMode", encoding="utf8") or 0)
+      except (TypeError, ValueError):
+        hda_mode = 0
+      if hda_mode in (1, 2):
+        hda2 = hda_mode == 2
+      if hda2:
         ret.flags |= HyundaiFlags.CANFD_HDA2.value
         # newer HDA2 cars steer with LKAS_ALT (0x110) and carry the lane info in CAM_0x362 instead of CAM_0x2a4 (carrot-wip rule)
         if 0x110 in cam_fp or 0x2a4 not in cam_fp:
