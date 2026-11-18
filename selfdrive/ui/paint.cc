@@ -44,6 +44,7 @@
 #define BOLD "KaiGenGothicKR-Bold"//"Inter-Bold"//"sans-bold"
 
 int g_fps= 0;
+static float g_gps_x = 30;  // GPS line x in the top-left badge row, set by drawLeadApilot after its badges
 
 #if 0
 static void ui_print(UIState *s, int x, int y,  const char* fmt, ... )
@@ -1641,6 +1642,9 @@ void DrawApilot::drawLeadApilot(const UIState* s) {
             else if (activeNDA % 100 > 0) ui_draw_image(s, { 30 + 135, 20, 120, 54 }, "ic_nda", 1.0f);
             else if (naviCluster > 0) ui_draw_image(s, { 30 + 135, 20, 120, 54 }, "ic_hda", 1.0f);
             if (radar_tracks) ui_draw_image(s, { 30 + 135 * 2, 20, 240, 54 }, "ic_radartracks", 1.0f);
+            // GPS line right after the last badge drawn in this row
+            const bool nav_badge = activeNDA > 0 || (hda_speedLimit > 0 && hda_speedLimitDistance > 0) || naviCluster > 0;
+            g_gps_x = radar_tracks ? 30 + 135 * 2 + 255 : nav_badge ? 30 + 135 * 2 : sccBus ? 30 + 135 : 30;
         }
 
         int bx = x;
@@ -1993,32 +1997,28 @@ static void ui_draw_gps_info(const UIState* s) {
     else if (acc <= 15.0f) { state = "잡힘"; color = COLOR_YELLOW; }
     else { state = "약함"; color = COLOR_OCHRE; }
 
+    // no middle dot / degree sign: the font has neither and stops drawing the string there
     char str[96];
-    if (fixed) snprintf(str, sizeof(str), "GPS %s · 위성 %d개(강 %d) · 오차 %.0fm", state, gps_sats, gps_strong, acc);
-    else if (gnss_alive) snprintf(str, sizeof(str), "GPS %s · 위성 %d개(강 %d)", state, gps_sats, gps_strong);
+    if (fixed) snprintf(str, sizeof(str), "GPS %s  위성 %d개(강 %d)  오차 %.0fm", state, gps_sats, gps_strong, acc);
+    else if (gnss_alive) snprintf(str, sizeof(str), "GPS %s  위성 %d개(강 %d)", state, gps_sats, gps_strong);
     else snprintf(str, sizeof(str), "GPS %s", state);
 
-    const float tx = s->fb_w - 300, ty = s->fb_h - 15, fsize = 32;
-    nvgTextAlign(s->vg, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
-    ui_draw_text(s, tx, ty, str, fsize, color, BOLD, 2.0f, 0.0f);
-
-    // signal bars left of the text: <20 dB-Hz none, then one bar per 5 dB-Hz up to 35+
-    float bounds[4];
-    nvgFontFace(s->vg, BOLD);
-    nvgFontSize(s->vg, fsize);
-    nvgTextBounds(s->vg, tx, ty, str, NULL, bounds);
+    // top left, in the badge row after SCC2 and the navigation badge (drawLeadApilot sets g_gps_x past them)
+    const float fsize = 32, by = 64;  // badges are 20..74 high
     const int bars = gps_cno >= 35 ? 4 : gps_cno >= 30 ? 3 : gps_cno >= 25 ? 2 : gps_cno >= 20 ? 1 : 0;
-    const float bw = 9, gap = 4, bx0 = bounds[0] - 15 - 4 * (bw + gap);
-    for (int i = 0; i < 4; i++) {
+    const float bw = 9, gap = 4;
+    for (int i = 0; i < 4; i++) {  // signal bars: <20 dB-Hz none, then one bar per 5 dB-Hz up to 35+
         const float bh = 8 + i * 6;
         nvgBeginPath(s->vg);
-        nvgRect(s->vg, bx0 + i * (bw + gap), ty - 6 - bh, bw, bh);
+        nvgRect(s->vg, g_gps_x + i * (bw + gap), by - bh, bw, bh);
         nvgFillColor(s->vg, i < bars ? color : nvgRGBA(255, 255, 255, 60));
         nvgFill(s->vg);
         nvgStrokeColor(s->vg, COLOR_BLACK_ALPHA(200));
         nvgStrokeWidth(s->vg, 1.5f);
         nvgStroke(s->vg);
     }
+    nvgTextAlign(s->vg, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
+    ui_draw_text(s, g_gps_x + 4 * (bw + gap) + 12, by, str, fsize, color, BOLD, 2.0f, 0.0f);
 }
 
 void ui_draw(UIState *s, int w, int h) {
