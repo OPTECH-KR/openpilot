@@ -72,6 +72,9 @@ class HyundaiFlags(IntFlag):
   CANFD_ALT_GEARS_2 = 64
   SEND_LFA = 128
   USE_FCA = 256
+  # 기타 차종 without SCC (same values as on apilot-c2-canfd)
+  NON_SCC = 65536                # no SCC, stock cruise control only (Kia Ray EV, Porter II EV)
+  NON_SCC_NO_TCS = 131072        # ... and no TCS13 (brake from E_EMS11)
 
 
 class CAR:
@@ -161,6 +164,10 @@ class CAR:
   KIA_K5_HEV_JF = "KIA K5 HEV 2017"
   KIA_K5_HEV_2022 = "KIA K5 HEV 2022 LEGACY"
   KIA_K9 = "KIA K9 2016-2019"
+
+  # 기타 차종: cruise-control-only cars (no SCC)
+  KIA_RAY_EV = "KIA RAY EV 2024"
+  PORTER_II_EV = "HYUNDAI PORTER II EV 2024"
 
 
 @dataclass
@@ -270,6 +277,10 @@ CAR_INFO: Dict[str, Optional[Union[HyundaiCarInfo, List[HyundaiCarInfo]]]] = {
   CAR.KIA_K5_HEV_JF: HyundaiCarInfo("Kia K5 Hybrid 2017", "All", harness=Harness.hyundai_c),
   CAR.KIA_K5_HEV_2022: HyundaiCarInfo("Kia K5 Hybrid 2022", "All", harness=Harness.hyundai_c),
   CAR.KIA_K9: HyundaiCarInfo("Kia K9 2016-19", "All", harness=Harness.hyundai_h),
+
+  # 기타 차종
+  CAR.KIA_RAY_EV: HyundaiCarInfo("Kia Ray EV 2024-25", "Cruise Control", harness=Harness.hyundai_h),
+  CAR.PORTER_II_EV: HyundaiCarInfo("Hyundai Porter II EV 2024", "Cruise Control", harness=Harness.hyundai_h),
 }
 
 class Buttons:
@@ -1676,7 +1687,7 @@ FW_VERSIONS = {
 
 CHECKSUM = {
   "crc8": [CAR.SANTA_FE, CAR.SONATA, CAR.PALISADE, CAR.KIA_SELTOS, CAR.ELANTRA_2021, CAR.ELANTRA_HEV_2021, CAR.SONATA_HYBRID, CAR.SANTA_FE_2022, CAR.KIA_K5_2021, CAR.SANTA_FE_HEV_2022, CAR.SANTA_FE_PHEV_2022, CAR.KIA_SOUL_EV_SK3, CAR.CASPER,
-           CAR.CUSTIN_1ST_GEN, CAR.CASPER_EV, CAR.KIA_K5_HEV_2020],
+           CAR.CUSTIN_1ST_GEN, CAR.CASPER_EV, CAR.KIA_K5_HEV_2020, CAR.KIA_RAY_EV],
   "6B": [CAR.KIA_SORENTO, CAR.HYUNDAI_GENESIS],
 }
 
@@ -1685,7 +1696,7 @@ FEATURES = {
   "use_cluster_gears": {CAR.ELANTRA, CAR.KONA, CAR.GRANDEUR_IG, CAR.GRANDEUR_IG_FL, CAR.K7, CAR.ELANTRA_GT_I30},
   "use_tcu_gears": {CAR.KIA_OPTIMA_G4, CAR.KIA_OPTIMA_G4_FL, CAR.SONATA_LF, CAR.VELOSTER, CAR.TUCSON, CAR.TUCSON_TL_SCC, CAR.KIA_K5_JF},
   "use_elect_gears": {CAR.KIA_NIRO_EV, CAR.KIA_NIRO_PHEV, CAR.KIA_NIRO_HEV_2021, CAR.KIA_OPTIMA_H, CAR.IONIQ_EV_LTD, CAR.KONA_EV, CAR.IONIQ, CAR.IONIQ_EV_2020, CAR.IONIQ_PHEV, CAR.ELANTRA_HEV_2021, CAR.SONATA_HYBRID, CAR.KONA_HEV, CAR.IONIQ_HEV_2022, CAR.SANTA_FE_HEV_2022, CAR.SANTA_FE_PHEV_2022, CAR.IONIQ_PHEV_2019, CAR.KONA_EV_2022, CAR.GRANDEUR_IG_HEV, CAR.GRANDEUR_IG_FL_HEV, CAR.NEXO, CAR.K7_HEV, CAR.K7_HEV_PE, CAR.KIA_SOUL_EV_SK3,
-                      CAR.CASPER_EV, CAR.KIA_K5_HEV_2020, CAR.KIA_NIRO_PHEV_2022, CAR.KIA_OPTIMA_H_G4_FL, CAR.KIA_K5_HEV_JF, CAR.KIA_K5_HEV_2022},
+                      CAR.CASPER_EV, CAR.KIA_K5_HEV_2020, CAR.KIA_NIRO_PHEV_2022, CAR.KIA_OPTIMA_H_G4_FL, CAR.KIA_K5_HEV_JF, CAR.KIA_K5_HEV_2022, CAR.KIA_RAY_EV, CAR.PORTER_II_EV},
 
 
   "send_lfa_mfa": {CAR.SONATA, CAR.PALISADE, CAR.IONIQ, CAR.KIA_NIRO_EV, CAR.KIA_NIRO_HEV_2021, CAR.GRANDEUR_IG_FL, CAR.GRANDEUR_IG_FL_HEV,
@@ -1704,9 +1715,13 @@ CANFD_RADAR_SCC_CAR = {CAR.GENESIS_GV70_1ST_GEN, }
 # The camera does SCC on these cars, rather than the radar
 CAMERA_SCC_CAR = {CAR.KONA_EV_2022, CAR.KONA_2022, CAR.CASPER_EV, }
 
+# 기타 차종: chosen on their own menu page (not in the normal car list), not driven on this code yet
+NON_SCC_CAR = {CAR.KIA_RAY_EV, CAR.PORTER_II_EV}
+OTHER_CAR = NON_SCC_CAR
+
 HYBRID_CAR = {CAR.IONIQ_PHEV, CAR.ELANTRA_HEV_2021, CAR.KIA_NIRO_PHEV, CAR.KIA_NIRO_HEV_2021, CAR.SONATA_HYBRID, CAR.KONA_HEV, CAR.IONIQ, CAR.IONIQ_HEV_2022, CAR.SANTA_FE_HEV_2022, CAR.SANTA_FE_PHEV_2022, CAR.IONIQ_PHEV_2019, CAR.TUCSON_HYBRID_4TH_GEN, CAR.KIA_SPORTAGE_HYBRID_5TH_GEN, CAR.GRANDEUR_IG_HEV, CAR.GRANDEUR_IG_FL_HEV, CAR.K7_HEV, CAR.K7_HEV_PE,
               CAR.KIA_K5_HEV_2020, CAR.KIA_NIRO_PHEV_2022, CAR.KIA_OPTIMA_H_G4_FL, CAR.KIA_K5_HEV_JF, CAR.KIA_K5_HEV_2022}  # these cars use a different gas signal
-EV_CAR = {CAR.IONIQ_EV_2020, CAR.IONIQ_EV_LTD, CAR.KONA_EV, CAR.KIA_NIRO_EV, CAR.KONA_EV_2022, CAR.KIA_EV6, CAR.IONIQ_5, CAR.NEXO, CAR.KIA_SOUL_EV_SK3, CAR.CASPER_EV}
+EV_CAR = {CAR.IONIQ_EV_2020, CAR.IONIQ_EV_LTD, CAR.KONA_EV, CAR.KIA_NIRO_EV, CAR.KONA_EV_2022, CAR.KIA_EV6, CAR.IONIQ_5, CAR.NEXO, CAR.KIA_SOUL_EV_SK3, CAR.CASPER_EV, CAR.KIA_RAY_EV, CAR.PORTER_II_EV}
 
 # these cars require a special panda safety mode due to missing counters and checksums in the messages
 LEGACY_SAFETY_MODE_CAR = {CAR.HYUNDAI_GENESIS, CAR.IONIQ_EV_2020, CAR.IONIQ_EV_LTD, CAR.IONIQ_PHEV, CAR.IONIQ, CAR.KIA_SORENTO, CAR.SONATA_LF, CAR.KIA_OPTIMA_G4, CAR.KIA_OPTIMA_G4_FL, CAR.VELOSTER, CAR.KIA_STINGER, CAR.GENESIS_G70, CAR.GENESIS_G80, CAR.KIA_CEED, CAR.ELANTRA, CAR.IONIQ_HEV_2022, 
@@ -1789,14 +1804,18 @@ DBC = {
   CAR.KIA_K5_HEV_JF: dbc_dict('hyundai_kia_generic', None),
   CAR.KIA_K5_HEV_2022: dbc_dict('hyundai_kia_generic', None),
   CAR.KIA_K9: dbc_dict('hyundai_kia_generic', None),
+  CAR.KIA_RAY_EV: dbc_dict('hyundai_kia_generic', None),
+  CAR.PORTER_II_EV: dbc_dict('hyundai_kia_generic', None),
   CAR.GENESIS_GV70_1ST_GEN: dbc_dict('hyundai_canfd', None),
 }
 
 
 
 def main():
+  # the car menu list (manager writes it to /data/params/d/SupportedCars): this branch runs on the C2's own panda,
+  # so only CAN cars; CAN FD cars need a red panda and are on apilot-c2-canfd. 기타 차종 have their own page
   for member, value in vars(CAR).items():
-    if not member.startswith("_"):
+    if not member.startswith("_") and value not in CANFD_CAR and value not in OTHER_CAR:
       print(value)
 
 

@@ -14,6 +14,15 @@ PREV_BUTTON_SAMPLES = 8
 CLUSTER_SAMPLE_RATE = 20  # frames
 GearShifter = car.CarState.GearShifter
 
+def non_scc_cruise_signals(CP):
+  """(available msg, sig, engaged msg, sig, set speed msg, sig) for cars without SCC (StarPilot get_non_scc_cruise_signals)"""
+  if CP.carFingerprint == CAR.KIA_RAY_EV:
+    return "LABEL11", "CC_React", "LABEL11", "CC_Engaged", "E_EMS11", "Cruise_Limit_Target"
+  if CP.carFingerprint in EV_CAR:
+    return "LABEL11", "CC_React", "EMS12", "ACC_ACT", "E_EMS11", "Cruise_Limit_Target"
+  return "EMS16", "CRUISE_LAMP_M", "EMS16", "CRUISE_LAMP_S", "LVR12", "CF_Lvr_CruiseSet"
+
+
 class CarState(CarStateBase):
   def __init__(self, CP):
     super().__init__(CP)
@@ -106,7 +115,13 @@ class CarState(CarStateBase):
 
     # cruise state
     ret.cruiseState.pcmMode = self.prev_pcmMode
-    if self.CP.openpilotLongitudinalControl and self.CP.sccBus == 0: # SCC0: Disable SCC Module
+    if self.CP.flags & HyundaiFlags.NON_SCC:
+      avail_msg, avail_sig, on_msg, on_sig, speed_msg, speed_sig = non_scc_cruise_signals(self.CP)
+      ret.cruiseState.available = cp.vl[avail_msg][avail_sig] != 0
+      ret.cruiseState.enabled = cp.vl[on_msg][on_sig] != 0
+      ret.cruiseState.standstill = False
+      ret.cruiseState.speed = cp.vl[speed_msg][speed_sig] * speed_conv
+    elif self.CP.openpilotLongitudinalControl and self.CP.sccBus == 0: # SCC0: Disable SCC Module
       # These are not used for engage/disengage since openpilot keeps track of state using the buttons
       ret.cruiseState.available = cp.vl["TCS13"]["ACCEnable"] == 0
       ret.cruiseState.enabled = cp.vl["TCS13"]["ACC_REQ"] == 1
@@ -134,6 +149,8 @@ class CarState(CarStateBase):
     # TODO: Find brake pressure
     ret.brake = 0
     ret.brakePressed = cp.vl["TCS13"]["DriverBraking"] != 0
+    if self.CP.flags & HyundaiFlags.NON_SCC_NO_TCS:
+      ret.brakePressed = cp.vl["E_EMS11"]["Brake_Pedal_Pos"] > 0  # no TCS13 on this car (Porter II EV, carrot)
     ret.brakeHoldActive = cp.vl["TCS15"]["AVH_LAMP"] == 2 # 0 OFF, 1 ERROR, 2 ACTIVE, 3 READY
     ret.parkingBrake = cp.vl["TCS13"]["PBRAKE_ACT"] == 1
     ret.accFaulted = cp.vl["TCS13"]["ACCEnable"] != 0  # 0 ACC CONTROL ENABLED, 1-3 ACC CONTROL DISABLED
@@ -190,7 +207,9 @@ class CarState(CarStateBase):
     if not self.CP.carFingerprint in (CAR.NEXO):
       ret.gearShifter = self.parse_gear_shifter(self.shifter_values.get(gear))
 
-    if not self.CP.openpilotLongitudinalControl:
+    if self.CP.flags & HyundaiFlags.NON_SCC:
+      pass  # no SCC12 / FCA11 to read stock AEB from
+    elif not self.CP.openpilotLongitudinalControl:
       aeb_src = "FCA11" if self.CP.flags & HyundaiFlags.USE_FCA.value else "SCC12"
       aeb_sig = "FCA_CmdAct" if self.CP.flags & HyundaiFlags.USE_FCA.value else "AEB_CmdAct"
       aeb_warning = cp_cruise.vl[aeb_src]["CF_VSM_Warn"] != 0
@@ -423,7 +442,16 @@ class CarState(CarStateBase):
       ("TPMS11", 5),      
     ]
 
-    if not CP.openpilotLongitudinalControl and CP.carFingerprint not in CAMERA_SCC_CAR:
+    if CP.flags & HyundaiFlags.NON_SCC:
+      avail_msg, avail_sig, on_msg, on_sig, speed_msg, speed_sig = non_scc_cruise_signals(CP)
+      signals += [(avail_sig, avail_msg), (on_sig, on_msg), (speed_sig, speed_msg), ("Brake_Pedal_Pos", "E_EMS11")]
+      # these cars are not driven on this code yet: only the messages steering needs are timed; TCS/TPMS/cluster-only
+      # messages a cruise-control-only car may not have are read when present (enforce_checks=False)
+      checks = [c for c in checks if c[0] not in ("TCS13", "TCS15", "TPMS11", "CGW4", "CLU15", "CGW2")]
+      for m in (avail_msg, on_msg, speed_msg):
+        if m not in [c[0] for c in checks]:
+          checks.append((m, 10))
+    elif not CP.openpilotLongitudinalControl and CP.carFingerprint not in CAMERA_SCC_CAR:
       signals += [
         ("MainMode_ACC", "SCC11"),
         ("VSetDis", "SCC11"),

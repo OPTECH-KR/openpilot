@@ -54,6 +54,7 @@ class CarController:
 
     self.accel_last = 0
     self.apply_steer_last = 0
+    self.non_scc_speed_buttons = False
     self.car_fingerprint = CP.carFingerprint
     #self.send_lfa_mfa_lkas = True if self.car_fingerprint in FEATURES["send_lfa_mfa"] and self.car_fingerprint not in [CAR.HYUNDAI_GENESIS] else False
     self.send_lfa_mfa_lkas = CP.flags & HyundaiFlags.SEND_LFA.value
@@ -128,6 +129,8 @@ class CarController:
       self.softHoldMode = int(Params().get("SoftHoldMode", encoding="utf8"))
       self.steerDeltaUp = int(Params().get("SteerDeltaUp", encoding="utf8"))
       self.steerDeltaDown = int(Params().get("SteerDeltaDown", encoding="utf8"))
+      if self.CP.flags & HyundaiFlags.NON_SCC:
+        self.non_scc_speed_buttons = Params().get_bool("CcOnlySpeedButtons")
 
     # tester present - w/ no response (keeps relevant ECU disabled)
     if self.frame % 100 == 0 and not (self.CP.flags & HyundaiFlags.CANFD_CAMERA_SCC.value) and self.CP.openpilotLongitudinalControl:
@@ -229,7 +232,9 @@ class CarController:
           current = int(CS.out.cruiseState.speed*CV.MS_TO_KPH + 0.5)
 
           #CC.debugTextCC = "BTN:00,T:{:.1f},C:{:.1f},{},{}".format(target, current, self.wait_timer, self.alive_timer)
-          if (self.frame - self.last_button_frame) > self.button_wait:
+          if self.CP.flags & HyundaiFlags.NON_SCC and not self.non_scc_speed_buttons:
+            pass  # cruise-control-only car: the driver sets the speed unless '크루즈 속도 자동 조절' is on
+          elif (self.frame - self.last_button_frame) > self.button_wait:
             if (self.frame - self.button_alive_frame) > self.button_alive:
               self.button_wait = randint(8,15)
               self.last_button_frame = self.frame

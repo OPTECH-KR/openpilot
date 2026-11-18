@@ -58,6 +58,7 @@ def manager_init() -> None:
     ("AutoShutdown", "1"),
     ("GpsSource", "1"),
     ("EngageWithLong", "1"),
+    ("CcOnlySpeedButtons", "0"),   # 기타 차종 (no SCC): let openpilot press the cruise buttons to set the speed
     ("ShowConnInfo", "1"),
     ("ShowLaneInfo", "1"),
     ("ShowBlindSpot", "1"),

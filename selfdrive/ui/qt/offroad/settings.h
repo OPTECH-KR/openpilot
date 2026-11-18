@@ -123,6 +123,25 @@ signals:
 
 };
 
+// 기타 차종: cars that need a feature still being tried (angle steering LFA2 cars, cars without SCC).
+// Not in the normal car list; picked and set up on this page (start tab, last item).
+class OtherCars : public QWidget {
+  Q_OBJECT
+public:
+  explicit OtherCars(QWidget* parent = 0);
+
+protected:
+  void showEvent(QShowEvent *event) override;
+
+private:
+  void refresh();
+  QList<QPair<QString, ButtonControl*>> car_btns;
+
+signals:
+  void backPress();
+  void selectedCar();
+};
+
 // carrot (C3X) style "CarrotPilot" panel: Start / Cruise / Speed / Tuning / Disp / Path tabs
 class CarrotPanel : public QWidget {
   Q_OBJECT
@@ -131,6 +150,7 @@ private:
   QStackedLayout* main_layout = nullptr;
   QWidget* homeScreen = nullptr;
   SelectCar* selectCar = nullptr;
+  OtherCars* otherCars = nullptr;
   int currentCarrotIndex = 0;
 
   QVBoxLayout* carrotLayout;
