@@ -212,14 +212,23 @@ class DriveLog:
 
 def main():
   os.makedirs(LOG_DIR, exist_ok=True)
-  for prefix in ("2", "crash-"):  # drive logs (<date>-<time>.txt) and crash tracebacks, kept separately
-    for f in sorted(f for f in os.listdir(LOG_DIR) if f.startswith(prefix) and f.endswith(".txt"))[:-KEEP_FILES]:
+  # drive logs (<date>-<time>[-n].txt, also 1970... when the clock was not set yet) and crash tracebacks are kept
+  # separately, newest KEEP_FILES of each by modification time
+  names = [f for f in os.listdir(LOG_DIR) if f.endswith(".txt")]
+  groups = ([f for f in names if f[:1].isdigit()], [f for f in names if f.startswith("crash-")])
+  for group in groups:
+    for f in sorted(group, key=lambda x: os.path.getmtime(os.path.join(LOG_DIR, x)))[:-KEEP_FILES]:
       try:
         os.remove(os.path.join(LOG_DIR, f))
       except OSError:
         pass
 
-  path = os.path.join(LOG_DIR, datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + ".txt")
+  # in the car the clock often starts at 1970-01-01 09:00 (no network time yet), so the same name comes back:
+  # never append to an older drive
+  base = os.path.join(LOG_DIR, datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
+  path, n = base + ".txt", 1
+  while os.path.exists(path):
+    path, n = f"{base}-{n}.txt", n + 1
   with open(path, "a", buffering=1, encoding="utf8") as out:
     out.write(HEADER + "\n")
     log = DriveLog(out)
@@ -229,6 +238,7 @@ def main():
     except Exception:  # noqa: BLE001
       pass
     errors = 0
+    next_sync = time.monotonic() + 5.
     while True:
       try:
         log.step()
@@ -236,6 +246,12 @@ def main():
         errors += 1
         if errors <= 5:
           log.event(f"drivelog error: {type(e).__name__}: {e}")
+      if time.monotonic() >= next_sync:  # a power cut at ignition off otherwise leaves the last minutes as zeros
+        next_sync = time.monotonic() + 5.
+        try:
+          os.fsync(out.fileno())
+        except OSError:
+          pass
       time.sleep(0.1)
 
 

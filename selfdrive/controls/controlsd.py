@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import math
+import time
 from typing import SupportsFloat
 
 from cereal import car, log
@@ -228,7 +229,10 @@ class Controls:
 
     # controlsd is driven by can recv, expected at 100Hz
     self.rk = Ratekeeper(100, print_delay_threshold=None)
-    self.prof = Profiler(False)  # off by default
+    # sections timed every frame; write_profile() puts the average per frame into /data/drivelog/diag.txt every 30 s
+    self.prof = Profiler(True)
+    self.prof_frames = 0
+    self.prof_max = 0.
 
   def set_initial_state(self):
     if REPLAY:
@@ -696,6 +700,7 @@ class Controls:
 
     if not self.joystick_mode:
       # accel PID loop
+      self.prof.checkpoint("Control prep")
       pid_accel_limits = self.CI.get_pid_accel_limits(self.CP, CS.vEgo, self.v_cruise_helper.v_cruise_kph * CV.KPH_TO_MS)
       t_since_plan = (self.sm.frame - self.sm.rcv_frame['longitudinalPlan']) * DT_CTRL
       actuators.accel, actuators.jerk = self.LoC.update(CC.longActive, CS, long_plan, pid_accel_limits, t_since_plan, CC)
@@ -703,6 +708,7 @@ class Controls:
       #print(self.debugText2)
       if len(long_plan.speeds):
         actuators.speed = long_plan.speeds[-1]
+      self.prof.checkpoint("LongControl")
 
       # Steering PID loop and lateral MPC
       self.desired_curvature, self.desired_curvature_rate = get_lag_adjusted_curvature(self.CP, CS.vEgo,
@@ -719,6 +725,7 @@ class Controls:
                                                                                self.last_actuators, self.steer_limited, self.desired_curvature,
                                                                                self.desired_curvature_rate, self.sm['liveLocationKalman'])
       actuators.curvature = self.desired_curvature
+      self.prof.checkpoint("LatControl")
     else:
       lac_log = log.ControlsState.LateralDebugState.new_message()
       if self.sm.rcv_frame['testJoystick'] > 0:
@@ -873,7 +880,9 @@ class Controls:
 
     if not self.read_only and self.initialized:
       # send car controls over can
+      self.prof.checkpoint("Publish prep")
       self.last_actuators, can_sends = self.CI.apply(CC)
+      self.prof.checkpoint("CarController")
       self.pm.send('sendcan', can_list_to_can_capnp(can_sends, msgtype='sendcan', valid=CS.canValid))
       CC.actuatorsOutput = self.last_actuators
       if self.CP.steerControlType == car.CarParams.SteerControlType.angle:
@@ -1009,6 +1018,7 @@ class Controls:
 
     self.update_events(CS)
     #C2#cloudlog.timestamp("Events updated")
+    self.prof.checkpoint("Events")
 
     if not self.read_only and self.initialized:
       # Update control state
@@ -1023,15 +1033,36 @@ class Controls:
     # Publish data
     self.publish_logs(CS, start_time, CC, lac_log)
     self.prof.checkpoint("Sent")
+    self.prof_max = max(self.prof_max, sec_since_boot() - start_time)
 
     self.CS_prev = CS
+
+  def write_profile(self):
+    """Every 3000 frames (30 s): average ms per frame of each step section, the slowest frame and the CPU time of
+    this process, so a busy controlsd (late carState -> radarFault / commIssue elsewhere) shows what is heavy."""
+    self.prof_frames += 1
+    if self.prof_frames == 1:
+      self.prof_cpu0 = time.process_time()
+      self.prof_wall0 = time.monotonic()
+    if self.prof_frames < 3000:
+      return
+    n = self.prof_frames
+    parts = [f"{k} {v * 1000. / n:.2f}" for k, v in sorted(self.prof.cp.items(), key=lambda x: -x[1])
+             if k not in self.prof.cp_ignored]
+    cpu = (time.process_time() - self.prof_cpu0) / max(time.monotonic() - self.prof_wall0, 1e-3) * 100.
+    diag_write(f"controlsd ms/frame: {', '.join(parts)} | total {self.prof.tot * 1000. / n:.2f} "
+               f"slowest {self.prof_max * 1000.:.0f} | cpu {cpu:.0f}% | lagging {self.rk.lagging}")
+    self.prof.reset(True)
+    self.prof.tot = 0.
+    self.prof_frames = 0
+    self.prof_max = 0.
 
   def controlsd_thread(self):
     while True:
       initialized_prev = self.initialized
       self.step()
       self.rk.monitor_time()
-      self.prof.display()
+      self.write_profile()
 
       # ajouatom: CI.init()할때  lag가 disable_ecu(), enable_radar_tracks()로 인해 발생함... 초기화가 필요함. 
       if self.initialized and not initialized_prev:
