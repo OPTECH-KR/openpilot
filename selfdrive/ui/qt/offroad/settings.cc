@@ -714,7 +714,20 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     Params().putBool("GpsCheck", false);
   });
   startToggles->addItem(gps_btn);
-  startToggles->addItem(new ParamControl("EngageWithLong", "가감속도 함께 켜기", "켜 두면(초록색) 크루즈 버튼으로 openpilot을 켤 때 조향과 가감속이 함께 켜지고, 설정 속도는 그때의 현재 속도입니다. 끄면 조향만 켜지고, 가감속은 + 또는 - 버튼을 누르면 시작합니다. 어느 쪽이든 크루즈 버튼을 다시 누르면 조향과 가감속이 모두 꺼집니다.", SHELL_ICON, this));
+  // EngageWithLong: what the cruise button turns on (controlsd / cruise_helper); no reboot needed
+  auto engage_mode_btn = new ButtonControl("사용 방식", "", "크루즈 버튼으로 openpilot을 켤 때 무엇을 켤지 고릅니다. 조향+가감속 사용: 조향과 가감속이 함께 켜지고, 설정 속도는 그때의 현재 속도입니다. 브레이크를 밟았다 떼면 원래 설정 속도로 다시 갑니다. 조향만 사용: 조향만 켜지고, 어떤 버튼이나 페달로도 가감속은 켜지지 않습니다. 어느 쪽이든 크루즈 버튼을 다시 누르면 모두 꺼지고, +/- 버튼은 가감속이 켜져 있을 때 설정 속도만 바꿉니다.");
+  auto engage_mode_name = []() {
+    return Params().getBool("EngageWithLong") ? QString("조향+가감속 사용") : QString("조향만 사용");
+  };
+  engage_mode_btn->setText(engage_mode_name());
+  QObject::connect(engage_mode_btn, &ButtonControl::clicked, [=]() {
+    const QStringList names = {"조향+가감속 사용", "조향만 사용"};
+    const QString sel = MultiOptionDialog::getSelection("사용 방식을 고르세요", names, engage_mode_name(), this);
+    if (sel.isEmpty() || sel == engage_mode_name()) return;
+    Params().putBool("EngageWithLong", sel == names[0]);
+    engage_mode_btn->setText(engage_mode_name());
+  });
+  startToggles->addItem(engage_mode_btn);
   startToggles->addItem(new ParamControl("AutoShutdown", "자동 꺼짐", "켜 두면(초록색) 차량이나 충전기 전원 없이 배터리로만 켜져 있고 주행 중이 아닐 때, 약 10분 뒤 기기가 스스로 꺼져 배터리를 보호합니다. 끄면 배터리가 다 닳을 때까지 켜져 있습니다. 주행 중이거나 전원이 연결돼 있으면 이 설정과 상관없이 꺼지지 않습니다.", SHELL_ICON, this));
   startToggles->addItem(new ParamControl("OpkrHotspotOnBoot", "부팅 시 핫스팟 켜기", "켜 두면 기기가 켜질 때 핫스팟(테더링)이 자동으로 켜집니다.", SHELL_ICON, this));
   auto updateBtn = new ButtonControl("업데이트 확인 후 적용", "업데이트");
@@ -748,8 +761,6 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   // ---- 주행: brake / cruise buttons ----
   cruiseToggles = new ListWidget(this);
   cruiseToggles->addItem(carrot_section("브레이크"));
-  cruiseToggles->addItem(new ParamControl("AutoResumeFromBrakeRelease", "브레이크 뗀 뒤 자동 재개", "브레이크를 밟으면 조향은 유지하고 가감속만 잠시 운전자에게 넘기며, 브레이크를 떼면 아래 조건에서 다시 openpilot이 가감속합니다. 정차 중: 앞차가 10m 안에 있을 때만. 주행 중: 앞차가 20m보다 멀리 있거나, 앞차 없이 시속 40km 이상일 때 (설정 속도는 '브레이크 재개 속도'를 따름). 신호만 보고 재개하지 않으며, 핸들을 20도 넘게 돌리고 있을 때와 취소 버튼으로 끈 뒤에는 재개하지 않습니다. 끄면 브레이크를 밟을 때마다 버튼으로 다시 켜야 합니다.", SHELL_ICON, this));
-  cruiseToggles->addItem(new CValueControl("BrakeResumeSpeedMode", "브레이크 재개 속도", "주행 중 브레이크를 밟았다 떼서 다시 가감속을 맡길 때의 설정 속도입니다. 0:브레이크를 뗀 순간의 속도로 이어 가기, 1:브레이크 밟기 전 설정 속도로 복귀(앞차와 차간은 그대로 지키면서 서서히 가속).", SHELL_ICON, 0, 1, 1));
   cruiseToggles->addItem(new CValueControl("SoftHoldMode", "소프트홀드", "정차 후 브레이크를 떼도 차를 멈춘 상태로 잡아 주는 기능입니다. 0:사용 안 함, 1:사용, 2:SCC와 함께 사용(일부 차량은 전자식 주차 브레이크가 걸릴 수 있음)", ROAD_ICON, 0, 2, 1));
   cruiseToggles->addItem(carrot_section("크루즈 버튼"));
   cruiseToggles->addItem(new CValueControl("LongControlActiveSound", "크루즈 알림음", "크루즈가 켜지고 꺼질 때 나는 알림음 크기입니다. 0:끄기, 1:작게, 2:크게", ROAD_ICON, 0, 2, 1));

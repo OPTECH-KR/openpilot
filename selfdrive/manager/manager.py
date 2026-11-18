@@ -201,9 +201,8 @@ def manager_init() -> None:
   # KeepEngage too: leaving D (N / R) disengages, as in stock openpilot
   for k in ("EnableAutoEngage", "CruiseOnDist", "AutoResumeFromGas", "AutoCancelFromGasMode", "KeepEngage", "TrafficStopMode", "CruiseControlMode", "DisengageOnAccelerator"):
     params.put(k, "0")
-  # brake release resume (option AutoResumeFromBrakeRelease, kept in the menu) runs with fixed conditions:
-  # stopped -> only behind a lead within 10 m; moving -> lead farther than 20 m, or no lead at 40 km/h or more,
-  # at the current speed; never on a detected traffic signal alone
+  # apilot's own brake release resume (AutoResumeFromBrakeRelease) is pinned off below and removed from the menu;
+  # cruise_helper resumes at the set speed instead (EngageWithLong). These conditions stay pinned for its code path:
   for k, v in (("AutoResumeFromBrakeReleaseLeadCar", "1"), ("AutoResumeFromBrakeReleaseDist", "20"),
                ("AutoResumeFromBrakeCarSpeed", "40"), ("AutoResumeFromBrakeReleaseTrafficSign", "0"),
                ("TFollowGap1", "110"), ("TFollowGap2", "120"), ("TFollowGap3", "140"), ("TFollowGap4", "160"),
@@ -222,7 +221,9 @@ def manager_init() -> None:
                ("SteerDeltaUp", "3"), ("SteerDeltaDown", "7"), ("UseLaneLineSpeed", "0"),
                ("CruiseButtonMode", "0"), ("CruiseSpeedMin", "10"),
                ("ShowHudMode", "6"),
-               ("GpsSource", "1")):  # GPS is always the phone built-in one; the selector is removed  # screen mode fixed to the carrot HUD box; the selector is removed
+               ("GpsSource", "1"),
+               # brake release resume is done by cruise_helper (EngageWithLong): the old apilot conditions are off
+               ("AutoResumeFromBrakeRelease", "0"), ("BrakeResumeSpeedMode", "1")):  # GPS is always the phone built-in one; the selector is removed  # screen mode fixed to the carrot HUD box; the selector is removed
     params.put(k, v)
 
   # is this dashcam?

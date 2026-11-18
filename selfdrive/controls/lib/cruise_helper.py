@@ -923,7 +923,7 @@ class CruiseHelper:
           if self.cruiseOnDist > 0.0:
             longActiveUser = 3
 
-      # C2 port ('가감속도 함께 켜기' on): speed control paused by the brake comes back, at the set speed from before
+      # C2 port ('사용 방식' 조향+가감속): speed control paused by the brake comes back, at the set speed from before
       # braking, as soon as the brake is off: right away when moving (>= 10 km/h) or behind a lead within 10 m; from a
       # stop without a lead, once the driver has driven off past 10 km/h and is off the gas (no launch from a stop)
       if self.engageWithLong and self.brake_paused and longActiveUser <= 0 and not brakePressed and not CS.gasPressed:
@@ -933,7 +933,7 @@ class CruiseHelper:
       if longActiveUser > 0:
         self.brake_paused = False
 
-      # C2 port: steering only (시작 탭 '가감속도 함께 켜기' off) -> speed control never starts
+      # C2 port: steering only (시작 탭 '사용 방식' 조향만) -> speed control never starts
       if not self.engageWithLong:
         longActiveUser = min(longActiveUser, 0)
       self.cruise_control(controls, CS, longActiveUser, v_cruise_kph)

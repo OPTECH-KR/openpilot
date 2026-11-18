@@ -626,7 +626,7 @@ class Controls:
             self.state = State.enabled
           self.current_alert_types.append(ET.ENABLE)
           self.v_cruise_helper.initialize_v_cruise(CS)
-          # C2 port (one-button use, 시작 탭 '가감속도 함께 켜기' EngageWithLong, default on): speed control starts
+          # C2 port (one-button use, 시작 탭 '사용 방식' EngageWithLong, default 조향+가감속): speed control starts
           # together with steering at the current speed. Off: steering only; speed control starts with a +/- press
           # as in apilot (the gas-pedal auto resume is forced off here).
           self.cruise_helper.longActiveUser = 1 if self.params.get_bool("EngageWithLong") else 0
