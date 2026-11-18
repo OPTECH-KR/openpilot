@@ -1006,8 +1006,9 @@ class Controls:
     start_time = sec_since_boot()
     self.prof.checkpoint("Ratekeeper", ignore=True)
 
-    self.is_metric = self.params.get_bool("IsMetric")
-    self.experimental_mode = self.params.get_bool("ExperimentalMode") and self.CP.openpilotLongitudinalControl
+    if self.sm.frame % 100 == 0:  # two param file reads every frame cost about 2% of the C2 CPU; once a second is enough
+      self.is_metric = self.params.get_bool("IsMetric")
+      self.experimental_mode = self.params.get_bool("ExperimentalMode") and self.CP.openpilotLongitudinalControl
     #self.experimental_mode = self.experimental_mode or self.sm['lateralPlan'].desireReady != 0
     #self.experimental_mode = self.sm['longitudinalPlan'].xState in [XState.e2eStop, XState.e2eCruisePrepare]
 
@@ -1061,6 +1062,12 @@ class Controls:
     self.prof_max = 0.
 
   def controlsd_thread(self):
+    # C2 diagnostics: function-level CPU sampling for 2 minutes after start (result in /data/drivelog/diag.txt)
+    try:
+      from selfdrive.carrot.tools.sampler import StackSampler
+      StackSampler("controlsd").start()
+    except Exception:  # noqa: BLE001
+      pass
     while True:
       initialized_prev = self.initialized
       self.step()
