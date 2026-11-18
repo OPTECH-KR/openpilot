@@ -14,6 +14,11 @@ PREV_BUTTON_SAMPLES = 8
 CLUSTER_SAMPLE_RATE = 20  # frames
 GearShifter = car.CarState.GearShifter
 
+def driver_pressed(gas, gas2):
+  from selfdrive.car.hyundai.pedal import driver_pressed as _pressed
+  return _pressed(gas, gas2)
+
+
 def non_scc_cruise_signals(CP):
   """(available msg, sig, engaged msg, sig, set speed msg, sig) for cars without SCC (StarPilot get_non_scc_cruise_signals)"""
   if CP.carFingerprint == CAR.KIA_RAY_EV:
@@ -154,6 +159,8 @@ class CarState(CarStateBase):
     ret.brakeHoldActive = cp.vl["TCS15"]["AVH_LAMP"] == 2 # 0 OFF, 1 ERROR, 2 ACTIVE, 3 READY
     ret.parkingBrake = cp.vl["TCS13"]["PBRAKE_ACT"] == 1
     ret.accFaulted = cp.vl["TCS13"]["ACCEnable"] != 0  # 0 ACC CONTROL ENABLED, 1-3 ACC CONTROL DISABLED
+    if self.CP.flags & HyundaiFlags.NON_SCC:
+      ret.accFaulted = False  # TCS13 ACCEnable means nothing without SCC
     ret.brakeLights = bool(cp.vl["TCS13"]["BrakeLight"] or ret.brakePressed)
     ret.driverOverride = cp.vl["TCS13"]["DriverOverride"]
 
@@ -168,6 +175,14 @@ class CarState(CarStateBase):
         ret.motorRpm = cp.vl["ELECT_GEAR"]["Elect_Motor_Speed"] * 30 # opkr, may multiply deceleration ratio in line with engine rpm
       ret.chargeMeter = cp.vl["EV_Info"]["OPKR_EV_Charge_Level"] # opkr
       ret.gasPressed = ret.gas > 0
+      if self.CP.flags & HyundaiFlags.NON_SCC_PEDAL:
+        # the pedal box sits between the pedal and the car: the car's pedal signal is our command, the driver's is in GAS_SENSOR
+        cp_pedal = getattr(self, "cp_pedal", None)
+        self.pedal_valid = cp_pedal is not None and cp_pedal.can_valid
+        self.pedal_state = int(cp_pedal.vl["GAS_SENSOR"]["STATE"]) if cp_pedal is not None else 5
+        ret.accFaulted = not self.pedal_valid or self.pedal_state != 0
+        if cp_pedal is not None:
+          ret.gasPressed = driver_pressed(cp_pedal.vl["GAS_SENSOR"]["INTERCEPTOR_GAS"], cp_pedal.vl["GAS_SENSOR"]["INTERCEPTOR_GAS2"])
     else:
       ret.gas = cp.vl["EMS12"]["PV_AV_CAN"] / 100.
       ret.gasPressed = bool(cp.vl["EMS16"]["CF_Ems_AclAct"])
@@ -524,6 +539,15 @@ class CarState(CarStateBase):
       checks.append(("Navi_HU", 5))
 
     return CANParser(DBC[CP.carFingerprint]["pt"], signals, checks, 0, enforce_checks=False)
+
+  @staticmethod
+  def get_body_can_parser(CP):
+    # comma pedal on the cars without SCC (only when the menu switch is on and the pedal was seen at start)
+    if CP.flags & HyundaiFlags.NON_SCC_PEDAL:
+      from selfdrive.car.hyundai.pedal import PEDAL_DBC
+      signals = [("INTERCEPTOR_GAS", "GAS_SENSOR"), ("INTERCEPTOR_GAS2", "GAS_SENSOR"), ("STATE", "GAS_SENSOR")]
+      return CANParser(PEDAL_DBC[CP.carFingerprint], signals, [("GAS_SENSOR", 50)], 0)
+    return None
 
   @staticmethod
   def get_cam_can_parser(CP):

@@ -123,13 +123,15 @@ signals:
 
 };
 
-// '레이·포터 설정': settings for the cars without SCC (Kia Ray EV, Porter II EV). Its start-tab item shows only while
-// one of them is the chosen car.
+// '레이 EV 설정' / '포터 II EV 설정': settings of a car without SCC (cruise control only), one page per car with its own
+// params (RaySpeedButtons, RayPedal, ... / Porter...). Its start-tab item shows only while that car is the chosen one.
 class CcOnlyCarPage : public QWidget {
   Q_OBJECT
 public:
-  explicit CcOnlyCarPage(QWidget* parent = 0);
-  static bool isCcOnlyCar(const QString &car);
+  explicit CcOnlyCarPage(int index, QWidget* parent = 0);
+  static int count();
+  static QString carName(int index);   // CAR string in values.py
+  static QString menuTitle(int index); // '레이 EV 설정'
 
 signals:
   void backPress();
@@ -143,7 +145,7 @@ private:
   QStackedLayout* main_layout = nullptr;
   QWidget* homeScreen = nullptr;
   SelectCar* selectCar = nullptr;
-  CcOnlyCarPage* ccOnlyPage = nullptr;
+  QList<CcOnlyCarPage*> ccOnlyPages;
   int currentCarrotIndex = 0;
 
   QVBoxLayout* carrotLayout;

@@ -9,6 +9,8 @@ const int HYUNDAI_PARAM_ALT_LIMITS = 64; // TODO: shift this down with the rest 
 const int HYUNDAI_PARAM_AUTO_ENGAGE = 128;
 // no SCC, stock cruise control only (Kia Ray EV, Porter II EV); 256 / 512 are taken by CAN FD alt / angle steering
 const int HYUNDAI_PARAM_NON_SCC = 1024;
+// ... with a comma pedal (Ray EV / Porter II EV): openpilot sends GAS_COMMAND 0x200 (StarPilot Ray pedal checks)
+const int HYUNDAI_PARAM_NON_SCC_PEDAL = 2048;
 
 const uint8_t HYUNDAI_PREV_BUTTON_SAMPLES = 8;  // roughly 160 ms
 const uint32_t HYUNDAI_STANDSTILL_THRSLD = 12;  // 0.375 kph
@@ -28,6 +30,7 @@ bool hyundai_camera_scc = false;
 bool hyundai_alt_limits = false;
 bool hyundai_auto_engage = false;
 bool hyundai_non_scc = false;
+bool hyundai_non_scc_pedal = false;
 uint8_t hyundai_last_button_interaction;  // button messages since the user pressed an enable button
 
 void hyundai_common_init(uint16_t param) {
@@ -45,6 +48,7 @@ void hyundai_common_init(uint16_t param) {
 #endif
   hyundai_auto_engage = GET_FLAG(param, HYUNDAI_PARAM_AUTO_ENGAGE);
   hyundai_non_scc = GET_FLAG(param, HYUNDAI_PARAM_NON_SCC);
+  hyundai_non_scc_pedal = hyundai_non_scc && GET_FLAG(param, HYUNDAI_PARAM_NON_SCC_PEDAL);
 }
 
 void hyundai_common_cruise_state_check(const int cruise_engaged) {

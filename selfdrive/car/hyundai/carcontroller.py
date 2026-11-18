@@ -3,7 +3,7 @@ from common.conversions import Conversions as CV
 from common.numpy_fast import clip, interp
 from common.realtime import DT_CTRL
 from opendbc.can.packer import CANPacker
-from selfdrive.car import apply_driver_steer_torque_limits
+from selfdrive.car import apply_driver_steer_torque_limits, create_gas_interceptor_command
 from selfdrive.car.hyundai import hyundaicanfd, hyundaican
 from selfdrive.car.hyundai.values import HyundaiFlags, Buttons, CarControllerParams, CANFD_CAR, CAR, FEATURES, LEGACY_SAFETY_MODE_CAR
 import random
@@ -55,6 +55,14 @@ class CarController:
     self.accel_last = 0
     self.apply_steer_last = 0
     self.non_scc_speed_buttons = False
+    # comma pedal (Ray EV / Porter II EV without SCC)
+    self.pedal = bool(CP.flags & HyundaiFlags.NON_SCC_PEDAL)
+    self.pedal_packer = None
+    self.pedal_gas_last = 0.
+    self.pedal_max = 0.7
+    if self.pedal:
+      from selfdrive.car.hyundai.pedal import PEDAL_DBC
+      self.pedal_packer = CANPacker(PEDAL_DBC[CP.carFingerprint])
     self.car_fingerprint = CP.carFingerprint
     #self.send_lfa_mfa_lkas = True if self.car_fingerprint in FEATURES["send_lfa_mfa"] and self.car_fingerprint not in [CAR.HYUNDAI_GENESIS] else False
     self.send_lfa_mfa_lkas = CP.flags & HyundaiFlags.SEND_LFA.value
@@ -130,7 +138,13 @@ class CarController:
       self.steerDeltaUp = int(Params().get("SteerDeltaUp", encoding="utf8"))
       self.steerDeltaDown = int(Params().get("SteerDeltaDown", encoding="utf8"))
       if self.CP.flags & HyundaiFlags.NON_SCC:
-        self.non_scc_speed_buttons = Params().get_bool("CcOnlySpeedButtons")
+        from selfdrive.car.hyundai.pedal import PEDAL_PARAMS
+        _, max_param, buttons_param = PEDAL_PARAMS[self.CP.carFingerprint]
+        self.non_scc_speed_buttons = Params().get_bool(buttons_param)
+        try:
+          self.pedal_max = min(max(int(Params().get(max_param, encoding="utf8") or 70), 10), 70) / 100.
+        except ValueError:
+          self.pedal_max = 0.5
 
     # tester present - w/ no response (keeps relevant ECU disabled)
     if self.frame % 100 == 0 and not (self.CP.flags & HyundaiFlags.CANFD_CAMERA_SCC.value) and self.CP.openpilotLongitudinalControl:
@@ -268,7 +282,23 @@ class CarController:
       if self.CP.carFingerprint in (CAR.GENESIS_G90_2019, CAR.GENESIS_G90, CAR.K7, CAR.K7_PE):
         can_sends.append(hyundaican.create_mdps12(self.packer, self.frame, CS.mdps12))
 
-      if self.frame % 2 == 0 and self.CP.openpilotLongitudinalControl:
+      # comma pedal: openpilot long through the accelerator; the car's own cruise control is cancelled while engaged
+      if self.pedal:
+        from selfdrive.car.hyundai.pedal import pedal_target, next_command
+        if CC.enabled and CS.out.cruiseState.enabled and (self.frame - self.last_button_frame) * DT_CTRL > 0.04:
+          can_sends.append(hyundaican.create_clu11(self.packer, self.frame, CS.clu11, Buttons.CANCEL, self.CP.carFingerprint))
+          self.last_button_frame = self.frame
+        if self.frame % 4 == 0:
+          ready = getattr(CS, "pedal_valid", False) and getattr(CS, "pedal_state", 5) == 0
+          active = CC.longActive and ready and not CC.cruiseControl.override and not CS.out.gasPressed and not CS.out.brakePressed
+          if active:
+            target = pedal_target(accel, CS.out.vEgo, hud_control.setSpeed, self.pedal_max)
+            self.pedal_gas_last = next_command(target, self.pedal_gas_last)
+          else:
+            self.pedal_gas_last = 0.
+          can_sends.append(create_gas_interceptor_command(self.pedal_packer, self.pedal_gas_last, (self.frame // 4) & 0xF))
+
+      if self.frame % 2 == 0 and self.CP.openpilotLongitudinalControl and not self.CP.flags & HyundaiFlags.NON_SCC:
         # TODO: unclear if this is needed
         startingJerk = self.jerkStartLimit
         jerkLimit = 5.0
@@ -300,14 +330,14 @@ class CarController:
         can_sends.append(hyundaican.create_lfahda_mfc(self.packer, CC, self.blinking_signal))
 
       # 5 Hz ACC options
-      if self.frame % 20 == 0 and self.CP.openpilotLongitudinalControl: 
+      if self.frame % 20 == 0 and self.CP.openpilotLongitudinalControl and not self.CP.flags & HyundaiFlags.NON_SCC:
         if self.CP.sccBus == 0:
           can_sends.extend(hyundaican.create_acc_opt(self.CP, CS, self.packer))
         elif CS.scc13 is not None:
           can_sends.append(hyundaican.create_acc_opt_copy(self.CP, CS, self.packer))
 
       # 2 Hz front radar options
-      if self.frame % 50 == 0 and self.CP.openpilotLongitudinalControl  and self.CP.sccBus == 0:
+      if self.frame % 50 == 0 and self.CP.openpilotLongitudinalControl  and self.CP.sccBus == 0 and not self.CP.flags & HyundaiFlags.NON_SCC:
         can_sends.append(hyundaican.create_frt_radar_opt(self.packer))
 
     new_actuators = actuators.copy()

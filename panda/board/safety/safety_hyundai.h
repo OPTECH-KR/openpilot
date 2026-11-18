@@ -22,6 +22,7 @@ const int HYUNDAI_MAX_ACCEL = 250;  // 1/100 m/s2
 const int HYUNDAI_MIN_ACCEL = -400; // -350; // 1/100 m/s2
 
 const CanMsg HYUNDAI_TX_MSGS[] = {
+  {0x200, 0, 6},                            // comma pedal GAS_COMMAND, cars without SCC with a pedal only (tx hook)
   {593, 2, 8},                              // MDPS12, Bus 2
   {832, 0, 8},                              // LKAS11, Bus 0
   {1056, 0, 8},                             // SCC11, Bus 0
@@ -108,6 +109,31 @@ AddrCheckStruct hyundai_non_scc_addr_checks[] = {
   {.msg = {{902, 0, 8, .expected_timestep = 10000U}, { 0 }, { 0 }}},
 };
 #define HYUNDAI_NON_SCC_ADDR_CHECK_LEN (sizeof(hyundai_non_scc_addr_checks) / sizeof(hyundai_non_scc_addr_checks[0]))
+
+// ... with a comma pedal: its GAS_SENSOR (0x201, 50 Hz) must keep coming
+AddrCheckStruct hyundai_non_scc_pedal_addr_checks[] = {
+  {.msg = {{608, 0, 8, .check_checksum = true, .max_counter = 3U, .expected_timestep = 10000U},
+           {881, 0, 8, .expected_timestep = 10000U}, { 0 }}},
+  {.msg = {{902, 0, 8, .expected_timestep = 10000U}, { 0 }, { 0 }}},
+  {.msg = {{0x201, 0, 6, .expected_timestep = 20000U}, { 0 }, { 0 }}},
+};
+#define HYUNDAI_NON_SCC_PEDAL_ADDR_CHECK_LEN (sizeof(hyundai_non_scc_pedal_addr_checks) / sizeof(hyundai_non_scc_pedal_addr_checks[0]))
+
+// pedal state kept apart from gas_pressed / brake_pressed, which apilot clears for every Hyundai below
+bool hyundai_pedal_gas_pressed = false;
+bool hyundai_pedal_brake_pressed = false;
+bool hyundai_pedal_tcs13_seen = false;
+
+static uint8_t hyundai_pedal_checksum(CANPacket_t *msg) {
+  uint8_t crc = 0xFFU;
+  for (int i = 4; i >= 0; i--) {
+    crc ^= GET_BYTE(msg, i);
+    for (int j = 0; j < 8; j++) {
+      crc = ((crc & 0x80U) != 0U) ? (uint8_t)((crc << 1U) ^ 0xD5U) : (uint8_t)(crc << 1U);
+    }
+  }
+  return crc;
+}
 
 bool hyundai_legacy = false;
 
@@ -203,6 +229,22 @@ static int hyundai_rx_hook(CANPacket_t *to_push) {
     hyundai_common_cruise_state_check(cruise_engaged);
   }*/
 
+  // comma pedal: the driver's pedal (raw tracks, StarPilot Ray firmware thresholds) and the brake, for the pedal command checks
+  if (valid && hyundai_non_scc_pedal && (bus == 0)) {
+    if (addr == 0x201) {
+      const uint32_t track1 = ((uint32_t)GET_BYTE(to_push, 0) << 8) | GET_BYTE(to_push, 1);
+      const uint32_t track2 = ((uint32_t)GET_BYTE(to_push, 2) << 8) | GET_BYTE(to_push, 3);
+      hyundai_pedal_gas_pressed = (track1 > 272U) || (track2 > 513U);
+    }
+    if (addr == 916) {
+      hyundai_pedal_tcs13_seen = true;
+      hyundai_pedal_brake_pressed = GET_BIT(to_push, 55U) != 0U;
+    }
+    if ((addr == 881) && !hyundai_pedal_tcs13_seen) {
+      hyundai_pedal_brake_pressed = GET_BYTE(to_push, 0) != 0U;  // E_EMS11 Brake_Pedal_Pos (Porter has no TCS13)
+    }
+  }
+
   // no SCC: like the SCC cars here (apilot keeps controls allowed), the wheel speed message stands in for SCC11
   if (valid && hyundai_non_scc && (bus == 0) && (addr == 902)) {
     hyundai_common_cruise_state_check(1);
@@ -289,6 +331,32 @@ static int hyundai_tx_hook(CANPacket_t *to_send, bool longitudinal_allowed) {
           controls_allowed = 1;
           hyundai_auto_engage = 0;
       }
+  }
+
+  // comma pedal command (StarPilot Ray pedal checks): only on a car without SCC with the pedal flag; enabled commands stay
+  // in the calibrated range (track2 follows track1), disabled ones are all zero, and no throttle without controls allowed
+  // or while the driver presses the gas or the brake
+  if (addr == 0x200) {
+    if (!hyundai_non_scc_pedal) {
+      tx = 0;
+    } else {
+      const int track1 = (GET_BYTE(to_send, 0) << 8) | GET_BYTE(to_send, 1);
+      const int track2 = (GET_BYTE(to_send, 2) << 8) | GET_BYTE(to_send, 3);
+      const bool enabled = (GET_BYTE(to_send, 4) & 0x80U) != 0U;
+      const int expected_track2 = 497 + (2 * (track1 - 264));
+      bool violation = (GET_BYTE(to_send, 4) & 0x70U) != 0U;
+      violation |= GET_BYTE(to_send, 5) != hyundai_pedal_checksum(to_send);
+      if (enabled) {
+        violation |= (track1 < 264) || (track1 > 530) || (track2 < 497) || (track2 > 1035);
+        violation |= ABS(track2 - expected_track2) > 40;
+        violation |= !controls_allowed || hyundai_pedal_gas_pressed || hyundai_pedal_brake_pressed;
+      } else {
+        violation |= (track1 != 0) || (track2 != 0);
+      }
+      if (violation) {
+        tx = 0;
+      }
+    }
   }
 
   // FCA11: Block any potential actuation
@@ -444,7 +512,12 @@ static const addr_checks* hyundai_legacy_init(int16_t param) {
   hyundai_longitudinal = false;
   hyundai_camera_scc = false;
 
-  if (hyundai_non_scc) {
+  hyundai_pedal_gas_pressed = false;
+  hyundai_pedal_brake_pressed = false;
+  hyundai_pedal_tcs13_seen = false;
+  if (hyundai_non_scc_pedal) {
+    hyundai_rx_checks = (addr_checks){hyundai_non_scc_pedal_addr_checks, HYUNDAI_NON_SCC_PEDAL_ADDR_CHECK_LEN};
+  } else if (hyundai_non_scc) {
     hyundai_rx_checks = (addr_checks){hyundai_non_scc_addr_checks, HYUNDAI_NON_SCC_ADDR_CHECK_LEN};
   } else {
     hyundai_rx_checks = (addr_checks){hyundai_legacy_addr_checks, HYUNDAI_LEGACY_ADDR_CHECK_LEN};

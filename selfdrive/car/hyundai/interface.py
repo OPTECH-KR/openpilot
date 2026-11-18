@@ -369,6 +369,24 @@ class CarInterface(CarInterfaceBase):
     ret.openpilotLongitudinalControl = experimental_long and ret.experimentalLongitudinalAvailable
     ret.pcmCruise = not ret.openpilotLongitudinalControl
 
+    # cars without SCC with a comma pedal: the car's own menu switch ('페달 사용') and the pedal box on the bus (0x201, 6 bytes)
+    if candidate in NON_SCC_CAR:
+      from selfdrive.car.hyundai.pedal import PEDAL_PARAMS, PEDAL_SENSOR_ADDR, PEDAL_SENSOR_LEN
+      if Params().get_bool(PEDAL_PARAMS[candidate][0]) and fingerprint[0].get(PEDAL_SENSOR_ADDR) == PEDAL_SENSOR_LEN:
+        ret.flags |= HyundaiFlags.NON_SCC_PEDAL.value
+        ret.enableGasInterceptor = True
+        ret.experimentalLongitudinalAvailable = True
+        ret.openpilotLongitudinalControl = True
+        ret.pcmCruise = False
+        ret.radarUnavailable = True  # no radar: the camera finds the lead
+        ret.minEnableSpeed = -1.
+        ret.autoResumeSng = False    # no brake to hold the car: no stop and go
+        # StarPilot Ray EV pedal tune
+        ret.longitudinalTuning.kpBP = [0., 5., 15., 35.]
+        ret.longitudinalTuning.kpV = [0.095, 0.085, 0.065, 0.050]
+        ret.longitudinalTuning.kiBP = [0., 3., 6., 35.]
+        ret.longitudinalTuning.kiV = [0.07, 0.10, 0.15, 0.24]
+
     ret.stoppingControl = True
     ret.startingState = False # True # startAccel을 적용하는 startingState를 막음.
     ret.vEgoStarting = 0.2
@@ -404,6 +422,8 @@ class CarInterface(CarInterfaceBase):
         # no SCC12/TCS checks to wait for: the legacy mode with the non-SCC flag (panda safety_hyundai.h)
         ret.safetyConfigs = [get_safety_config(car.CarParams.SafetyModel.hyundaiLegacy)]
         ret.safetyConfigs[0].safetyParam |= Panda.FLAG_HYUNDAI_NON_SCC
+        if ret.flags & HyundaiFlags.NON_SCC_PEDAL:
+          ret.safetyConfigs[0].safetyParam |= Panda.FLAG_HYUNDAI_NON_SCC_PEDAL
       elif candidate in LEGACY_SAFETY_MODE_CAR:
         # these cars require a special panda safety mode due to missing counters and checksums in the messages
         ret.safetyConfigs = [get_safety_config(car.CarParams.SafetyModel.hyundaiLegacy)]
@@ -440,6 +460,8 @@ class CarInterface(CarInterfaceBase):
 
   @staticmethod
   def init(CP, logcan, sendcan):
+    if CP.flags & HyundaiFlags.NON_SCC:
+      return  # no SCC radar to switch off or to ask for tracks (the pedal cars run openpilot long without one)
     if CP.openpilotLongitudinalControl and not (CP.flags & HyundaiFlags.CANFD_CAMERA_SCC.value) and CP.sccBus == 0:
       addr, bus = 0x7d0, 0
       if CP.flags & HyundaiFlags.CANFD_HDA2.value:
@@ -451,6 +473,7 @@ class CarInterface(CarInterfaceBase):
       enable_radar_tracks(CP, logcan, sendcan)      
 
   def _update(self, c):
+    self.CS.cp_pedal = self.cp_body  # comma pedal GAS_SENSOR parser (None unless NON_SCC_PEDAL)
     ret = self.CS.update(self.cp, self.cp_cam)
 
     #if self.CS.CP.openpilotLongitudinalControl and self.CS.cruise_buttons[-1] != self.CS.prev_cruise_buttons:

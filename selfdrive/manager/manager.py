@@ -58,7 +58,13 @@ def manager_init() -> None:
     ("AutoShutdown", "1"),
     ("GpsSource", "1"),
     ("EngageWithLong", "1"),
-    ("CcOnlySpeedButtons", "0"),   # 기타 차종 (no SCC): let openpilot press the cruise buttons to set the speed
+    # Ray EV / Porter II EV (no SCC): each car its own settings page (start tab, shown when the car is chosen)
+    ("RaySpeedButtons", "0"),      # let openpilot press the cruise buttons to set the speed (no pedal)
+    ("RayPedal", "0"),             # comma pedal: openpilot long through the accelerator
+    ("RayPedalMax", "70"),         # pedal command cap, % (StarPilot Ray calibration allows 70)
+    ("PorterSpeedButtons", "0"),
+    ("PorterPedal", "0"),
+    ("PorterPedalMax", "40"),      # no Porter calibration yet: lower cap
     ("ShowConnInfo", "1"),
     ("ShowLaneInfo", "1"),
     ("ShowBlindSpot", "1"),

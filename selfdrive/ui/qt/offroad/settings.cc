@@ -697,20 +697,25 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   selectCar = new SelectCar(this);
   connect(selectCarBtn, &QPushButton::clicked, [=]() { main_layout->setCurrentWidget(selectCar); });
   connect(selectCar, &SelectCar::backPress, [=]() { main_layout->setCurrentWidget(homeScreen); });
-  // '레이·포터 설정': only while the chosen car is one without SCC (Ray EV, Porter II EV)
-  ccOnlyPage = new CcOnlyCarPage(this);
-  auto cc_only_btn = new ButtonControl("레이·포터 설정", "열기", "스마트 크루즈(SCC)가 없는 레이 EV·포터 II EV 전용 설정입니다. 차종을 레이 EV나 포터 II EV로 골랐을 때만 보입니다.");
-  QObject::connect(cc_only_btn, &ButtonControl::clicked, [=]() { main_layout->setCurrentWidget(ccOnlyPage); });
-  connect(ccOnlyPage, &CcOnlyCarPage::backPress, [=]() { main_layout->setCurrentWidget(homeScreen); });
-  cc_only_btn->setVisible(CcOnlyCarPage::isCcOnlyCar(selected));
+  // '레이 EV 설정' / '포터 II EV 설정': each only while that car is the chosen one (cars without SCC)
+  QList<ButtonControl*> cc_only_btns;
+  for (int i = 0; i < CcOnlyCarPage::count(); i++) {
+    CcOnlyCarPage* page = new CcOnlyCarPage(i, this);
+    ccOnlyPages.append(page);
+    auto btn = new ButtonControl(CcOnlyCarPage::menuTitle(i), "열기", "스마트 크루즈(SCC)가 없는 차량 전용 설정입니다(크루즈 속도 자동 조절, 페달 사용). 차종을 이 차로 골랐을 때만 보입니다.");
+    QObject::connect(btn, &ButtonControl::clicked, [=]() { main_layout->setCurrentWidget(page); });
+    connect(page, &CcOnlyCarPage::backPress, [=]() { main_layout->setCurrentWidget(homeScreen); });
+    btn->setVisible(selected == CcOnlyCarPage::carName(i));
+    cc_only_btns.append(btn);
+  }
   connect(selectCar, &SelectCar::selectedCar, [=]() {
     QString car = QString::fromStdString(Params().get("SelectedCar"));
     selectCarBtn->setText(car.length() ? car_menu_name(car) : tr("차종 선택"));
-    cc_only_btn->setVisible(CcOnlyCarPage::isCcOnlyCar(car));
+    for (int i = 0; i < cc_only_btns.size(); i++) cc_only_btns[i]->setVisible(car == CcOnlyCarPage::carName(i));
     main_layout->setCurrentWidget(homeScreen);
   });
   startToggles->addItem(selectCarBtn);
-  startToggles->addItem(cc_only_btn);
+  for (auto btn : cc_only_btns) startToggles->addItem(btn);
   auto gps_btn = new ButtonControl("GPS 확인", "확인", "시동을 걸지 않아도 GPS를 켜서 잡힘 여부, 신호 세기, 위성 수, 위치 오차를 실시간으로 보여 줍니다. 창을 닫으면 GPS는 다시 꺼집니다. 기기 내장 GPS를 사용합니다.");
   QObject::connect(gps_btn, &ButtonControl::clicked, [=]() {
     Params().putBool("GpsCheck", true);  // boardd powers the uBlox while this is set (read about once a second)
@@ -926,7 +931,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   homeScreen->setLayout(carrotLayout);
   main_layout->addWidget(homeScreen);
   main_layout->addWidget(selectCar);
-  main_layout->addWidget(ccOnlyPage);
+  for (auto page : ccOnlyPages) main_layout->addWidget(page);
   main_layout->setCurrentWidget(homeScreen);
 
   togglesCarrot(0);
@@ -1201,18 +1206,29 @@ SelectCar::SelectCar(QWidget* parent): QWidget(parent) {
 
   main_layout->addWidget(list);
 }
-// ---- 레이·포터 설정 page ----
-// CAR names must match NON_SCC_CAR in selfdrive/car/hyundai/values.py; tests/test_nonscc_port_c2.py checks them.
-static const char *CC_ONLY_CARS[] = {"KIA RAY EV 2024", "HYUNDAI PORTER II EV 2024"};
+// ---- 레이 EV 설정 / 포터 II EV 설정 pages ----
+// CAR names must match NON_SCC_CAR in selfdrive/car/hyundai/values.py and the param prefixes PEDAL_PARAMS in
+// selfdrive/car/hyundai/pedal.py; tests/test_nonscc_port_c2.py checks them.
+struct CcOnlyCarEntry {
+  const char *car, *title, *prefix;
+  int pedal_max_default;
+  const char *note;
+};
+static const CcOnlyCarEntry CC_ONLY_CARS[] = {
+  {"KIA RAY EV 2024", "레이 EV", "Ray", 70,
+   "페달 보정값은 스타파일럿이 실제 레이 EV로 맞춘 값을 씁니다."},
+  {"HYUNDAI PORTER II EV 2024", "포터 II EV", "Porter", 40,
+   "포터는 아직 실제 차로 맞춘 페달 보정값이 없어 레이 EV 값을 임시로 씁니다. 안전한 곳에서 낮은 상한으로 먼저 확인하고, 필요하면 보정값을 맞춰야 합니다."},
+};
 
-bool CcOnlyCarPage::isCcOnlyCar(const QString &car) {
-  for (const char *c : CC_ONLY_CARS) {
-    if (car == c) return true;
-  }
-  return false;
-}
+int CcOnlyCarPage::count() { return sizeof(CC_ONLY_CARS) / sizeof(CC_ONLY_CARS[0]); }
+QString CcOnlyCarPage::carName(int index) { return CC_ONLY_CARS[index].car; }
+QString CcOnlyCarPage::menuTitle(int index) { return QString(CC_ONLY_CARS[index].title) + " 설정"; }
 
-CcOnlyCarPage::CcOnlyCarPage(QWidget* parent): QWidget(parent) {
+CcOnlyCarPage::CcOnlyCarPage(int index, QWidget* parent): QWidget(parent) {
+  const CcOnlyCarEntry &e = CC_ONLY_CARS[index];
+  const QString prefix = e.prefix;
+
   QVBoxLayout* main_layout = new QVBoxLayout(this);
   main_layout->setMargin(20);
   main_layout->setSpacing(20);
@@ -1224,15 +1240,24 @@ CcOnlyCarPage::CcOnlyCarPage(QWidget* parent): QWidget(parent) {
   main_layout->addWidget(back, 0, Qt::AlignLeft);
 
   ListWidget* list = new ListWidget(this);
-  list->addItem(carrot_section("레이 EV · 포터 II EV"));
-  QLabel* intro = new QLabel("스마트 크루즈(SCC)가 없는 차량이라 openpilot은 조향만 하고, 속도는 차의 크루즈 컨트롤이 유지합니다. "
+  list->addItem(carrot_section(QString(e.title) + " 설정"));
+  QLabel* intro = new QLabel("스마트 크루즈(SCC)가 없는 차량입니다. 페달 장치가 없으면 openpilot은 조향만 하고, 속도는 차의 크루즈 컨트롤이 유지합니다. "
                              "앞차를 감지하는 레이더가 없으니 앞차와의 거리는 항상 운전자가 지켜 주세요. "
                              "아직 실제 차로 시험하지 않았으니, 처음에는 'openpilot 사용'을 끄고(읽기 전용) 짧게 달려 본 뒤 조향을 켜 주세요.");
   intro->setWordWrap(true);
   intro->setStyleSheet("font-size: 38px; color: #E0E0E0; padding: 10px;");
   list->addItem(intro);
-  list->addItem(new ParamControl("CcOnlySpeedButtons", "크루즈 속도 자동 조절",
-    "켜면 openpilot이 크루즈 버튼을 대신 눌러 설정 속도를 바꿉니다(커브·과속카메라 감속 등). 이 차들은 앞차를 감지하는 레이더가 없고 크루즈가 브레이크를 세게 걸지 못하므로, 앞차와의 거리는 항상 운전자가 직접 지켜야 합니다. 기본은 꺼짐(조향만).", SHELL_ICON, this));
+  list->addItem(new ParamControl(prefix + "SpeedButtons", "크루즈 속도 자동 조절",
+    "페달을 쓰지 않을 때, openpilot이 크루즈 버튼을 대신 눌러 설정 속도를 바꿉니다(커브·과속카메라 감속 등). 크루즈가 브레이크를 세게 걸지 못하므로 앞차와의 거리는 항상 운전자가 지켜야 합니다. 기본은 꺼짐(조향만).", SHELL_ICON, this));
+
+  list->addItem(carrot_section("페달 (comma 페달 장치)"));
+  list->addItem(new ParamControl(prefix + "Pedal", "페달 사용",
+    "comma 페달 장치를 단 경우에만 켜세요. 켜면 openpilot이 가속페달로 가감속을 맡고, 차의 크루즈는 자동으로 꺼집니다. "
+    "브레이크 장치가 없어 감속은 회생제동만큼만 되고, 앞차 뒤에서 멈추거나 정차를 유지할 수 없습니다. "
+    "페달 장치가 인식되지 않으면 켜 두어도 조향만 합니다. 재부팅해야 적용됩니다.", SHELL_ICON, this));
+  list->addItem(new CValueControl(prefix + "PedalMax", "페달 최대 밟는 양",
+    QString("openpilot이 가속페달을 최대 몇 %까지 밟을지 정합니다. 처음에는 낮게 시작해 보세요. 10~70, 기본 %1. ").arg(e.pedal_max_default) + e.note,
+    ROAD_ICON, 10, 70, 5));
 
   main_layout->addWidget(new ScrollView(list, this));
 }
