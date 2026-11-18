@@ -1713,7 +1713,7 @@ CANFD_CAR = {CAR.KIA_EV6, CAR.IONIQ_5, CAR.TUCSON_HYBRID_4TH_GEN, CAR.KIA_SPORTA
 CANFD_RADAR_SCC_CAR = {CAR.GENESIS_GV70_1ST_GEN, }
 
 # The camera does SCC on these cars, rather than the radar
-CAMERA_SCC_CAR = {CAR.KONA_EV_2022, CAR.KONA_2022, CAR.CASPER_EV, }
+CAMERA_SCC_CAR = {CAR.KONA_EV_2022, CAR.KONA_2022, CAR.CASPER_EV, CAR.CASPER, }
 
 # 기타 차종: chosen on their own menu page (not in the normal car list), not driven on this code yet
 NON_SCC_CAR = {CAR.KIA_RAY_EV, CAR.PORTER_II_EV}
@@ -1804,6 +1804,8 @@ DBC = {
   CAR.KIA_K5_HEV_JF: dbc_dict('hyundai_kia_generic', None),
   CAR.KIA_K5_HEV_2022: dbc_dict('hyundai_kia_generic', None),
   CAR.KIA_K9: dbc_dict('hyundai_kia_generic', None),
+  # was missing: choosing the Casper stopped openpilot at start (carrot: camera SCC, CRC8)
+  CAR.CASPER: dbc_dict('hyundai_kia_generic', None),
   CAR.KIA_RAY_EV: dbc_dict('hyundai_kia_generic', None),
   CAR.PORTER_II_EV: dbc_dict('hyundai_kia_generic', None),
   CAR.GENESIS_GV70_1ST_GEN: dbc_dict('hyundai_canfd', None),
@@ -1811,12 +1813,19 @@ DBC = {
 
 
 
+import sys
+
+
 def main():
   # the car menu list (manager writes it to /data/params/d/SupportedCars): this branch runs on the C2's own panda,
   # so only CAN cars; CAN FD cars need a red panda and are on apilot-c2-canfd. 기타 차종 have their own page
-  for member, value in vars(CAR).items():
-    if not member.startswith("_") and value not in CANFD_CAR and value not in OTHER_CAR:
-      print(value)
+  cars = [value for member, value in vars(CAR).items()
+          if not member.startswith("_") and value not in CANFD_CAR and value not in OTHER_CAR
+          and value in DBC]  # a name without a DBC entry (TUCSON_4TH_GEN) cannot start
+  # grouped by brand / model / year with Korean names (car_menu.py); utf-8 whatever the locale
+  from selfdrive.car.hyundai.car_menu import menu_lines
+  for line in menu_lines(cars):
+    sys.stdout.buffer.write(line.encode("utf-8") + b"\n")
 
 
 if __name__ == "__main__":

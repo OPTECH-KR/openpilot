@@ -434,24 +434,30 @@ QWidget *network_panel(QWidget *parent) {
 #endif
 }
 
-static QStringList get_list(const char* path)
-{
+// SupportedCars lines are "CAR|brand|display" (selfdrive/car/hyundai/car_menu.py); an old plain "CAR" line also works
+static QStringList get_list_utf8(const char* path) {
   QStringList stringList;
   QFile textFile(path);
-  if(textFile.open(QIODevice::ReadOnly))
-  {
-      QTextStream textStream(&textFile);
-      while (true)
-      {
-        QString line = textStream.readLine();
-        if (line.isNull())
-            break;
-        else
-            stringList.append(line);
-      }
+  if (textFile.open(QIODevice::ReadOnly)) {
+    QTextStream textStream(&textFile);
+    textStream.setCodec("UTF-8");
+    while (true) {
+      QString line = textStream.readLine();
+      if (line.isNull()) break;
+      if (!line.trimmed().isEmpty()) stringList.append(line);
+    }
   }
-
   return stringList;
+}
+
+// the menu name of a CAR string ("기아 · K5 DL3 (2020~2023)"), or the CAR string itself when the list does not have it
+static QString car_menu_name(const QString &car) {
+  if (car.isEmpty()) return QString();
+  for (const QString &line : get_list_utf8("/data/params/d/SupportedCars")) {
+    const QStringList parts = line.split('|');
+    if (parts.size() >= 3 && parts[0] == car) return parts[1] + " · " + parts[2];
+  }
+  return car;
 }
 
 void SettingsWindow::showEvent(QShowEvent *event) {
@@ -677,7 +683,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   // ---- 시작: car, hotspot, update ----
   startToggles = new ListWidget(this);
   QString selected = QString::fromStdString(Params().get("SelectedCar"));
-  QPushButton* selectCarBtn = new QPushButton(selected.length() ? selected : tr("차종 선택"));
+  QPushButton* selectCarBtn = new QPushButton(selected.length() ? car_menu_name(selected) : tr("차종 선택"));
   selectCarBtn->setObjectName("selectCarBtn");
   selectCarBtn->setStyleSheet(R"(
     QPushButton {
@@ -693,7 +699,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   connect(selectCar, &SelectCar::backPress, [=]() { main_layout->setCurrentWidget(homeScreen); });
   connect(selectCar, &SelectCar::selectedCar, [=]() {
     QString car = QString::fromStdString(Params().get("SelectedCar"));
-    selectCarBtn->setText(car.length() ? car : tr("차종 선택"));
+    selectCarBtn->setText(car.length() ? car_menu_name(car) : tr("차종 선택"));
     main_layout->setCurrentWidget(homeScreen);
   });
   startToggles->addItem(selectCarBtn);
@@ -759,7 +765,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   connect(otherCars, &OtherCars::backPress, [=]() { main_layout->setCurrentWidget(homeScreen); });
   connect(otherCars, &OtherCars::selectedCar, [=]() {
     QString car = QString::fromStdString(Params().get("SelectedCar"));
-    selectCarBtn->setText(car.length() ? car : tr("차종 선택"));
+    selectCarBtn->setText(car.length() ? car_menu_name(car) : tr("차종 선택"));
   });
   startToggles->addItem(other_cars_btn);
   auto tmuxlog_btn = new ButtonControl("오류 로그 (Tmux)", "보기");
@@ -1150,32 +1156,47 @@ SelectCar::SelectCar(QWidget* parent): QWidget(parent) {
   QScroller::grabGesture(list->viewport(), QScroller::LeftMouseButtonGesture);
   list->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
 
-  list->addItem(tr("[ 선택 안 함 ]"));
+  // [선택 안 함], then 현대 / 기아 / 제네시스 headers with their cars in model and year order (car_menu.py).
+  // Each car row keeps its CAR string in UserRole; that is what SelectedCar stores.
+  QListWidgetItem* none_item = new QListWidgetItem(tr("[ 선택 안 함 ]"));
+  none_item->setData(Qt::UserRole, QString());
+  list->addItem(none_item);
+  list->setCurrentItem(none_item);
 
-  QStringList items = get_list("/data/params/d/SupportedCars");
-  QStringList items_gm = get_list("/data/params/d/SupportedCars_gm");
-  list->addItems(items);
-  list->addItems(items_gm);
-  list->setCurrentRow(0);
-
-  QString selected = QString::fromStdString(Params().get("SelectedCar"));
-
-  int index = 0;
-  for(QString item : items) {
-    if(selected == item) {
-        list->setCurrentRow(index + 1);
-        break;
+  const QString selected = QString::fromStdString(Params().get("SelectedCar"));
+  QStringList lines = get_list_utf8("/data/params/d/SupportedCars");
+  lines += get_list_utf8("/data/params/d/SupportedCars_gm");
+  QString brand_prev;
+  for (const QString &line : lines) {
+    const QStringList parts = line.split('|');
+    const QString car = parts[0];
+    const QString brand = parts.size() >= 3 ? parts[1] : QString();
+    const QString name = parts.size() >= 3 ? parts[2] : car;
+    if (!brand.isEmpty() && brand != brand_prev) {
+      QListWidgetItem* header = new QListWidgetItem("■ " + brand);
+      header->setFlags(Qt::NoItemFlags);  // not selectable
+      header->setForeground(QColor("#33ab4c"));
+      QFont f = header->font();
+      f.setBold(true);
+      header->setFont(f);
+      list->addItem(header);
+      brand_prev = brand;
     }
-    index++;
+    QListWidgetItem* item = new QListWidgetItem("      " + name);
+    item->setData(Qt::UserRole, car);
+    list->addItem(item);
+    if (car == selected) list->setCurrentItem(item);
   }
+  if (list->currentItem()) list->scrollToItem(list->currentItem(), QAbstractItemView::PositionAtCenter);
 
   QObject::connect(list, QOverload<QListWidgetItem*>::of(&QListWidget::itemClicked),
     [=](QListWidgetItem* item){
-
-    if(list->currentRow() == 0)
+    if (!(item->flags() & Qt::ItemIsSelectable)) return;  // brand header
+    const QString car = item->data(Qt::UserRole).toString();
+    if (car.isEmpty())
         Params().remove("SelectedCar");
     else
-        Params().put("SelectedCar", list->currentItem()->text().toStdString());
+        Params().put("SelectedCar", car.toStdString());
 
     emit selectedCar();
     });
