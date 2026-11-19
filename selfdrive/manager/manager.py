@@ -46,22 +46,22 @@ def manager_init() -> None:
     ("OpenpilotEnabledToggle", "1"),
     ("ShowDebugUI", "0"),
     ("OPKRServer", "0"),
-    ("ShowDateTime", "1"),
+    ("ShowDateTime", "0"),
     ("ShowHudMode", "6"),
     ("ShowSteerRotate", "1"),
     ("ShowPathEnd", "1"),
     ("ShowAccelRpm", "1"),
-    ("ShowTpms", "1"),
+    ("ShowTpms", "0"),
     ("ShowSteerMode", "2"),
     ("ShowDeviceState", "1"),
     ("ShowGpsInfo", "1"),
-    ("AutoShutdown", "1"),
+    ("AutoShutdown", "0"),
     ("GpsSource", "1"),
     ("EngageWithLong", "1"),
     ("AngleSteerMaxGain", "100"),  # 기타 차종 (angle steering): max torque reduction gain, %
     ("CanfdHdaMode", "0"),         # CAN FD: 0 auto HDA1/HDA2, 1 HDA1, 2 HDA2 (기타 차종 page)
     ("CcOnlySpeedButtons", "0"),   # 기타 차종 (no SCC): let openpilot press the cruise buttons to set the speed
-    ("ShowConnInfo", "1"),
+    ("ShowConnInfo", "0"),
     ("ShowLaneInfo", "1"),
     ("ShowBlindSpot", "1"),
     ("ShowGapInfo", "1"),
@@ -251,8 +251,10 @@ def manager_init() -> None:
   params.put("GitCommit", get_commit(default=""))
   # release date of the code (commit time, as written by the release), shown as 브랜치 커밋 on the software page
   try:
-    commit_date = subprocess.check_output(["git", "log", "-1", "--format=%cd", "--date=format:%Y-%m-%d %H:%M:%S"],
-                                          cwd=BASEDIR, encoding="utf8", stderr=subprocess.DEVNULL).strip()
+    # always in Korea time, whatever time zone the commit was made in (POSIX TZ string, no tzdata needed)
+    commit_date = subprocess.check_output(["git", "log", "-1", "--format=%cd", "--date=format-local:%Y-%m-%d %H:%M:%S"],
+                                          cwd=BASEDIR, encoding="utf8", stderr=subprocess.DEVNULL,
+                                          env=dict(os.environ, TZ="KST-9")).strip()
   except Exception:
     commit_date = ""
   params.put("GitCommitDate", commit_date)

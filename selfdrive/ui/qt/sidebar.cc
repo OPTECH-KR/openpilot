@@ -33,8 +33,8 @@ void Sidebar::drawMetric(QPainter &p, const QPair<QString, QString> &label, QCol
 }
 
 Sidebar::Sidebar(QWidget *parent) : QFrame(parent), onroad(false), flag_pressed(false), settings_pressed(false) {
-  home_img = loadPixmap("../assets/images/button_home.png", home_btn.size());
-  flag_img = loadPixmap("../assets/images/button_flag.png", home_btn.size());
+  home_img = loadPixmap("../assets/images/button_home_optech.png", home_btn.size());  // OPTECH owl (was the carrot bunny)
+  flag_img = loadPixmap("../assets/images/button_home_optech.png", home_btn.size());  // OPTECH owl while driving too (was the carrot bunny)
   settings_img = loadPixmap("../assets/images/button_settings.png", settings_btn.size(), Qt::IgnoreAspectRatio);
 
   connect(this, &Sidebar::valueChanged, [=] { update(); });

@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cmath>
 #include <string>
+#include <memory>
 
 #include <QDebug>
 
@@ -33,6 +34,7 @@
 #include <QScroller>
 #include <QListView>
 #include <QListWidget>
+#include <QMap>
 
 #include <QProcess> // opkr
 #include <QDateTime> // opkr
@@ -154,7 +156,7 @@ void TogglesPanel::updateToggles() {
                                   .arg(tr("새 주행 화면"))
                                   .arg(tr("저속에서는 회전 구간을 더 잘 보여주기 위해 주행 화면이 광각 카메라로 바뀝니다. 오른쪽 위에 실험 모드 로고도 표시됩니다."));
 
-  // experimental mode and openpilot longitudinal (alpha) are set from the 당근파일럿 > 고급 tab
+  // experimental mode and openpilot longitudinal (alpha) are set from the OPTECH > 고급 tab
   // (apilot switches acc / blended on its own; experimental mode would force blended all the time)
   const bool show_advanced = false;
   e2e_toggle->setVisible(show_advanced);
@@ -451,11 +453,39 @@ static QStringList get_list_utf8(const char* path) {
 }
 
 // the menu name of a CAR string (the CAR string itself, kept in the list file for later use)
+// LFA2 차량 (angle steering CAN FD cars), shown on their own page next to the normal car list.
+// CAR names must match selfdrive/car/hyundai/values.py (OTHER_CAR_MENU); tests/test_other_cars_c2.py checks them.
+// This branch (optech-fd) offers the angle-steering CAN FD cars; the cars without SCC are on optech.
+struct OtherCarEntry { const char *car; const char *brand; const char *title; const char *desc; };
+static const OtherCarEntry OTHER_ANGLE_CARS[] = {
+  {"HYUNDAI IONIQ 5 PE 2025", "HYUNDAI", "IONIQ 5 PE NE 2025~", "LFA2 차량. 레드판다가 필요합니다."},
+  {"HYUNDAI IONIQ 6 PE 2025", "HYUNDAI", "IONIQ 6 PE CE 2025~", "LFA2 차량으로 보고 각도 방식으로 조향합니다. 2023~24년식은 일반 차종 목록의 'IONIQ 6 CE 2023-2024'를 고르세요. 레드판다가 필요합니다."},
+  {"HYUNDAI IONIQ 9 2025", "HYUNDAI", "IONIQ 9 ME 2025~", "LFA2 차량. 레드판다가 필요합니다."},
+  {"HYUNDAI SANTA FE MX5 2024", "HYUNDAI", "SANTA FE MX5 2024~", "LFA2 차량(가솔린). 레드판다가 필요합니다."},
+  {"HYUNDAI SANTA FE MX5 HEV 2024", "HYUNDAI", "SANTA FE HYBRID MX5 2024~", "LFA2 차량. 레드판다가 필요합니다."},
+  {"HYUNDAI GRANDEUR GN7 HEV 2025", "HYUNDAI", "GRANDEUR HYBRID GN7 2025~", "LFA2 차량(HDA II). LFA2가 아닌 2023~24년식 하이브리드는 일반 차종 목록의 'GRANDEUR GN7 2023~'을 고르세요(하이브리드는 자동 인식). 레드판다가 필요합니다."},
+  {"KIA EV6 PE 2025", "KIA", "EV6 PE CV 2024~", "LFA2 차량. 레드판다가 필요합니다."},
+  {"KIA EV9 2024", "KIA", "EV9 MV 2023~", "LFA2 차량. 레드판다가 필요합니다."},
+  {"KIA EV5 2026", "KIA", "EV5 2026~", "핸들을 각도로 움직이는 차(HDA II). 레드판다가 필요합니다."},
+  {"GENESIS GV80 2025", "GENESIS", "GV80 / COUPE JX1 2025~", "LFA2 차량(HDA II). 2023년식까지는 일반 차종 목록의 'GV80 JX1 2020-2023'을 고르세요. 레드판다가 필요합니다."},
+};
+
+// "KIA EV9 MV 2023~" for an LFA2 car (the 'LFA2 차종' button), empty for any other car
+static QString lfa2_title(const QString &car) {
+  for (const auto &e : OTHER_ANGLE_CARS) {
+    if (car == e.car) return QString(e.brand) + " " + e.title;
+  }
+  return QString();
+}
+
 static QString car_menu_name(const QString &car) {
+  // the menu file has the name without the brand ("K5 DL3 2020-2023"); the car button shows "KIA K5 DL3 2020-2023"
   if (car.isEmpty()) return QString();
   for (const QString &line : get_list_utf8("/data/params/d/SupportedCars")) {
     const QStringList parts = line.split('|');
-    if (parts.size() >= 3 && parts[0] == car) return parts[2];
+    if (parts.size() >= 3 && parts[0] == car) {
+      return parts[2].startsWith(parts[1] + " ") ? parts[2] : parts[1] + " " + parts[2];
+    }
   }
   return car;
 }
@@ -518,7 +548,7 @@ SettingsWindow::SettingsWindow(QWidget *parent) : QFrame(parent) {
 #endif
     {tr("Toggles"), toggles},
     {tr("Software"), new SoftwarePanel(this)},
-    {"당근파일럿", new CarrotPanel(this)},
+    {"OPTECH", new CarrotPanel(this)},
   };
 
 #ifdef ENABLE_MAPS
@@ -552,7 +582,7 @@ SettingsWindow::SettingsWindow(QWidget *parent) : QFrame(parent) {
     sidebar_layout->addWidget(btn, 0, Qt::AlignRight);
 
     // Network panel handles its own margins; the carrot panel is wide, so keep its sides tight
-    const int lr_margin = name == tr("Network") ? 0 : (name == "당근파일럿" ? 15 : 50);
+    const int lr_margin = name == tr("Network") ? 0 : (name == "OPTECH" ? 15 : 50);
     panel->setContentsMargins(lr_margin, 25, lr_margin, 25);
 
     ScrollView *panel_frame = new ScrollView(panel, this);
@@ -680,12 +710,10 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   QWidget* toggles = new QWidget();
   QVBoxLayout* toggles_layout = new QVBoxLayout(toggles);
 
-  // ---- 시작: car, hotspot, update ----
+  // ---- 시작: car ----
   startToggles = new ListWidget(this);
-  QString selected = QString::fromStdString(Params().get("SelectedCar"));
-  QPushButton* selectCarBtn = new QPushButton(selected.length() ? car_menu_name(selected) : tr("차종 선택"));
-  selectCarBtn->setObjectName("selectCarBtn");
-  selectCarBtn->setStyleSheet(R"(
+  // two buttons: the normal car list (left) and the LFA2 cars (right); the one in use shows the car
+  const QString car_btn_style = R"(
     QPushButton {
       margin-top: 20px; margin-bottom: 20px; padding: 10px; height: 120px; border-radius: 15px;
       color: #FFFFFF; background-color: #2C2CE2;
@@ -693,16 +721,75 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     QPushButton:pressed {
       background-color: #2424FF;
     }
-  )");
+  )";
+  QPushButton* selectCarBtn = new QPushButton();
+  selectCarBtn->setObjectName("selectCarBtn");
+  selectCarBtn->setStyleSheet(car_btn_style);
+  QPushButton* lfa2CarBtn = new QPushButton();
+  lfa2CarBtn->setObjectName("lfa2CarBtn");
+  lfa2CarBtn->setStyleSheet(car_btn_style);
+  // One car is chosen at a time (one SelectedCar param): a car from '차종 선택' replaces an LFA2 car and the other way
+  // round, and the button of the one not in use goes back to its name.
+  // 'LFA2 차종 설정': shown open under HDA 방식 while an LFA2 car is the chosen one
+  ListWidget* lfa2_settings = new ListWidget(this);
+  lfa2_settings->addItem(carrot_section("LFA2 차종 설정"));
+  QLabel* lfa2_intro = new QLabel("아직 실제 차로 시험하지 않은 차종입니다. 처음에는 'openpilot 사용'을 끄고(읽기 전용) 짧게 달려 본 뒤, 기록을 확인하고 조향을 켜 주세요.");
+  lfa2_intro->setWordWrap(true);
+  lfa2_intro->setStyleSheet("font-size: 38px; color: #E0E0E0; padding: 10px;");
+  lfa2_settings->addItem(lfa2_intro);
+  lfa2_settings->addItem(new CValueControl("AngleSteerMaxGain", "각도 조향 최대 힘",
+    "각도 방식 차에서 openpilot이 쓸 수 있는 핸들 힘의 상한(%)입니다. 운전자가 핸들을 잡으면 이 값과 상관없이 힘이 자동으로 줄어듭니다. 커브에서 힘이 모자라면 올리고, 핸들이 너무 세게 느껴지면 내리세요. 30~100, 기본 100", ROAD_ICON, 30, 100, 5));
+  auto update_car_btns = [=]() {
+    const QString car = QString::fromStdString(Params().get("SelectedCar"));
+    const QString lfa2 = lfa2_title(car);
+    selectCarBtn->setText(car.length() && lfa2.isEmpty() ? car_menu_name(car) : tr("차종 선택"));
+    lfa2CarBtn->setText(lfa2.isEmpty() ? QString("LFA2 차종") : lfa2);
+    lfa2_settings->setVisible(!lfa2.isEmpty());
+  };
+  update_car_btns();
+  QHBoxLayout* car_row = new QHBoxLayout();
+  car_row->setSpacing(20);
+  car_row->addWidget(selectCarBtn, 1);
+  car_row->addWidget(lfa2CarBtn, 1);
+
   selectCar = new SelectCar(this);
   connect(selectCarBtn, &QPushButton::clicked, [=]() { main_layout->setCurrentWidget(selectCar); });
   connect(selectCar, &SelectCar::backPress, [=]() { main_layout->setCurrentWidget(homeScreen); });
   connect(selectCar, &SelectCar::selectedCar, [=]() {
-    QString car = QString::fromStdString(Params().get("SelectedCar"));
-    selectCarBtn->setText(car.length() ? car_menu_name(car) : tr("차종 선택"));
+    update_car_btns();
     main_layout->setCurrentWidget(homeScreen);
   });
-  startToggles->addItem(selectCarBtn);
+  otherCars = new OtherCars(this);
+  connect(lfa2CarBtn, &QPushButton::clicked, [=]() { main_layout->setCurrentWidget(otherCars); });
+  connect(otherCars, &OtherCars::backPress, [=]() { main_layout->setCurrentWidget(homeScreen); });
+  connect(otherCars, &OtherCars::selectedCar, [=]() {
+    update_car_btns();
+    if (!lfa2_title(QString::fromStdString(Params().get("SelectedCar"))).isEmpty()) {
+      main_layout->setCurrentWidget(homeScreen);
+      ConfirmationDialog::alert("이 차량은 따로 확인할 설정이 있어요.\nHDA 방식 아래의 'LFA2 차종 설정'을 확인해 주세요.", this);
+    }
+  });
+  startToggles->addItem(car_row);
+
+  // CanfdHdaMode: selfdrive/car/hyundai/interface.py reads it at start (reboot to apply)
+  auto hda_mode_btn = new ButtonControl("", "선택",
+    "CAN FD 차량이 HDA1인지 HDA2(고속도로 주행 보조 2)인지 정합니다. 기본은 자동 인식으로, 시동을 걸 때 카메라 쪽 신호를 보고 정합니다. "
+    "자동 인식이 틀려서 핸들이 움직이지 않을 때만 직접 고르세요. 모든 CAN FD 차량(LFA2 차량 포함)에 적용되고, 재부팅해야 적용됩니다.");
+  const QStringList hda_names = {"HDA 방식: 자동 인식", "HDA 방식: HDA1", "HDA 방식: HDA2"};
+  auto hda_mode = []() {
+    const int m = QString::fromStdString(Params().get("CanfdHdaMode")).toInt();
+    return (m >= 0 && m <= 2) ? m : 0;
+  };
+  hda_mode_btn->setTitle(hda_names[hda_mode()]);
+  QObject::connect(hda_mode_btn, &ButtonControl::clicked, [=]() {
+    const QString sel = MultiOptionDialog::getSelection("HDA 방식을 고르세요", hda_names, hda_names[hda_mode()], this);
+    const int idx = hda_names.indexOf(sel);
+    if (idx < 0 || idx == hda_mode()) return;
+    Params().put("CanfdHdaMode", std::to_string(idx));
+    hda_mode_btn->setTitle(hda_names[idx]);
+  });
+  startToggles->addItem(hda_mode_btn);
+  startToggles->addItem(lfa2_settings);
   auto gps_btn = new ButtonControl("GPS 확인", "확인", "시동을 걸지 않아도 GPS를 켜서 잡힘 여부, 신호 세기, 위성 수, 위치 오차를 실시간으로 보여 줍니다. 창을 닫으면 GPS는 다시 꺼집니다. 기기 내장 GPS를 사용합니다.");
   QObject::connect(gps_btn, &ButtonControl::clicked, [=]() {
     Params().putBool("GpsCheck", true);  // boardd powers the uBlox while this is set (read about once a second)
@@ -719,7 +806,6 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     refresh.stop();
     Params().putBool("GpsCheck", false);
   });
-  startToggles->addItem(gps_btn);
   // EngageWithLong: what the cruise button turns on (controlsd / cruise_helper); no reboot needed
   auto engage_mode_btn = new ButtonControl("", "선택", "크루즈 버튼으로 openpilot을 켤 때 무엇을 켤지 고릅니다. 조향+가감속 사용: 조향과 가감속이 함께 켜지고, 설정 속도는 그때의 현재 속도입니다. 브레이크를 밟았다 떼면 원래 설정 속도로 다시 갑니다. 조향만 사용: 조향만 켜지고, 어떤 버튼이나 페달로도 가감속은 켜지지 않습니다. 어느 쪽이든 크루즈 버튼을 다시 누르면 모두 꺼지고, +/- 버튼은 가감속이 켜져 있을 때 설정 속도만 바꿉니다.");
   auto engage_mode_name = []() {
@@ -733,41 +819,6 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     Params().putBool("EngageWithLong", sel == names[0]);
     engage_mode_btn->setTitle(engage_mode_name());
   });
-  startToggles->addItem(engage_mode_btn);
-  startToggles->addItem(new ParamControl("AutoShutdown", "자동 꺼짐", "켜 두면(초록색) 차량이나 충전기 전원 없이 배터리로만 켜져 있고 주행 중이 아닐 때, 약 10분 뒤 기기가 스스로 꺼져 배터리를 보호합니다. 끄면 배터리가 다 닳을 때까지 켜져 있습니다. 주행 중이거나 전원이 연결돼 있으면 이 설정과 상관없이 꺼지지 않습니다.", SHELL_ICON, this));
-  startToggles->addItem(new ParamControl("OpkrHotspotOnBoot", "부팅 시 핫스팟 켜기", "켜 두면 기기가 켜질 때 핫스팟(테더링)이 자동으로 켜집니다.", SHELL_ICON, this));
-  auto updateBtn = new ButtonControl("업데이트 확인 후 적용", "업데이트");
-  QObject::connect(updateBtn, &ButtonControl::clicked, [=]() {
-    const char* gitcommit = "/data/openpilot/selfdrive/assets/addon/sh/gitcommit.sh";
-    const char* gitpull = "/data/openpilot/selfdrive/assets/addon/sh/gitpull.sh";
-    std::system(gitcommit);
-    std::system("date -u '+%Y-%m-%dT%H:%M:%S' > /data/params/d/LastUpdateTime");
-    QString commit_local = QString::fromStdString(Params().get("GitCommit")).left(7);
-    QString commit_remote = QString::fromStdString(Params().get("GitCommitRemote")).left(7);
-    if (commit_remote.isEmpty()) {
-      ConfirmationDialog::alert("업데이트 서버에 연결하지 못했어요.\n와이파이 연결을 확인해 주세요.", this);
-    } else if (commit_local == commit_remote) {
-      ConfirmationDialog::alert("이미 최신 버전이에요.\n(" + commit_local + ")", this);
-    } else {
-      QString changes = QString::fromStdString(util::read_file("/tmp/update_changelog.txt")).trimmed();
-      if (changes.isEmpty()) changes = "(바뀐 내용 목록을 불러오지 못했어요)";
-      if (ConfirmationDialog::richConfirm("새 업데이트가 있어요. (" + commit_local + " → " + commit_remote + ")\n\n바뀐 내용:\n" + changes +
-                                      "\n\n받은 뒤 자동으로 재부팅해요. 업데이트할까요?", "업데이트", this)) {
-        std::system(gitpull);
-      }
-    }
-  });
-  startToggles->addItem(updateBtn);
-  // 기타 차종: the last item of the start tab; opens its own page
-  otherCars = new OtherCars(this);
-  auto other_cars_btn = new ButtonControl("기타 차종 (시험 중)", "열기", "아직 실제 차로 시험하지 않은 기능이 필요한 차종입니다. 핸들을 각도로 움직이는 신형 차(아이오닉 5 PE·EV6 PE 등)를 여기서 고르고, CAN FD 차량의 HDA 방식을 정합니다. 스마트 크루즈(SCC)가 없는 레이 EV·포터 II EV는 optech 브랜치에 있습니다.");
-  QObject::connect(other_cars_btn, &ButtonControl::clicked, [=]() { main_layout->setCurrentWidget(otherCars); });
-  connect(otherCars, &OtherCars::backPress, [=]() { main_layout->setCurrentWidget(homeScreen); });
-  connect(otherCars, &OtherCars::selectedCar, [=]() {
-    QString car = QString::fromStdString(Params().get("SelectedCar"));
-    selectCarBtn->setText(car.length() ? car_menu_name(car) : tr("차종 선택"));
-  });
-  startToggles->addItem(other_cars_btn);
   auto tmuxlog_btn = new ButtonControl("오류 로그 (Tmux)", "보기");
   QObject::connect(tmuxlog_btn, &ButtonControl::clicked, [=]() {
     const std::string txt = util::read_file("/data/tmux_error.log");
@@ -776,6 +827,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
 
   // ---- 주행: brake / cruise buttons ----
   cruiseToggles = new ListWidget(this);
+  cruiseToggles->addItem(engage_mode_btn);  // 조향+가감속 사용 / 조향만 사용 (made with the 시작 items above)
   cruiseToggles->addItem(carrot_section("브레이크"));
   cruiseToggles->addItem(new CValueControl("SoftHoldMode", "소프트홀드", "정차 후 브레이크를 떼도 차를 멈춘 상태로 잡아 주는 기능입니다. 0:사용 안 함, 1:사용, 2:SCC와 함께 사용(일부 차량은 전자식 주차 브레이크가 걸릴 수 있음)", ROAD_ICON, 0, 2, 1));
   cruiseToggles->addItem(carrot_section("크루즈 버튼"));
@@ -783,7 +835,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   cruiseToggles->addItem(new CValueControl("CruiseSpeedUnit", "버튼 한 번에 바뀌는 속도", "크루즈 속도 버튼을 한 번 누를 때 바뀌는 속도(km/h)입니다.", ROAD_ICON, 1, 20, 1));
   cruiseToggles->addItem(carrot_section("과속카메라 · 방지턱"));
   cruiseToggles->addItem(new CValueControl("AutoNaviSpeedCtrl", "카메라 감속", "과속카메라 앞에서 자동으로 감속합니다. 0:사용 안 함, 1:APM(내비 연동), 2:APM + 순정 내비게이션, 3:NDA", ROAD_ICON, 0, 3, 1));
-  cruiseToggles->addItem(new CValueControl("SpeedCamDB", "내장 카메라 DB", "내비 앱 없이 C2 안에 넣어 둔 전국 고정식 단속카메라 목록(공공데이터, 과속·신호과속·구간단속 약 3만 1천 대)과 GPS로 앞쪽 카메라를 찾아 감속합니다. 내비 앱(APM)이 카메라 정보를 보내면 앱 정보를 우선하고, 앱이 회전 안내만 보낼 때(티맵 등)는 내장 DB로 카메라 감속을 합니다. 이동식 카메라와 새로 생긴 카메라는 없고, 반대 차로 카메라에서도 제한속도까지 줄일 수 있습니다. '카메라 감속'이 1 이상이어야 감속합니다. 0:끄기, 1:켜기. 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 1, 1));
+  cruiseToggles->addItem(new CValueControl("SpeedCamDB", "내장 카메라 DB", "과속카메라 앞에서 알아서 속도를 줄여 줍니다. 내비 앱이 없어도 됩니다.\n전국 고정식 단속카메라 약 3만 1천 대(공공데이터)의 위치가 기기에 들어 있고, GPS로 앞에 있는 카메라를 찾습니다. 구간단속은 구간이 끝날 때까지 제한속도를 지킵니다.\n\n● 함께 켜야 할 것: '카메라 감속'을 1 이상으로\n● 안 되는 경우: 이동식 카메라, 새로 생긴 카메라 / GPS가 안 잡힐 때 / 스마트 크루즈가 없는 차(조향만 하는 차)\n● 주의: 반대 차로의 카메라에서도 속도를 줄일 수 있습니다. 내비 앱(APM)이 카메라 정보를 보내면 앱 정보를 먼저 씁니다.\n\n0: 끄기, 1: 켜기. 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 1, 1));
   cruiseToggles->addItem(new CValueControl("HapticFeedbackWhenSpeedCamera", "카메라 알림", "과속카메라가 가까워질 때 알려 주는 방법입니다. 0:사용 안 함, 1:핸들 진동, 2:계기판 표시, 3:HUD 표시", ROAD_ICON, 0, 3, 1));
   cruiseToggles->addItem(new CValueControl("AutoNaviSpeedBumpSpeed", "방지턱 통과 속도", "과속방지턱을 넘을 때의 속도(km/h)입니다.", ROAD_ICON, 10, 100, 5));
 
@@ -843,6 +895,10 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
 
   // ---- 고급: experimental / developer ----
   advancedToggles = new ListWidget(this);
+  advancedToggles->addItem(carrot_section("기기"));
+  advancedToggles->addItem(gps_btn);  // GPS 확인 (made with the 시작 items above)
+  advancedToggles->addItem(new ParamControl("AutoShutdown", "자동 꺼짐", "켜 두면(초록색) 차량이나 충전기 전원 없이 배터리로만 켜져 있고 주행 중이 아닐 때, 약 10분 뒤 기기가 스스로 꺼져 배터리를 보호합니다. 끄면 배터리가 다 닳을 때까지 켜져 있습니다. 주행 중이거나 전원이 연결돼 있으면 이 설정과 상관없이 꺼지지 않습니다.", SHELL_ICON, this));
+  advancedToggles->addItem(new ParamControl("OpkrHotspotOnBoot", "부팅 시 핫스팟 켜기", "켜 두면 기기가 켜질 때 핫스팟(테더링)이 자동으로 켜집니다.", SHELL_ICON, this));
   advancedToggles->addItem(carrot_section("주행 기록"));
   auto drivelog_btn = new ButtonControl("주행 기록 보기", "보기", "주행할 때마다 자동으로 남는 기록입니다. 고른 주행에서 켜짐·꺼짐, 경고, 오류, 프로그램 멈춤을 시간순으로 보여 줍니다. (최근 30번 보관)");
   QObject::connect(drivelog_btn, &ButtonControl::clicked, [=]() {
@@ -1143,54 +1199,95 @@ SelectCar::SelectCar(QWidget* parent): QWidget(parent) {
   main_layout->setMargin(20);
   main_layout->setSpacing(20);
 
-  // Back button
+  // Back button: from a brand's cars back to the brands, from the brands back to the settings
   QPushButton* back = new QPushButton(tr("Back"));
   back->setObjectName("back_btn");
   back->setFixedSize(500, 100);
-  connect(back, &QPushButton::clicked, [=]() { emit backPress(); });
   main_layout->addWidget(back, 0, Qt::AlignLeft);
 
   QListWidget* list = new QListWidget(this);
   list->setStyleSheet("QListView {padding: 40px; background-color: #393939; border-radius: 15px; height: 140px;} QListView::item{height: 100px}");
-  //list->setAttribute(Qt::WA_AcceptTouchEvents, true);
   QScroller::grabGesture(list->viewport(), QScroller::LeftMouseButtonGesture);
   list->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
 
-  // [선택 안 함], then 현대 / 기아 / 제네시스 headers with their cars in model and year order (car_menu.py).
-  // Each car row keeps its CAR string in UserRole; that is what SelectedCar stores.
-  QListWidgetItem* none_item = new QListWidgetItem(tr("[ 선택 안 함 ]"));
-  none_item->setData(Qt::UserRole, QString());
-  list->addItem(none_item);
-  list->setCurrentItem(none_item);
-
-  const QString selected = QString::fromStdString(Params().get("SelectedCar"));
+  // menu file lines "CAR|brand|name" in brand, model and year order (car_menu.py). The brand list comes first; a brand
+  // shows only its cars. Each car row keeps its CAR string in UserRole; that is what SelectedCar stores.
   QStringList lines = get_list_utf8("/data/params/d/SupportedCars");
   lines += get_list_utf8("/data/params/d/SupportedCars_gm");
-  QString brand_prev;
+  auto brands = std::make_shared<QStringList>();
+  auto cars = std::make_shared<QMap<QString, QList<QPair<QString, QString>>>>();  // brand -> (CAR, name)
   for (const QString &line : lines) {
     const QStringList parts = line.split('|');
     const QString car = parts[0];
-    const QString brand = parts.size() >= 3 ? parts[1] : QString();
+    if (car.isEmpty()) continue;
+    const QString brand = parts.size() >= 3 ? parts[1] : QString("OTHER");
     const QString name = parts.size() >= 3 ? parts[2] : car;
-    if (!brand.isEmpty() && brand != brand_prev) {
-      QListWidgetItem* header = new QListWidgetItem("■ " + brand);
-      header->setFlags(Qt::NoItemFlags);  // not selectable
-      header->setForeground(QColor("#33ab4c"));
-      QFont f = header->font();
-      f.setBold(true);
-      header->setFont(f);
-      list->addItem(header);
-      brand_prev = brand;
-    }
-    QListWidgetItem* item = new QListWidgetItem("      " + name);
-    item->setData(Qt::UserRole, car);
-    list->addItem(item);
-    if (car == selected) list->setCurrentItem(item);
+    if (!brands->contains(brand)) brands->append(brand);
+    (*cars)[brand].append(qMakePair(car, name));
   }
-  if (list->currentItem()) list->scrollToItem(list->currentItem(), QAbstractItemView::PositionAtCenter);
+  static const QMap<QString, QString> BRAND_KO = {{"HYUNDAI", "현대"}, {"KIA", "기아"}, {"GENESIS", "제네시스"}, {"CHEVROLET", "쉐보레"}};
+  auto cur_brand = std::make_shared<QString>();
+
+  auto show_brands = [=]() {
+    cur_brand->clear();
+    list->clear();
+    const QString selected = QString::fromStdString(Params().get("SelectedCar"));
+    QListWidgetItem* none_item = new QListWidgetItem(tr("[ 선택 안 함 ]"));
+    none_item->setData(Qt::UserRole, QString());
+    list->addItem(none_item);
+    list->setCurrentItem(none_item);
+    for (const QString &b : *brands) {
+      const QString ko = BRAND_KO.value(b);
+      QListWidgetItem* item = new QListWidgetItem("   " + b + (ko.isEmpty() ? "" : "  " + ko) +
+                                                  QString("   (%1)   ▶").arg((*cars)[b].size()));
+      item->setData(Qt::UserRole + 1, b);
+      list->addItem(item);
+      for (const auto &c : (*cars)[b]) {
+        if (c.first == selected) list->setCurrentItem(item);
+      }
+    }
+    list->scrollToTop();
+  };
+
+  auto show_cars = [=](const QString &b) {
+    *cur_brand = b;
+    list->clear();
+    const QString selected = QString::fromStdString(Params().get("SelectedCar"));
+    const QString ko = BRAND_KO.value(b);
+    QListWidgetItem* header = new QListWidgetItem("■ " + b + (ko.isEmpty() ? "" : "  " + ko));
+    header->setFlags(Qt::NoItemFlags);  // not selectable
+    header->setForeground(QColor("#33ab4c"));
+    QFont f = header->font();
+    f.setBold(true);
+    header->setFont(f);
+    list->addItem(header);
+    for (const auto &c : (*cars)[b]) {
+      QListWidgetItem* item = new QListWidgetItem("      " + c.second);
+      item->setData(Qt::UserRole, c.first);
+      list->addItem(item);
+      if (c.first == selected) list->setCurrentItem(item);
+    }
+    if (list->currentItem()) list->scrollToItem(list->currentItem(), QAbstractItemView::PositionAtCenter);
+    else list->scrollToTop();
+  };
+
+  show_brands();
+
+  connect(back, &QPushButton::clicked, [=]() {
+    if (!cur_brand->isEmpty()) {
+      show_brands();
+    } else {
+      emit backPress();
+    }
+  });
 
   QObject::connect(list, QOverload<QListWidgetItem*>::of(&QListWidget::itemClicked),
     [=](QListWidgetItem* item){
+    const QString brand = item->data(Qt::UserRole + 1).toString();
+    if (!brand.isEmpty()) {  // a brand: show its cars
+      show_cars(brand);
+      return;
+    }
     if (!(item->flags() & Qt::ItemIsSelectable)) return;  // brand header
     const QString car = item->data(Qt::UserRole).toString();
     if (car.isEmpty())
@@ -1198,26 +1295,14 @@ SelectCar::SelectCar(QWidget* parent): QWidget(parent) {
     else
         Params().put("SelectedCar", car.toStdString());
 
+    show_brands();  // next time the list starts from the brands again
     emit selectedCar();
     });
 
   main_layout->addWidget(list);
 }
 
-// ---- 기타 차종 page ----
-// CAR names must match selfdrive/car/hyundai/values.py (OTHER_CAR_MENU); tests/test_other_cars_c2.py checks them.
-// This branch (optech-fd) offers the angle-steering CAN FD cars; the cars without SCC are on optech.
-struct OtherCarEntry { const char *car; const char *title; const char *desc; };
-static const OtherCarEntry OTHER_ANGLE_CARS[] = {
-  {"HYUNDAI IONIQ 5 PE 2025", "아이오닉 5 PE (2024~)", "LFA2 차량. 레드판다가 필요합니다."},
-  {"HYUNDAI IONIQ 6 PE 2025", "아이오닉 6 PE (2025~)", "LFA2 차량으로 보고 각도 방식으로 조향합니다. 2023~24년식은 일반 차종 목록의 'HYUNDAI IONIQ 6 2023'을 고르세요. 레드판다가 필요합니다."},
-  {"KIA EV6 PE 2025", "EV6 PE (2025~)", "LFA2 차량. 레드판다가 필요합니다."},
-  {"HYUNDAI IONIQ 9 2025", "아이오닉 9", "LFA2 차량. 레드판다가 필요합니다."},
-  {"HYUNDAI SANTA FE MX5 2024", "싼타페 MX5 (가솔린)", "LFA2 차량. 레드판다가 필요합니다."},
-  {"HYUNDAI SANTA FE MX5 HEV 2024", "싼타페 MX5 하이브리드", "LFA2 차량. 레드판다가 필요합니다."},
-  {"KIA EV9 2024", "EV9", "LFA2 차량. 레드판다가 필요합니다."},
-};
-
+// ---- LFA2 차량 page ----
 OtherCars::OtherCars(QWidget* parent): QWidget(parent) {
   QVBoxLayout* main_layout = new QVBoxLayout(this);
   main_layout->setMargin(20);
@@ -1247,44 +1332,23 @@ OtherCars::OtherCars(QWidget* parent): QWidget(parent) {
     list->addItem(btn);
   };
 
-  list->addItem(carrot_section("핸들을 각도로 움직이는 차 (LFA2)"));
-  for (const auto &e : OTHER_ANGLE_CARS) add_car(e);
-  list->addItem(new CValueControl("AngleSteerMaxGain", "각도 조향 최대 힘",
-    "각도 방식 차에서 openpilot이 쓸 수 있는 핸들 힘의 상한(%)입니다. 운전자가 핸들을 잡으면 이 값과 상관없이 힘이 자동으로 줄어듭니다. 커브에서 힘이 모자라면 올리고, 핸들이 너무 세게 느껴지면 내리세요. 30~100, 기본 100", ROAD_ICON, 30, 100, 5));
-
-  // CanfdHdaMode: selfdrive/car/hyundai/interface.py reads it at start (reboot to apply)
-  list->addItem(carrot_section("CAN FD 차량 공통 (레드판다)"));
-  auto hda_mode_btn = new ButtonControl("", "선택",
-    "CAN FD 차량이 HDA1인지 HDA2(고속도로 주행 보조 2)인지 정합니다. 기본은 자동 인식으로, 시동을 걸 때 카메라 쪽 신호를 보고 정합니다. "
-    "자동 인식이 틀려서 핸들이 움직이지 않을 때만 직접 고르세요. 기타 차종뿐 아니라 일반 목록의 CAN FD 차량에도 적용되고, 재부팅해야 적용됩니다.");
-  const QStringList hda_names = {"HDA 방식: 자동 인식", "HDA 방식: HDA1", "HDA 방식: HDA2"};
-  auto hda_mode = []() {
-    const int m = QString::fromStdString(Params().get("CanfdHdaMode")).toInt();
-    return (m >= 0 && m <= 2) ? m : 0;
-  };
-  hda_mode_btn->setTitle(hda_names[hda_mode()]);
-  QObject::connect(hda_mode_btn, &ButtonControl::clicked, [=]() {
-    const QString sel = MultiOptionDialog::getSelection("HDA 방식을 고르세요", hda_names, hda_names[hda_mode()], this);
-    const int idx = hda_names.indexOf(sel);
-    if (idx < 0 || idx == hda_mode()) return;
-    Params().put("CanfdHdaMode", std::to_string(idx));
-    hda_mode_btn->setTitle(hda_names[idx]);
-  });
-  list->addItem(hda_mode_btn);
-
-  auto clear_btn = new ButtonControl("기타 차종 선택 해제", "해제", "여기서 고른 차종을 지우고, 차를 자동으로 인식하게 되돌립니다.");
-  QObject::connect(clear_btn, &ButtonControl::clicked, [=]() {
-    const QString cur = QString::fromStdString(Params().get("SelectedCar"));
-    for (const auto &p : car_btns) {
-      if (p.first == cur) {
-        Params().remove("SelectedCar");
-        break;
-      }
+  // grouped by brand, in the table's order
+  QStringList brands;
+  for (const auto &e : OTHER_ANGLE_CARS) {
+    if (!brands.contains(e.brand)) brands.append(e.brand);
+  }
+  static const QMap<QString, QString> BRAND_KO = {{"HYUNDAI", "현대"}, {"KIA", "기아"}, {"GENESIS", "제네시스"}};
+  for (const QString &brand : brands) {
+    list->addItem(carrot_section(brand + "  " + BRAND_KO.value(brand)));
+    for (const auto &e : OTHER_ANGLE_CARS) {
+      if (brand == e.brand) add_car(e);
     }
-    refresh();
-    emit selectedCar();
-  });
-  list->addItem(clear_btn);
+  }
+  QLabel* note = new QLabel("차종은 하나만 고를 수 있어요. 여기서 고르면 '차종 선택'에서 고른 차는 자동으로 해제되고, "
+                            "'차종 선택'에서 고르면 여기서 고른 차가 자동으로 해제돼요.");
+  note->setWordWrap(true);
+  note->setStyleSheet("font-size: 34px; color: #A0A0A0; padding: 10px;");
+  list->addItem(note);
 
   main_layout->addWidget(new ScrollView(list, this));
   refresh();

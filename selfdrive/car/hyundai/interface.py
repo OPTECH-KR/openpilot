@@ -191,6 +191,11 @@ class CarInterface(CarInterfaceBase):
       tire_stiffness_factor = 0.7
       ret.centerToFront = ret.wheelbase * 0.4
       ret.steerRatio = 14.00
+    elif candidate == CAR.TUCSON_4TH_GEN:  # gasoline / diesel: same platform as the hybrid
+      ret.mass = 1630. + STD_CARGO_KG  # StarPilot
+      ret.wheelbase = 2.756
+      ret.steerRatio = 16.
+      tire_stiffness_factor = 0.385
     elif candidate == CAR.TUCSON_HYBRID_4TH_GEN:
       ret.mass = 1680. + STD_CARGO_KG  # average of all 3 trims
       ret.wheelbase = 2.756
@@ -254,7 +259,7 @@ class CarInterface(CarInterfaceBase):
       ret.wheelbase = 2.9
       ret.steerRatio = 16.
       tire_stiffness_factor = 0.65
-    elif candidate == CAR.AZERA_7TH_GEN:
+    elif candidate == CAR.GRANDEUR_GN7:
       ret.mass = 1700. + STD_CARGO_KG
       ret.wheelbase = 2.895
       ret.steerRatio = 16.5
@@ -264,6 +269,41 @@ class CarInterface(CarInterfaceBase):
       ret.wheelbase = 2.66
       ret.steerRatio = 13.6
       tire_stiffness_factor = 0.385
+    elif candidate == CAR.KONA_2ND_GEN:  # StarPilot
+      ret.mass = 1590. + STD_CARGO_KG
+      ret.wheelbase = 2.66
+      ret.steerRatio = 13.6
+      tire_stiffness_factor = 0.385
+    elif candidate == CAR.SONATA_HEV_2024:  # StarPilot
+      ret.mass = 1616. + STD_CARGO_KG
+      ret.wheelbase = 2.84
+      ret.steerRatio = 13.27
+      tire_stiffness_factor = 1.0
+    elif candidate == CAR.STARIA_EV:  # carrot: Staria baseline, Korean Lounge EV weight and wheelbase
+      ret.mass = 2590. + STD_CARGO_KG
+      ret.wheelbase = 3.275
+      ret.steerRatio = 11.94
+      tire_stiffness_factor = 1.0
+    elif candidate == CAR.KIA_CARNIVAL_HEV_4TH_GEN:  # StarPilot
+      ret.mass = 2253. + STD_CARGO_KG
+      ret.wheelbase = 3.09
+      ret.steerRatio = 14.23
+      tire_stiffness_factor = 1.0
+    elif candidate == CAR.GRANDEUR_GN7_HEV:  # StarPilot (LFA2)
+      ret.mass = 1720. + STD_CARGO_KG
+      ret.wheelbase = 2.895
+      ret.steerRatio = 13.5
+      tire_stiffness_factor = 0.65
+    elif candidate == CAR.KIA_EV5:  # carrot (angle)
+      ret.mass = 2095. + STD_CARGO_KG
+      ret.wheelbase = 2.75
+      ret.steerRatio = 16.0
+      tire_stiffness_factor = 0.65
+    elif candidate == CAR.GENESIS_GV80_2025:  # StarPilot: GV80 2023 specs (LFA2)
+      ret.mass = 2258. + STD_CARGO_KG
+      ret.wheelbase = 2.95
+      ret.steerRatio = 14.14
+      tire_stiffness_factor = 0.65
     elif candidate == CAR.KONA_HEV_2ND_GEN:
       ret.mass = 1590. + STD_CARGO_KG
       ret.wheelbase = 2.66
