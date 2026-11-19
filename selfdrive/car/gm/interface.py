@@ -234,7 +234,7 @@ class CarInterface(CarInterfaceBase):
       apply_bolt_tune(ret, get_bolt_tune(ret))
 
     elif candidate == CAR.SILVERADO:
-      ret.mass = 2200. + STD_CARGO_KG
+      ret.mass = 2450. + STD_CARGO_KG  # optech: comma / FrogPilot / dragonpilot
       ret.wheelbase = 3.75
       ret.steerRatio = 16.3
       ret.centerToFront = ret.wheelbase * 0.5
@@ -309,7 +309,7 @@ class CarInterface(CarInterfaceBase):
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
     elif candidate == CAR.SILVERADO_CC:
-      ret.mass = 2200. + STD_CARGO_KG
+      ret.mass = 2450. + STD_CARGO_KG  # optech: comma / FrogPilot / dragonpilot
       ret.wheelbase = 3.75
       ret.steerRatio = 16.3
       ret.centerToFront = ret.wheelbase * 0.5

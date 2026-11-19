@@ -19,6 +19,8 @@ Button = namedtuple('Button', ['event_type', 'can_addr', 'can_msg', 'values'])
 
 class CarControllerParams:
   STEER_STEP = 2                          # HCA_01/HCA_1 message frequency 50Hz
+  # optech: comma / sunnypilot / StarPilot / dragonpilot: newer EPS racks fault below this speed; no low speed alert
+  DEFAULT_MIN_STEER_SPEED = 0.4            # m/s
   ACC_CONTROL_STEP = 2                    # ACC_06/ACC_07/ACC_System frequency 50Hz
 
   ACCEL_MAX = 2.0                         # 2.0 m/s max acceleration

@@ -3,7 +3,7 @@ from panda import Panda
 from common.conversions import Conversions as CV
 from selfdrive.car import STD_CARGO_KG, get_safety_config
 from selfdrive.car.interfaces import CarInterfaceBase
-from selfdrive.car.volkswagen.values import CAR, PQ_CARS, CANBUS, NetworkLocation, TransmissionType, GearShifter
+from selfdrive.car.volkswagen.values import CAR, PQ_CARS, CarControllerParams, CANBUS, NetworkLocation, TransmissionType, GearShifter
 
 ButtonType = car.CarState.ButtonEvent.Type
 EventName = car.CarEvent.EventName
@@ -66,6 +66,7 @@ class CarInterface(CarInterfaceBase):
         ret.networkLocation = NetworkLocation.fwdCamera
 
     # Global lateral tuning defaults, can be overridden per-vehicle
+    ret.minSteerSpeed = CarControllerParams.DEFAULT_MIN_STEER_SPEED  # optech: see values.py
 
     ret.steerActuatorDelay = 0.1
     ret.steerLimitTimer = 0.4
@@ -165,7 +166,7 @@ class CarInterface(CarInterfaceBase):
       ret.wheelbase = 2.68
 
     elif candidate == CAR.SEAT_ATECA_MK1:
-      ret.mass = 1900 + STD_CARGO_KG
+      ret.mass = 1300 + STD_CARGO_KG  # optech: all forks (1900 was a typo)
       ret.wheelbase = 2.64
 
     elif candidate == CAR.SEAT_LEON_MK3:
@@ -216,7 +217,7 @@ class CarInterface(CarInterfaceBase):
                                        enable_buttons=(ButtonType.setCruise, ButtonType.resumeCruise))
 
     # Low speed steer alert hysteresis logic
-    if self.CP.minSteerSpeed > 0. and ret.vEgo < (self.CP.minSteerSpeed + 1.):
+    if (self.CP.minSteerSpeed - 1e-3) > CarControllerParams.DEFAULT_MIN_STEER_SPEED and ret.vEgo < (self.CP.minSteerSpeed + 1.):
       self.low_speed_alert = True
     elif ret.vEgo > (self.CP.minSteerSpeed + 2.):
       self.low_speed_alert = False
