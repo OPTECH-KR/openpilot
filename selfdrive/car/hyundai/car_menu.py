@@ -1,7 +1,8 @@
 """Car select menu order: Hyundai / Kia / Genesis cars grouped by brand, then model, then model year.
 
-The menu shows the CAR string itself (English, in this order); the value saved in the SelectedCar param stays the CAR string from values.py, so a car
-chosen before keeps working. values.py main() prints the list the manager stores in /data/params/d/SupportedCars, one
+The menu shows English names, with the Korean market name where the CAR string uses the overseas one (DISPLAY below:
+ELANTRA -> AVANTE, FORTE -> K3, OPTIMA -> K5, NON-SCC -> NO SCC). The value saved in the SelectedCar param stays the CAR
+string from values.py, so a car chosen before keeps working. values.py main() prints the list the manager stores in /data/params/d/SupportedCars, one
 car per line as "CAR string|brand|display text" (the UI also accepts an old plain "CAR string" line).
 The same file is used on optech (CAN cars) and optech-fd (CAN FD cars); each branch lists its own cars.
 """
@@ -145,12 +146,39 @@ def _brand_guess(car):
 
 BRAND_EN = {"현대": "HYUNDAI", "기아": "KIA", "제네시스": "GENESIS"}
 
+# What the menu shows when it differs from the CAR string: the Korean market model name (in English) instead of the
+# overseas one, and "NO SCC" for the lower trims without smart cruise control. Only the text changes.
+DISPLAY = {
+  "HYUNDAI ELANTRA 2017": "HYUNDAI AVANTE AD 2017",
+  "HYUNDAI ELANTRA 2021": "HYUNDAI AVANTE CN7 2021",
+  "HYUNDAI ELANTRA HYBRID 2021": "HYUNDAI AVANTE HYBRID CN7 2021",
+  "HYUNDAI ELANTRA 2022 NON-SCC": "HYUNDAI AVANTE CN7 2021 NO SCC",
+  "HYUNDAI ELANTRA HYBRID 2022 NON-SCC": "HYUNDAI AVANTE HYBRID CN7 2021 NO SCC",
+  "HYUNDAI KONA 2019 NON-SCC": "HYUNDAI KONA 2019 NO SCC",
+  "HYUNDAI KONA ELECTRIC 2019 NON-SCC": "HYUNDAI KONA ELECTRIC 2019 NO SCC",
+  "HYUNDAI VENUE 2021 NON-SCC": "HYUNDAI VENUE 2021 NO SCC",
+  "HYUNDAI SANTA FE PlUG-IN HYBRID 2022": "HYUNDAI SANTA FE PLUG-IN HYBRID 2022",
+  "KIA FORTE E 2018 & GT 2021": "KIA K3 BD 2019",
+  "KIA FORTE 2019 NON-SCC": "KIA K3 BD 2019 NO SCC",
+  "KIA FORTE 2021 NON-SCC": "KIA K3 BD 2021 NO SCC",
+  "KIA OPTIMA 4TH GEN": "KIA K5 JF 2017",
+  "KIA OPTIMA 4TH GEN FACELIFT": "KIA K5 JF FACELIFT 2019",
+  "KIA OPTIMA HYBRID 2017 & SPORTS 2019": "KIA K5 HYBRID JF 2017",
+  "KIA OPTIMA HYBRID 4TH GEN FACELIFT": "KIA K5 HYBRID JF FACELIFT 2019",
+  "KIA SELTOS 2023 NON-SCC": "KIA SELTOS 2023 NO SCC",
+  "GENESIS G70 2021 NON-SCC": "GENESIS G70 2021 NO SCC",
+}
+
+
+def display_name(car):
+  return DISPLAY.get(car, car)
+
 
 def menu_lines(cars):
-  """menu file lines for these CAR strings, sorted by brand, model family and year. The menu shows the CAR string
-  itself (the user wants the original English names); the Korean texts above only set the order."""
+  """menu file lines for these CAR strings, sorted by brand, model family and year. The menu shows the English name
+  (display_name: Korean market model names, NO SCC); the Korean texts above only set the order."""
   lines = []
   for car in sorted(cars, key=_key):
     brand = MENU.get(car, (_brand_guess(car),))[0]
-    lines.append(f"{car}|{BRAND_EN.get(brand, brand)}|{car}")
+    lines.append(f"{car}|{BRAND_EN.get(brand, brand)}|{display_name(car)}")
   return lines

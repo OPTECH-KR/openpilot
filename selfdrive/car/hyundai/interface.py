@@ -259,7 +259,7 @@ class CarInterface(CarInterfaceBase):
       ret.wheelbase = 2.9
       ret.steerRatio = 16.
       tire_stiffness_factor = 0.65
-    elif candidate == CAR.AZERA_7TH_GEN:
+    elif candidate == CAR.GRANDEUR_GN7:
       ret.mass = 1700. + STD_CARGO_KG
       ret.wheelbase = 2.895
       ret.steerRatio = 16.5
@@ -289,7 +289,7 @@ class CarInterface(CarInterfaceBase):
       ret.wheelbase = 3.09
       ret.steerRatio = 14.23
       tire_stiffness_factor = 1.0
-    elif candidate == CAR.AZERA_HEV_7TH_GEN:  # StarPilot (LFA2)
+    elif candidate == CAR.GRANDEUR_GN7_HEV:  # StarPilot (LFA2)
       ret.mass = 1720. + STD_CARGO_KG
       ret.wheelbase = 2.895
       ret.steerRatio = 13.5
