@@ -48,5 +48,9 @@
   "Offroad_NoFirmware": {
     "text": "openpilot was unable to identify your car. Check integrity of cables and ensure all connections are secure, particularly that the comma power is fully inserted in the OBD-II port of the vehicle. Need help? Join discord.comma.ai.",
     "severity": 0
+  },
+  "Offroad_OptechCanDiag": {
+    "text": "차량 신호 진단: 차 신호는 들어오는데 시동이 감지되지 않았어요. 이 화면을 사진으로 보내 주세요.",
+    "severity": 0
   }
 }
