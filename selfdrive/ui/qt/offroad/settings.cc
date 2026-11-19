@@ -456,23 +456,24 @@ static QStringList get_list_utf8(const char* path) {
 // LFA2 차량 (angle steering CAN FD cars), shown on their own page next to the normal car list.
 // CAR names must match selfdrive/car/hyundai/values.py (OTHER_CAR_MENU); tests/test_other_cars_c2.py checks them.
 // This branch (optech-fd) offers the angle-steering CAN FD cars; the cars without SCC are on optech.
-struct OtherCarEntry { const char *car; const char *title; const char *desc; };
+struct OtherCarEntry { const char *car; const char *brand; const char *title; const char *desc; };
 static const OtherCarEntry OTHER_ANGLE_CARS[] = {
-  {"HYUNDAI IONIQ 5 PE 2025", "아이오닉 5 PE (2024~)", "LFA2 차량. 레드판다가 필요합니다."},
-  {"HYUNDAI IONIQ 6 PE 2025", "아이오닉 6 PE (2025~)", "LFA2 차량으로 보고 각도 방식으로 조향합니다. 2023~24년식은 일반 차종 목록의 'HYUNDAI IONIQ 6 2023'을 고르세요. 레드판다가 필요합니다."},
-  {"KIA EV6 PE 2025", "EV6 PE (2025~)", "LFA2 차량. 레드판다가 필요합니다."},
-  {"HYUNDAI IONIQ 9 2025", "아이오닉 9", "LFA2 차량. 레드판다가 필요합니다."},
-  {"HYUNDAI SANTA FE MX5 2024", "싼타페 MX5 (가솔린)", "LFA2 차량. 레드판다가 필요합니다."},
-  {"HYUNDAI SANTA FE MX5 HEV 2024", "싼타페 MX5 하이브리드", "LFA2 차량. 레드판다가 필요합니다."},
-  {"KIA EV9 2024", "EV9", "LFA2 차량. 레드판다가 필요합니다."},
-  {"HYUNDAI GRANDEUR GN7 HEV 2025", "그랜저 하이브리드 GN7 (2025~)", "LFA2 차량(HDA II). LFA2가 아닌 2023~24년식 하이브리드는 일반 목록의 '디 올 뉴 그랜저 GN7'을 고르세요(하이브리드는 자동 인식). 레드판다가 필요합니다."},
-  {"KIA EV5 2026", "EV5", "핸들을 각도로 움직이는 차(HDA II). 레드판다가 필요합니다."},
-  {"GENESIS GV80 2025", "GV80 · GV80 쿠페 (2025~)", "LFA2 차량(HDA II). 2023년식까지는 일반 목록의 'GV80 JX1'을 고르세요. 레드판다가 필요합니다."},
+  {"HYUNDAI IONIQ 5 PE 2025", "HYUNDAI", "IONIQ 5 PE NE 2025~", "LFA2 차량. 레드판다가 필요합니다."},
+  {"HYUNDAI IONIQ 6 PE 2025", "HYUNDAI", "IONIQ 6 PE CE 2025~", "LFA2 차량으로 보고 각도 방식으로 조향합니다. 2023~24년식은 일반 차종 목록의 'IONIQ 6 CE 2023-2024'를 고르세요. 레드판다가 필요합니다."},
+  {"HYUNDAI IONIQ 9 2025", "HYUNDAI", "IONIQ 9 ME 2025~", "LFA2 차량. 레드판다가 필요합니다."},
+  {"HYUNDAI SANTA FE MX5 2024", "HYUNDAI", "SANTA FE MX5 2024~", "LFA2 차량(가솔린). 레드판다가 필요합니다."},
+  {"HYUNDAI SANTA FE MX5 HEV 2024", "HYUNDAI", "SANTA FE HYBRID MX5 2024~", "LFA2 차량. 레드판다가 필요합니다."},
+  {"HYUNDAI GRANDEUR GN7 HEV 2025", "HYUNDAI", "GRANDEUR HYBRID GN7 2025~", "LFA2 차량(HDA II). LFA2가 아닌 2023~24년식 하이브리드는 일반 차종 목록의 'GRANDEUR GN7 2023~'을 고르세요(하이브리드는 자동 인식). 레드판다가 필요합니다."},
+  {"KIA EV6 PE 2025", "KIA", "EV6 PE CV 2024~", "LFA2 차량. 레드판다가 필요합니다."},
+  {"KIA EV9 2024", "KIA", "EV9 MV 2023~", "LFA2 차량. 레드판다가 필요합니다."},
+  {"KIA EV5 2026", "KIA", "EV5 2026~", "핸들을 각도로 움직이는 차(HDA II). 레드판다가 필요합니다."},
+  {"GENESIS GV80 2025", "GENESIS", "GV80 / COUPE JX1 2025~", "LFA2 차량(HDA II). 2023년식까지는 일반 차종 목록의 'GV80 JX1 2020-2023'을 고르세요. 레드판다가 필요합니다."},
 };
 
+// "KIA EV9 MV 2023~" for an LFA2 car (the 'LFA2 차종' button), empty for any other car
 static QString lfa2_title(const QString &car) {
   for (const auto &e : OTHER_ANGLE_CARS) {
-    if (car == e.car) return e.title;
+    if (car == e.car) return QString(e.brand) + " " + e.title;
   }
   return QString();
 }
@@ -727,9 +728,11 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   QPushButton* lfa2CarBtn = new QPushButton();
   lfa2CarBtn->setObjectName("lfa2CarBtn");
   lfa2CarBtn->setStyleSheet(car_btn_style);
-  // 'LFA2 차량 설정': shown open under HDA 방식 while an LFA2 car is the chosen one
+  // One car is chosen at a time (one SelectedCar param): a car from '차종 선택' replaces an LFA2 car and the other way
+  // round, and the button of the one not in use goes back to its name.
+  // 'LFA2 차종 설정': shown open under HDA 방식 while an LFA2 car is the chosen one
   ListWidget* lfa2_settings = new ListWidget(this);
-  lfa2_settings->addItem(carrot_section("LFA2 차량 설정"));
+  lfa2_settings->addItem(carrot_section("LFA2 차종 설정"));
   QLabel* lfa2_intro = new QLabel("아직 실제 차로 시험하지 않은 차종입니다. 처음에는 'openpilot 사용'을 끄고(읽기 전용) 짧게 달려 본 뒤, 기록을 확인하고 조향을 켜 주세요.");
   lfa2_intro->setWordWrap(true);
   lfa2_intro->setStyleSheet("font-size: 38px; color: #E0E0E0; padding: 10px;");
@@ -740,7 +743,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     const QString car = QString::fromStdString(Params().get("SelectedCar"));
     const QString lfa2 = lfa2_title(car);
     selectCarBtn->setText(car.length() && lfa2.isEmpty() ? car_menu_name(car) : tr("차종 선택"));
-    lfa2CarBtn->setText(lfa2.isEmpty() ? QString("LFA2 차량") : lfa2);
+    lfa2CarBtn->setText(lfa2.isEmpty() ? QString("LFA2 차종") : lfa2);
     lfa2_settings->setVisible(!lfa2.isEmpty());
   };
   update_car_btns();
@@ -763,7 +766,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     update_car_btns();
     if (!lfa2_title(QString::fromStdString(Params().get("SelectedCar"))).isEmpty()) {
       main_layout->setCurrentWidget(homeScreen);
-      ConfirmationDialog::alert("이 차량은 따로 확인할 설정이 있어요.\nHDA 방식 아래의 'LFA2 차량 설정'을 확인해 주세요.", this);
+      ConfirmationDialog::alert("이 차량은 따로 확인할 설정이 있어요.\nHDA 방식 아래의 'LFA2 차종 설정'을 확인해 주세요.", this);
     }
   });
   startToggles->addItem(car_row);
@@ -1329,22 +1332,23 @@ OtherCars::OtherCars(QWidget* parent): QWidget(parent) {
     list->addItem(btn);
   };
 
-  list->addItem(carrot_section("LFA2 차량 (핸들을 각도로 움직이는 차)"));
-  for (const auto &e : OTHER_ANGLE_CARS) add_car(e);
-
-  auto clear_btn = new ButtonControl("LFA2 차량 선택 해제", "해제", "여기서 고른 차종을 지우고, 차를 자동으로 인식하게 되돌립니다.");
-  QObject::connect(clear_btn, &ButtonControl::clicked, [=]() {
-    const QString cur = QString::fromStdString(Params().get("SelectedCar"));
-    for (const auto &p : car_btns) {
-      if (p.first == cur) {
-        Params().remove("SelectedCar");
-        break;
-      }
+  // grouped by brand, in the table's order
+  QStringList brands;
+  for (const auto &e : OTHER_ANGLE_CARS) {
+    if (!brands.contains(e.brand)) brands.append(e.brand);
+  }
+  static const QMap<QString, QString> BRAND_KO = {{"HYUNDAI", "현대"}, {"KIA", "기아"}, {"GENESIS", "제네시스"}};
+  for (const QString &brand : brands) {
+    list->addItem(carrot_section(brand + "  " + BRAND_KO.value(brand)));
+    for (const auto &e : OTHER_ANGLE_CARS) {
+      if (brand == e.brand) add_car(e);
     }
-    refresh();
-    emit selectedCar();
-  });
-  list->addItem(clear_btn);
+  }
+  QLabel* note = new QLabel("차종은 하나만 고를 수 있어요. 여기서 고르면 '차종 선택'에서 고른 차는 자동으로 해제되고, "
+                            "'차종 선택'에서 고르면 여기서 고른 차가 자동으로 해제돼요.");
+  note->setWordWrap(true);
+  note->setStyleSheet("font-size: 34px; color: #A0A0A0; padding: 10px;");
+  list->addItem(note);
 
   main_layout->addWidget(new ScrollView(list, this));
   refresh();
