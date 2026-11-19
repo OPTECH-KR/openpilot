@@ -231,6 +231,7 @@ std::unordered_map<std::string, uint32_t> keys = {
     { "RayPedal", PERSISTENT },
     { "RayPedalMax", PERSISTENT },
     { "RayPedalStrong", PERSISTENT },
+    { "PandaIdlePassthrough", PERSISTENT },  // optech: non Hyundai / Kia car -> panda relay off while not in control
     { "RayPedalKi", PERSISTENT },
     { "PorterSpeedButtons", PERSISTENT },
     { "PorterPedal", PERSISTENT },

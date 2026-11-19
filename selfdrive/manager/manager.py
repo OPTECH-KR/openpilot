@@ -35,6 +35,15 @@ def manager_init() -> None:
   #subprocess.call("./bootlog", cwd=os.path.join(BASEDIR, "selfdrive/loggerd"))
 
   params = Params()
+
+  # optech: panda relay behaviour for the selected car (boardd sends it with NO_OUTPUT); car_helpers keeps it current
+  try:
+    selected = params.get("SelectedCar", encoding="utf8")
+    if selected:
+      from selfdrive.car.optech_relay import set_idle_passthrough
+      set_idle_passthrough(selected, params)
+  except Exception:
+    cloudlog.exception("optech: PandaIdlePassthrough from SelectedCar failed")
   params.clear_all(ParamKeyType.CLEAR_ON_MANAGER_START)
 
   default_params: List[Tuple[str, Union[str, bytes]]] = [

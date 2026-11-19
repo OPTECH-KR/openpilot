@@ -296,6 +296,10 @@ void send_empty_panda_state(PubMaster *pm) {
 
 std::optional<bool> send_panda_states(PubMaster *pm, const std::vector<Panda *> &pandas, bool spoofing_started) {
   bool ignition_local = false;
+  // optech: non Hyundai / Kia car (set from the car brand) -> NO_OUTPUT with the panda's idle passthrough bit, so the
+  // relay is off (car <-> camera direct) while openpilot is not in control, like comma / dragonpilot d2
+  static Params idle_params;
+  const int no_output_param = idle_params.getBool("PandaIdlePassthrough") ? 1 : 0;
 
   // build msg
   MessageBuilder msg;
@@ -326,7 +330,7 @@ std::optional<bool> send_panda_states(PubMaster *pm, const std::vector<Panda *> 
 
     // Make sure CAN buses are live: safety_setter_thread does not work if Panda CAN are silent and there is only one other CAN node
     if (health.safety_mode_pkt == (uint8_t)(cereal::CarParams::SafetyModel::SILENT)) {
-      panda->set_safety_model(cereal::CarParams::SafetyModel::NO_OUTPUT);
+      panda->set_safety_model(cereal::CarParams::SafetyModel::NO_OUTPUT, no_output_param);
     }
 
   #ifndef __x86_64__
@@ -336,8 +340,9 @@ std::optional<bool> send_panda_states(PubMaster *pm, const std::vector<Panda *> 
     }
 
     // set safety mode to NO_OUTPUT when car is off. ELM327 is an alternative if we want to leverage athenad/connect
-    if (!ignition_local && (health.safety_mode_pkt != (uint8_t)(cereal::CarParams::SafetyModel::NO_OUTPUT))) {
-      panda->set_safety_model(cereal::CarParams::SafetyModel::NO_OUTPUT);
+    if (!ignition_local && ((health.safety_mode_pkt != (uint8_t)(cereal::CarParams::SafetyModel::NO_OUTPUT)) ||
+                            (health.safety_param_pkt != no_output_param))) {
+      panda->set_safety_model(cereal::CarParams::SafetyModel::NO_OUTPUT, no_output_param);
     }
   #endif
 
