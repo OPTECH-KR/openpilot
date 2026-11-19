@@ -722,11 +722,21 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   QPushButton* lfa2CarBtn = new QPushButton();
   lfa2CarBtn->setObjectName("lfa2CarBtn");
   lfa2CarBtn->setStyleSheet(car_btn_style);
+  // 'LFA2 차량 설정': shown open under HDA 방식 while an LFA2 car is the chosen one
+  ListWidget* lfa2_settings = new ListWidget(this);
+  lfa2_settings->addItem(carrot_section("LFA2 차량 설정"));
+  QLabel* lfa2_intro = new QLabel("아직 실제 차로 시험하지 않은 차종입니다. 처음에는 'openpilot 사용'을 끄고(읽기 전용) 짧게 달려 본 뒤, 기록을 확인하고 조향을 켜 주세요.");
+  lfa2_intro->setWordWrap(true);
+  lfa2_intro->setStyleSheet("font-size: 38px; color: #E0E0E0; padding: 10px;");
+  lfa2_settings->addItem(lfa2_intro);
+  lfa2_settings->addItem(new CValueControl("AngleSteerMaxGain", "각도 조향 최대 힘",
+    "각도 방식 차에서 openpilot이 쓸 수 있는 핸들 힘의 상한(%)입니다. 운전자가 핸들을 잡으면 이 값과 상관없이 힘이 자동으로 줄어듭니다. 커브에서 힘이 모자라면 올리고, 핸들이 너무 세게 느껴지면 내리세요. 30~100, 기본 100", ROAD_ICON, 30, 100, 5));
   auto update_car_btns = [=]() {
     const QString car = QString::fromStdString(Params().get("SelectedCar"));
     const QString lfa2 = lfa2_title(car);
     selectCarBtn->setText(car.length() && lfa2.isEmpty() ? car_menu_name(car) : tr("차종 선택"));
     lfa2CarBtn->setText(lfa2.isEmpty() ? QString("LFA2 차량") : lfa2);
+    lfa2_settings->setVisible(!lfa2.isEmpty());
   };
   update_car_btns();
   QHBoxLayout* car_row = new QHBoxLayout();
@@ -744,7 +754,14 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   otherCars = new OtherCars(this);
   connect(lfa2CarBtn, &QPushButton::clicked, [=]() { main_layout->setCurrentWidget(otherCars); });
   connect(otherCars, &OtherCars::backPress, [=]() { main_layout->setCurrentWidget(homeScreen); });
-  connect(otherCars, &OtherCars::selectedCar, [=]() { update_car_btns(); });
+  connect(otherCars, &OtherCars::selectedCar, [=]() {
+    update_car_btns();
+    if (!lfa2_title(QString::fromStdString(Params().get("SelectedCar"))).isEmpty()) {
+      main_layout->setCurrentWidget(homeScreen);
+      ConfirmationDialog::alert("이 차량은 따로 확인할 설정이 있어요.
+HDA 방식 아래의 'LFA2 차량 설정'을 확인해 주세요.", this);
+    }
+  });
   startToggles->addItem(car_row);
 
   // CanfdHdaMode: selfdrive/car/hyundai/interface.py reads it at start (reboot to apply)
@@ -765,6 +782,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     hda_mode_btn->setTitle(hda_names[idx]);
   });
   startToggles->addItem(hda_mode_btn);
+  startToggles->addItem(lfa2_settings);
   auto gps_btn = new ButtonControl("GPS 확인", "확인", "시동을 걸지 않아도 GPS를 켜서 잡힘 여부, 신호 세기, 위성 수, 위치 오차를 실시간으로 보여 줍니다. 창을 닫으면 GPS는 다시 꺼집니다. 기기 내장 GPS를 사용합니다.");
   QObject::connect(gps_btn, &ButtonControl::clicked, [=]() {
     Params().putBool("GpsCheck", true);  // boardd powers the uBlox while this is set (read about once a second)
@@ -1267,8 +1285,6 @@ OtherCars::OtherCars(QWidget* parent): QWidget(parent) {
 
   list->addItem(carrot_section("LFA2 차량 (핸들을 각도로 움직이는 차)"));
   for (const auto &e : OTHER_ANGLE_CARS) add_car(e);
-  list->addItem(new CValueControl("AngleSteerMaxGain", "각도 조향 최대 힘",
-    "각도 방식 차에서 openpilot이 쓸 수 있는 핸들 힘의 상한(%)입니다. 운전자가 핸들을 잡으면 이 값과 상관없이 힘이 자동으로 줄어듭니다. 커브에서 힘이 모자라면 올리고, 핸들이 너무 세게 느껴지면 내리세요. 30~100, 기본 100", ROAD_ICON, 30, 100, 5));
 
   auto clear_btn = new ButtonControl("LFA2 차량 선택 해제", "해제", "여기서 고른 차종을 지우고, 차를 자동으로 인식하게 되돌립니다.");
   QObject::connect(clear_btn, &ButtonControl::clicked, [=]() {
