@@ -1963,7 +1963,12 @@ def main():
   # Chevrolet (selfdrive/car/gm): the Bolt EUV 2022-23 with the camera harness, stock ACC
   from selfdrive.car.gm.values import CAR as GM_CAR
   cars.append(GM_CAR.BOLT_EUV)
-  cars.append(GM_CAR.BOLT_CC)  # Bolt EV 2017-21 without ACC, camera harness; comma pedal optional (ds5ajd/openpilot 0814)
+  cars.append(GM_CAR.BOLT_CC)
+  # more GM cars (optech, after StarPilot / sunnypilot / comma): ASCM, camera harness with stock ACC, without ACC
+  cars += [GM_CAR.VOLT, GM_CAR.VOLT_CC, GM_CAR.ACADIA, GM_CAR.BUICK_LACROSSE, GM_CAR.ESCALADE, GM_CAR.ESCALADE_ESV,
+           GM_CAR.ESCALADE_ESV_2019, GM_CAR.SILVERADO, GM_CAR.SILVERADO_CC, GM_CAR.EQUINOX, GM_CAR.EQUINOX_CC,
+           GM_CAR.TRAILBLAZER, GM_CAR.TRAILBLAZER_CC, GM_CAR.TRAX, GM_CAR.SUBURBAN, GM_CAR.SUBURBAN_CC, GM_CAR.YUKON_CC,
+           GM_CAR.MALIBU_CC, GM_CAR.CT6_CC, GM_CAR.XT4_CC, GM_CAR.XT5_CC]  # Bolt EV 2017-21 without ACC, camera harness; comma pedal optional (ds5ajd/openpilot 0814)
   # grouped by brand / model / year with Korean names (car_menu.py); utf-8 whatever the locale
   from selfdrive.car.hyundai.car_menu import menu_lines
   for line in menu_lines(cars):

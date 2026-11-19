@@ -7,7 +7,7 @@ car per line as "CAR string|brand|display text" (the UI also accepts an old plai
 The same file is used on optech (CAN cars) and optech-fd (CAN FD cars); each branch lists its own cars.
 """
 
-BRANDS = ("현대", "기아", "제네시스", "쉐보레")
+BRANDS = ("현대", "기아", "제네시스", "쉐보레", "GMC", "캐딜락", "뷰익")
 
 # CAR string: (brand, model family, display text, first model year). Family + year give the order inside a brand.
 MENU = {
@@ -137,6 +137,28 @@ MENU = {
   # ---------------- 쉐보레 (GM, selfdrive/car/gm) ----------------
   "CHEVROLET BOLT EV NO ACC": ("쉐보레", "볼트", "볼트 EV ACC 없음 (2017~2021)", 2017),
   "CHEVROLET BOLT EUV 2022": ("쉐보레", "볼트", "볼트 EUV (2022~2023)", 2022),
+  # GM (optech): ASCM / camera harness cars
+  "CHEVROLET VOLT PREMIER 2017": ("쉐보레", "볼트(Volt)", "볼트 PHEV ASCM (2017~2018)", 2017),
+  "CHEVROLET VOLT NO ACC": ("쉐보레", "볼트(Volt)", "볼트 PHEV ACC 없음 (2017~2018)", 2017),
+  "CHEVROLET TRAILBLAZER 2021": ("쉐보레", "트레일블레이저", "트레일블레이저 (2021~2022)", 2021),
+  "CHEVROLET TRAILBLAZER NO ACC": ("쉐보레", "트레일블레이저", "트레일블레이저 ACC 없음 (2021~2022)", 2021),
+  "CHEVROLET TRAX 2024": ("쉐보레", "트랙스", "트랙스 크로스오버 (2024~)", 2024),
+  "CHEVROLET EQUINOX 2019": ("쉐보레", "이쿼녹스", "이쿼녹스 (2019~2022)", 2019),
+  "CHEVROLET EQUINOX NO ACC": ("쉐보레", "이쿼녹스", "이쿼녹스 ACC 없음 (2019~2022)", 2019),
+  "CHEVROLET MALIBU NO ACC": ("쉐보레", "말리부", "말리부 ACC 없음 (2023)", 2023),
+  "CHEVROLET SILVERADO 1500 2020": ("쉐보레", "실버라도", "실버라도 1500 · 시에라 1500 (2020~2021)", 2020),
+  "CHEVROLET SILVERADO 1500 NO ACC": ("쉐보레", "실버라도", "실버라도 1500 · 시에라 1500 ACC 없음 (2020~2021)", 2020),
+  "CHEVROLET SUBURBAN 2016": ("쉐보레", "서버번", "서버번 (2016~2020, 카메라 하네스)", 2016),
+  "CHEVROLET SUBURBAN NO ACC": ("쉐보레", "서버번", "서버번 ACC 없음 (2016~2020)", 2016),
+  "GMC ACADIA DENALI 2018": ("GMC", "아카디아", "아카디아 (2018)", 2018),
+  "GMC YUKON NO ACC": ("GMC", "유콘", "유콘 ACC 없음 (2019~2020)", 2019),
+  "CADILLAC ESCALADE 2017": ("캐딜락", "에스컬레이드", "에스컬레이드 (2017)", 2017),
+  "CADILLAC ESCALADE ESV 2016": ("캐딜락", "에스컬레이드", "에스컬레이드 ESV (2016)", 2016),
+  "CADILLAC ESCALADE ESV 2019": ("캐딜락", "에스컬레이드", "에스컬레이드 ESV (2019)", 2019),
+  "CADILLAC CT6 NO ACC": ("캐딜락", "CT6", "CT6 ACC 없음 (2016~2020)", 2016),
+  "CADILLAC XT4 NO ACC": ("캐딜락", "XT4", "XT4 ACC 없음 (2023)", 2023),
+  "CADILLAC XT5 NO ACC": ("캐딜락", "XT5", "XT5 ACC 없음 (2022)", 2022),
+  "BUICK LACROSSE 2017": ("뷰익", "라크로스", "라크로스 (2017~2019)", 2017),
 }
 
 
@@ -147,10 +169,11 @@ def _key(car):
 
 
 def _brand_guess(car):
-  return "쉐보레" if car.startswith("CHEVROLET") else "제네시스" if car.startswith("GENESIS") else "기아" if car.startswith("KIA") else "현대" if car.startswith("HYUNDAI") else "기타"
+  return "GMC" if car.startswith("GMC") else "캐딜락" if car.startswith("CADILLAC") else "뷰익" if car.startswith("BUICK") else \
+    "쉐보레" if car.startswith("CHEVROLET") else "제네시스" if car.startswith("GENESIS") else "기아" if car.startswith("KIA") else "현대" if car.startswith("HYUNDAI") else "기타"
 
 
-BRAND_EN = {"현대": "HYUNDAI", "기아": "KIA", "제네시스": "GENESIS", "쉐보레": "CHEVROLET"}
+BRAND_EN = {"현대": "HYUNDAI", "기아": "KIA", "제네시스": "GENESIS", "쉐보레": "CHEVROLET", "GMC": "GMC", "캐딜락": "CADILLAC", "뷰익": "BUICK"}
 
 # What the menu shows: BRAND MODEL [TRIM] CODE YEARS, with the Korean market model name (AVANTE, K3, K5) where
 # the CAR string uses the overseas one and NO SCC for the trims without smart cruise control. Only the text changes;
@@ -282,6 +305,27 @@ DISPLAY = {
   "GENESIS GV80 2025": "GENESIS GV80 / COUPE JX1 LFA2 2025~",
   "CHEVROLET BOLT EV NO ACC": "CHEVROLET BOLT EV 2017-2021 NO ACC",
   "CHEVROLET BOLT EUV 2022": "CHEVROLET BOLT EUV 2022-2023",
+  "CHEVROLET VOLT PREMIER 2017": "CHEVROLET VOLT 2017-2018",
+  "CHEVROLET VOLT NO ACC": "CHEVROLET VOLT 2017-2018 NO ACC",
+  "CHEVROLET TRAILBLAZER 2021": "CHEVROLET TRAILBLAZER 2021-2022",
+  "CHEVROLET TRAILBLAZER NO ACC": "CHEVROLET TRAILBLAZER 2021-2022 NO ACC",
+  "CHEVROLET TRAX 2024": "CHEVROLET TRAX CROSSOVER 2024~",
+  "CHEVROLET EQUINOX 2019": "CHEVROLET EQUINOX 2019-2022",
+  "CHEVROLET EQUINOX NO ACC": "CHEVROLET EQUINOX 2019-2022 NO ACC",
+  "CHEVROLET MALIBU NO ACC": "CHEVROLET MALIBU 2023 NO ACC",
+  "CHEVROLET SILVERADO 1500 2020": "CHEVROLET SILVERADO / SIERRA 1500 2020-2021",
+  "CHEVROLET SILVERADO 1500 NO ACC": "CHEVROLET SILVERADO / SIERRA 1500 2020-2021 NO ACC",
+  "CHEVROLET SUBURBAN 2016": "CHEVROLET SUBURBAN 2016-2020",
+  "CHEVROLET SUBURBAN NO ACC": "CHEVROLET SUBURBAN 2016-2020 NO ACC",
+  "GMC ACADIA DENALI 2018": "GMC ACADIA 2018",
+  "GMC YUKON NO ACC": "GMC YUKON 2019-2020 NO ACC",
+  "CADILLAC ESCALADE 2017": "CADILLAC ESCALADE 2017",
+  "CADILLAC ESCALADE ESV 2016": "CADILLAC ESCALADE ESV 2016",
+  "CADILLAC ESCALADE ESV 2019": "CADILLAC ESCALADE ESV 2019",
+  "CADILLAC CT6 NO ACC": "CADILLAC CT6 2016-2020 NO ACC",
+  "CADILLAC XT4 NO ACC": "CADILLAC XT4 2023 NO ACC",
+  "CADILLAC XT5 NO ACC": "CADILLAC XT5 2022 NO ACC",
+  "BUICK LACROSSE 2017": "BUICK LACROSSE 2017-2019",
 }
 
 

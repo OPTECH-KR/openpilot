@@ -90,6 +90,20 @@ class CAR:
   # TODO EB: 0x2cb in fingerprint[0] seems to indicate ASCM presence
   VOLT_CC = "CHEVROLET VOLT NO ACC"
   BOLT_CC = "CHEVROLET BOLT EV NO ACC"
+  # optech: more GM cars after StarPilot / sunnypilot / comma (chosen in 차종 선택; no CAN fingerprints)
+  ESCALADE_ESV_2019 = "CADILLAC ESCALADE ESV 2019"      # ASCM (OBD-II harness)
+  TRAILBLAZER = "CHEVROLET TRAILBLAZER 2021"            # camera harness, stock ACC
+  TRAX = "CHEVROLET TRAX 2024"                          # camera harness, stock ACC (StarPilot)
+  SUBURBAN = "CHEVROLET SUBURBAN 2016"                  # camera harness, stock ACC (StarPilot CHEVROLET_SUBURBAN_CAMERA)
+  TRAILBLAZER_CC = "CHEVROLET TRAILBLAZER NO ACC"       # camera harness, no ACC (like the Bolt EV without ACC)
+  EQUINOX_CC = "CHEVROLET EQUINOX NO ACC"
+  MALIBU_CC = "CHEVROLET MALIBU NO ACC"
+  SILVERADO_CC = "CHEVROLET SILVERADO 1500 NO ACC"
+  SUBURBAN_CC = "CHEVROLET SUBURBAN NO ACC"
+  YUKON_CC = "GMC YUKON NO ACC"
+  CT6_CC = "CADILLAC CT6 NO ACC"
+  XT4_CC = "CADILLAC XT4 NO ACC"
+  XT5_CC = "CADILLAC XT5 NO ACC"
 
 
 class Footnote(Enum):
@@ -132,6 +146,19 @@ CAR_INFO: Dict[str, Union[GMCarInfo, List[GMCarInfo]]] = {
   CAR.EQUINOX: GMCarInfo("Chevrolet Equinox 2019-22"),
   CAR.VOLT_CC: GMCarInfo("Chevrolet Volt No ACC"),
   CAR.BOLT_CC: GMCarInfo("Chevrolet Bolt No ACC"),
+  CAR.ESCALADE_ESV_2019: GMCarInfo("Cadillac Escalade ESV 2019", "Adaptive Cruise Control (ACC) & LKAS"),
+  CAR.TRAILBLAZER: GMCarInfo("Chevrolet Trailblazer 2021-22"),
+  CAR.TRAX: GMCarInfo("Chevrolet Trax 2024-25"),
+  CAR.SUBURBAN: GMCarInfo("Chevrolet Suburban Premier 2016-20", "Adaptive Cruise Control (ACC) & LKAS"),
+  CAR.TRAILBLAZER_CC: GMCarInfo("Chevrolet Trailblazer No ACC 2021-22"),
+  CAR.EQUINOX_CC: GMCarInfo("Chevrolet Equinox No ACC 2019-22"),
+  CAR.MALIBU_CC: GMCarInfo("Chevrolet Malibu No ACC 2023"),
+  CAR.SILVERADO_CC: [GMCarInfo("Chevrolet Silverado 1500 No ACC 2020-21"), GMCarInfo("GMC Sierra 1500 No ACC 2020-21")],
+  CAR.SUBURBAN_CC: GMCarInfo("Chevrolet Suburban Premier No ACC 2016-20"),
+  CAR.YUKON_CC: GMCarInfo("GMC Yukon No ACC 2019-20"),
+  CAR.CT6_CC: GMCarInfo("Cadillac CT6 No ACC 2016-20"),
+  CAR.XT4_CC: GMCarInfo("Cadillac XT4 No ACC 2023"),
+  CAR.XT5_CC: GMCarInfo("Cadillac XT5 No ACC 2022"),
 }
 
 
@@ -292,10 +319,11 @@ FINGERPRINTS = {
 DBC: Dict[str, Dict[str, str]] = defaultdict(lambda: dbc_dict('gm_global_a_powertrain_generated', 'gm_global_a_object', chassis_dbc='gm_global_a_chassis'))
 
 EV_CAR = {CAR.VOLT, CAR.BOLT_EUV, CAR.VOLT_CC, CAR.BOLT_CC}
-CC_ONLY_CAR = {CAR.VOLT_CC, CAR.BOLT_CC}
+CC_ONLY_CAR = {CAR.VOLT_CC, CAR.BOLT_CC, CAR.TRAILBLAZER_CC, CAR.EQUINOX_CC, CAR.MALIBU_CC, CAR.SILVERADO_CC,
+               CAR.SUBURBAN_CC, CAR.YUKON_CC, CAR.CT6_CC, CAR.XT4_CC, CAR.XT5_CC}
 
 # We're integrated at the camera with VOACC on these cars (instead of ASCM w/ OBD-II harness)
-CAMERA_ACC_CAR = {CAR.BOLT_EUV, CAR.SILVERADO, CAR.EQUINOX, CAR.VOLT_CC, CAR.BOLT_CC}
+CAMERA_ACC_CAR = {CAR.BOLT_EUV, CAR.SILVERADO, CAR.EQUINOX, CAR.TRAILBLAZER, CAR.TRAX, CAR.SUBURBAN} | CC_ONLY_CAR
 
 STEER_THRESHOLD = 1.0
 
