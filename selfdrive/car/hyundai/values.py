@@ -1975,6 +1975,9 @@ def main():
   # Honda / Acura (selfdrive/car/honda, comma v0.9.2): not the radarless cars (dashcam only here) or Europe-only models
   from selfdrive.car.honda.values import CAR as HONDA_CAR
   cars += [v for k, v in vars(HONDA_CAR).items() if not k.startswith("_") and v not in ["HONDA CIVIC 2022", "HONDA CIVIC SEDAN 1.6 DIESEL 2019", "HONDA CR-V EU 2016", "HONDA HR-V 2023"]]
+  # Volkswagen group MQB (selfdrive/car/volkswagen, comma v0.9.2): stock ACC; not the PQ cars (dashcam only)
+  from selfdrive.car.volkswagen.values import CAR as VW_CAR, PQ_CARS as VW_PQ_CARS
+  cars += [v for k, v in vars(VW_CAR).items() if not k.startswith("_") and v not in VW_PQ_CARS]
   # grouped by brand / model / year with Korean names (car_menu.py); utf-8 whatever the locale
   from selfdrive.car.hyundai.car_menu import menu_lines
   for line in menu_lines(cars):

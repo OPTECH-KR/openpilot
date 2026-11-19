@@ -7,7 +7,7 @@ car per line as "CAR string|brand|display text" (the UI also accepts an old plai
 The same file is used on optech (CAN cars) and optech-fd (CAN FD cars); each branch lists its own cars.
 """
 
-BRANDS = ("현대", "기아", "제네시스", "쉐보레", "GMC", "캐딜락", "뷰익", "토요타", "렉서스", "혼다", "어큐라")
+BRANDS = ("현대", "기아", "제네시스", "쉐보레", "GMC", "캐딜락", "뷰익", "토요타", "렉서스", "혼다", "어큐라", "폭스바겐", "아우디", "세아트", "스코다")
 
 # CAR string: (brand, model family, display text, first model year). Family + year give the order inside a brand.
 MENU = {
@@ -228,6 +228,32 @@ MENU = {
   "ACURA ILX 2016": ("어큐라", "ILX", "ILX DE (2016~2019)", 2016),
   "ACURA RDX 2018": ("어큐라", "RDX", "RDX TB (2016~2018)", 2016),
   "ACURA RDX 2020": ("어큐라", "RDX", "RDX TC (2019~2022)", 2019),
+  # Volkswagen group MQB (optech, comma v0.9.2)
+  "VOLKSWAGEN ARTEON 1ST GEN": ("폭스바겐", "아테온", "아테온 · CC 3H (2018~2022)", 2018),
+  "VOLKSWAGEN ATLAS 1ST GEN": ("폭스바겐", "아틀라스", "아틀라스 · 테라몬트 CA (2018~2023)", 2018),
+  "VOLKSWAGEN CRAFTER 2ND GEN": ("폭스바겐", "크래프터", "크래프터 · MAN TGE SY (2017~2023)", 2017),
+  "VOLKSWAGEN GOLF 7TH GEN": ("폭스바겐", "골프", "골프 7세대 (2015~2021)", 2015),
+  "VOLKSWAGEN JETTA 7TH GEN": ("폭스바겐", "제타", "제타 7세대 BU (2018~2022)", 2018),
+  "VOLKSWAGEN PASSAT 8TH GEN": ("폭스바겐", "파사트", "파사트 B8 유럽형 (2015~2022)", 2015),
+  "VOLKSWAGEN POLO 6TH GEN": ("폭스바겐", "폴로", "폴로 6세대 AW (2018~2023)", 2018),
+  "VOLKSWAGEN TAOS 1ST GEN": ("폭스바겐", "타오스", "타오스 B2 (2022)", 2022),
+  "VOLKSWAGEN T-CROSS 1ST GEN": ("폭스바겐", "T-크로스", "T-크로스 C1 (2021)", 2021),
+  "VOLKSWAGEN TIGUAN 2ND GEN": ("폭스바겐", "티구안", "티구안 2세대 AD (2018~2023)", 2018),
+  "VOLKSWAGEN TOURAN 2ND GEN": ("폭스바겐", "투란", "투란 2세대 1T (2017)", 2017),
+  "VOLKSWAGEN TRANSPORTER T6.1": ("폭스바겐", "트랜스포터", "트랜스포터 · 멀티밴 T6.1 (2020~2021)", 2020),
+  "VOLKSWAGEN T-ROC 1ST GEN": ("폭스바겐", "T-록", "T-록 A1 (2021)", 2021),
+  "AUDI A3 3RD GEN": ("아우디", "A3", "A3 · S3 · RS3 8V (2014~2019)", 2014),
+  "AUDI Q2 1ST GEN": ("아우디", "Q2", "Q2 GA (2018)", 2018),
+  "AUDI Q3 2ND GEN": ("아우디", "Q3", "Q3 2세대 F3 (2019~2023)", 2019),
+  "SEAT ATECA 1ST GEN": ("세아트", "아테카", "아테카 5F (2018)", 2018),
+  "SEAT LEON 3RD GEN": ("세아트", "레온", "레온 3세대 5F (2014~2020)", 2014),
+  "SKODA FABIA 4TH GEN": ("스코다", "파비아", "파비아 4세대 PJ (2022~2023)", 2022),
+  "SKODA KAMIQ 1ST GEN": ("스코다", "카미크", "카미크 NW (2021)", 2021),
+  "SKODA KAROQ 1ST GEN": ("스코다", "카로크", "카로크 NU (2019~2021)", 2019),
+  "SKODA KODIAQ 1ST GEN": ("스코다", "코디악", "코디악 NS (2017~2023)", 2017),
+  "SKODA OCTAVIA 3RD GEN": ("스코다", "옥타비아", "옥타비아 3세대 NE (2015~2019)", 2015),
+  "SKODA SCALA 1ST GEN": ("스코다", "스칼라", "스칼라 NW (2020)", 2020),
+  "SKODA SUPERB 3RD GEN": ("스코다", "슈퍼브", "슈퍼브 3세대 3V (2015~2022)", 2015),
 }
 
 
@@ -238,13 +264,15 @@ def _key(car):
 
 
 def _brand_guess(car):
-  return "혼다" if car.startswith("HONDA") else "어큐라" if car.startswith("ACURA") else \
+  return "폭스바겐" if car.startswith("VOLKSWAGEN") else "아우디" if car.startswith("AUDI") else \
+    "세아트" if car.startswith("SEAT") else "스코다" if car.startswith("SKODA") else \
+    "혼다" if car.startswith("HONDA") else "어큐라" if car.startswith("ACURA") else \
     "토요타" if car.startswith("TOYOTA") else "렉서스" if car.startswith("LEXUS") else \
     "GMC" if car.startswith("GMC") else "캐딜락" if car.startswith("CADILLAC") else "뷰익" if car.startswith("BUICK") else \
     "쉐보레" if car.startswith("CHEVROLET") else "제네시스" if car.startswith("GENESIS") else "기아" if car.startswith("KIA") else "현대" if car.startswith("HYUNDAI") else "기타"
 
 
-BRAND_EN = {"현대": "HYUNDAI", "기아": "KIA", "제네시스": "GENESIS", "쉐보레": "CHEVROLET", "GMC": "GMC", "캐딜락": "CADILLAC", "뷰익": "BUICK", "토요타": "TOYOTA", "렉서스": "LEXUS", "혼다": "HONDA", "어큐라": "ACURA"}
+BRAND_EN = {"현대": "HYUNDAI", "기아": "KIA", "제네시스": "GENESIS", "쉐보레": "CHEVROLET", "GMC": "GMC", "캐딜락": "CADILLAC", "뷰익": "BUICK", "토요타": "TOYOTA", "렉서스": "LEXUS", "혼다": "HONDA", "어큐라": "ACURA", "폭스바겐": "VOLKSWAGEN", "아우디": "AUDI", "세아트": "SEAT", "스코다": "SKODA"}
 
 # What the menu shows: BRAND MODEL [TRIM] CODE YEARS, with the Korean market model name (AVANTE, K3, K5) where
 # the CAR string uses the overseas one and NO SCC for the trims without smart cruise control. Only the text changes;
@@ -464,6 +492,31 @@ DISPLAY = {
   "ACURA ILX 2016": "ACURA ILX DE 2016-2019",
   "ACURA RDX 2018": "ACURA RDX TB 2016-2018",
   "ACURA RDX 2020": "ACURA RDX TC 2019-2022",
+  "VOLKSWAGEN ARTEON 1ST GEN": "VOLKSWAGEN ARTEON / CC 3H 2018-2022",
+  "VOLKSWAGEN ATLAS 1ST GEN": "VOLKSWAGEN ATLAS / TERAMONT CA 2018-2023",
+  "VOLKSWAGEN CRAFTER 2ND GEN": "VOLKSWAGEN CRAFTER / MAN TGE SY 2017-2023",
+  "VOLKSWAGEN GOLF 7TH GEN": "VOLKSWAGEN GOLF MK7 2015-2021",
+  "VOLKSWAGEN JETTA 7TH GEN": "VOLKSWAGEN JETTA MK7 BU 2018-2022",
+  "VOLKSWAGEN PASSAT 8TH GEN": "VOLKSWAGEN PASSAT B8 (EUROPE) 2015-2022",
+  "VOLKSWAGEN POLO 6TH GEN": "VOLKSWAGEN POLO MK6 AW 2018-2023",
+  "VOLKSWAGEN TAOS 1ST GEN": "VOLKSWAGEN TAOS B2 2022",
+  "VOLKSWAGEN T-CROSS 1ST GEN": "VOLKSWAGEN T-CROSS C1 2021",
+  "VOLKSWAGEN TIGUAN 2ND GEN": "VOLKSWAGEN TIGUAN MK2 AD 2018-2023",
+  "VOLKSWAGEN TOURAN 2ND GEN": "VOLKSWAGEN TOURAN MK2 1T 2017",
+  "VOLKSWAGEN TRANSPORTER T6.1": "VOLKSWAGEN TRANSPORTER / MULTIVAN T6.1 2020-2021",
+  "VOLKSWAGEN T-ROC 1ST GEN": "VOLKSWAGEN T-ROC A1 2021",
+  "AUDI A3 3RD GEN": "AUDI A3 / S3 / RS3 8V 2014-2019",
+  "AUDI Q2 1ST GEN": "AUDI Q2 GA 2018",
+  "AUDI Q3 2ND GEN": "AUDI Q3 F3 2019-2023",
+  "SEAT ATECA 1ST GEN": "SEAT ATECA 5F 2018",
+  "SEAT LEON 3RD GEN": "SEAT LEON MK3 5F 2014-2020",
+  "SKODA FABIA 4TH GEN": "SKODA FABIA MK4 PJ 2022-2023",
+  "SKODA KAMIQ 1ST GEN": "SKODA KAMIQ NW 2021",
+  "SKODA KAROQ 1ST GEN": "SKODA KAROQ NU 2019-2021",
+  "SKODA KODIAQ 1ST GEN": "SKODA KODIAQ NS 2017-2023",
+  "SKODA OCTAVIA 3RD GEN": "SKODA OCTAVIA MK3 NE 2015-2019",
+  "SKODA SCALA 1ST GEN": "SKODA SCALA NW 2020",
+  "SKODA SUPERB 3RD GEN": "SKODA SUPERB MK3 3V 2015-2022",
 }
 
 
