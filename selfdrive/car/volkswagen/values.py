@@ -115,9 +115,7 @@ class CAR:
   GOLF_MK7 = "VOLKSWAGEN GOLF 7TH GEN"              # Chassis 5G/AU/BA/BE, Mk7 VW Golf and variants
   JETTA_MK7 = "VOLKSWAGEN JETTA 7TH GEN"            # Chassis BU, Mk7 VW Jetta
   PASSAT_MK8 = "VOLKSWAGEN PASSAT 8TH GEN"          # Chassis 3G, Mk8 VW Passat and variants
-  PASSAT_NMS = "VOLKSWAGEN PASSAT NMS"              # Chassis A3, North America/China/Mideast NMS Passat, incl. facelift
   POLO_MK6 = "VOLKSWAGEN POLO 6TH GEN"              # Chassis AW, Mk6 VW Polo
-  SHARAN_MK2 = "VOLKSWAGEN SHARAN 2ND GEN"          # Chassis 7N, Mk2 Volkswagen Sharan and SEAT Alhambra
   TAOS_MK1 = "VOLKSWAGEN TAOS 1ST GEN"              # Chassis B2, Mk1 VW Taos and Tharu
   TCROSS_MK1 = "VOLKSWAGEN T-CROSS 1ST GEN"         # Chassis C1, Mk1 VW T-Cross SWB and LWB variants
   TIGUAN_MK2 = "VOLKSWAGEN TIGUAN 2ND GEN"          # Chassis AD/BW, Mk2 VW Tiguan and variants
@@ -138,12 +136,12 @@ class CAR:
   SKODA_OCTAVIA_MK3 = "SKODA OCTAVIA 3RD GEN"       # Chassis NE, Mk3 Skoda Octavia and variants
 
 
-PQ_CARS = {CAR.PASSAT_NMS, CAR.SHARAN_MK2}
+# optech: no PQ cars (Passat NMS, Sharan): their DBC (vw_golf_mk4) needs an XOR checksum this tree's DBC
+# compiler lacks, and comma v0.9.2 has them dashcam only. The PQ code paths stay, unused.
+PQ_CARS: set = set()
 
 
 DBC: Dict[str, Dict[str, str]] = defaultdict(lambda: dbc_dict("vw_mqb_2010", None))
-for car_type in PQ_CARS:
-  DBC[car_type] = dbc_dict("vw_golf_mk4", None)
 
 
 class Footnote(Enum):
@@ -212,14 +210,9 @@ CAR_INFO: Dict[str, Union[VWCarInfo, List[VWCarInfo]]] = {
     VWCarInfo("Volkswagen Passat Alltrack 2015-22"),
     VWCarInfo("Volkswagen Passat GTE 2015-22"),
   ],
-  CAR.PASSAT_NMS: VWCarInfo("Volkswagen Passat NMS 2017-22"),
   CAR.POLO_MK6: [
     VWCarInfo("Volkswagen Polo 2018-23", footnotes=[Footnote.VW_MQB_A0]),
     VWCarInfo("Volkswagen Polo GTI 2018-23", footnotes=[Footnote.VW_MQB_A0]),
-  ],
-  CAR.SHARAN_MK2: [
-    VWCarInfo("Volkswagen Sharan 2018-22"),
-    VWCarInfo("SEAT Alhambra 2018-20"),
   ],
   CAR.TAOS_MK1: VWCarInfo("Volkswagen Taos 2022"),
   CAR.TCROSS_MK1: VWCarInfo("Volkswagen T-Cross 2021", footnotes=[Footnote.VW_MQB_A0]),
@@ -669,26 +662,6 @@ FW_VERSIONS = {
       b'\xf1\x875Q0907572R \xf1\x890771',
     ],
   },
-  CAR.PASSAT_NMS: {
-    (Ecu.engine, 0x7e0, None): [
-      b'\xf1\x8706K906016C \xf1\x899609',
-      b'\xf1\x8706K906016G \xf1\x891124',
-      b'\xf1\x8706K906071BJ\xf1\x894891',
-    ],
-    (Ecu.transmission, 0x7e1, None): [
-      b'\xf1\x8709G927158AB\xf1\x893318',
-      b'\xf1\x8709G927158BD\xf1\x893121',
-      b'\xf1\x8709G927158FQ\xf1\x893745',
-    ],
-    (Ecu.srs, 0x715, None): [
-      b'\xf1\x87561959655  \xf1\x890210\xf1\x82\02212121111113000102011--121012--101312',
-      b'\xf1\x87561959655C \xf1\x890508\xf1\x82\02215141111121100314919--153015--304831',
-    ],
-    (Ecu.fwdRadar, 0x757, None): [
-      b'\xf1\x87561907567A \xf1\x890132',
-      b'\xf1\x877N0907572C \xf1\x890211\xf1\x82\00152',
-    ],
-  },
   CAR.POLO_MK6: {
     (Ecu.engine, 0x7e0, None): [
       b'\xf1\x8704C906025H \xf1\x895177',
@@ -711,18 +684,6 @@ FW_VERSIONS = {
     (Ecu.fwdRadar, 0x757, None): [
       b'\xf1\x872Q0907572AA\xf1\x890396',
       b'\xf1\x872Q0907572R \xf1\x890372',
-    ],
-  },
-  CAR.SHARAN_MK2: {
-    # TODO: Sharan Mk2 EPS and DQ250 auto trans both require KWP2000 support for fingerprinting
-    (Ecu.engine, 0x7e0, None): [
-      b'\xf1\x8704L906016HE\xf1\x894635',
-    ],
-    (Ecu.srs, 0x715, None): [
-      b'\xf1\x877N0959655D \xf1\x890016\xf1\x82\x0801100705----10--',
-    ],
-    (Ecu.fwdRadar, 0x757, None): [
-      b'\xf1\x877N0907572C \xf1\x890211\xf1\x82\x0153',
     ],
   },
   CAR.TAOS_MK1: {

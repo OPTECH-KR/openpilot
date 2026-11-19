@@ -123,23 +123,9 @@ class CarInterface(CarInterfaceBase):
       ret.mass = 1551 + STD_CARGO_KG
       ret.wheelbase = 2.79
 
-    elif candidate == CAR.PASSAT_NMS:
-      ret.mass = 1503 + STD_CARGO_KG
-      ret.wheelbase = 2.80
-      ret.minEnableSpeed = 20 * CV.KPH_TO_MS  # ACC "basic", no FtS
-      ret.minSteerSpeed = 50 * CV.KPH_TO_MS
-      ret.steerActuatorDelay = 0.2
-      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
-
     elif candidate == CAR.POLO_MK6:
       ret.mass = 1230 + STD_CARGO_KG
       ret.wheelbase = 2.55
-
-    elif candidate == CAR.SHARAN_MK2:
-      ret.mass = 1639 + STD_CARGO_KG
-      ret.wheelbase = 2.92
-      ret.minSteerSpeed = 50 * CV.KPH_TO_MS
-      ret.steerActuatorDelay = 0.2
 
     elif candidate == CAR.TAOS_MK1:
       ret.mass = 1498 + STD_CARGO_KG
