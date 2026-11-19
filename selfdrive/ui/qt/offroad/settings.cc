@@ -463,6 +463,9 @@ static const OtherCarEntry OTHER_ANGLE_CARS[] = {
   {"HYUNDAI SANTA FE MX5 2024", "싼타페 MX5 (가솔린)", "LFA2 차량. 레드판다가 필요합니다."},
   {"HYUNDAI SANTA FE MX5 HEV 2024", "싼타페 MX5 하이브리드", "LFA2 차량. 레드판다가 필요합니다."},
   {"KIA EV9 2024", "EV9", "LFA2 차량. 레드판다가 필요합니다."},
+  {"HYUNDAI GRANDEUR GN7 HEV 2025", "그랜저 하이브리드 GN7 (2025~)", "LFA2 차량(HDA II). LFA2가 아닌 2023~24년식 하이브리드는 일반 목록의 '디 올 뉴 그랜저 GN7'을 고르세요(하이브리드는 자동 인식). 레드판다가 필요합니다."},
+  {"KIA EV5 2026", "EV5", "핸들을 각도로 움직이는 차(HDA II). 레드판다가 필요합니다."},
+  {"GENESIS GV80 2025", "GV80 · GV80 쿠페 (2025~)", "LFA2 차량(HDA II). 2023년식까지는 일반 목록의 'GV80 JX1'을 고르세요. 레드판다가 필요합니다."},
 };
 
 static QString lfa2_title(const QString &car) {
