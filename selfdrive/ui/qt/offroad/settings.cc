@@ -154,7 +154,7 @@ void TogglesPanel::updateToggles() {
                                   .arg(tr("새 주행 화면"))
                                   .arg(tr("저속에서는 회전 구간을 더 잘 보여주기 위해 주행 화면이 광각 카메라로 바뀝니다. 오른쪽 위에 실험 모드 로고도 표시됩니다."));
 
-  // experimental mode and openpilot longitudinal (alpha) are set from the 당근파일럿 > 고급 tab
+  // experimental mode and openpilot longitudinal (alpha) are set from the OPTECH > 고급 tab
   // (apilot switches acc / blended on its own; experimental mode would force blended all the time)
   const bool show_advanced = false;
   e2e_toggle->setVisible(show_advanced);
@@ -518,7 +518,7 @@ SettingsWindow::SettingsWindow(QWidget *parent) : QFrame(parent) {
 #endif
     {tr("Toggles"), toggles},
     {tr("Software"), new SoftwarePanel(this)},
-    {"당근파일럿", new CarrotPanel(this)},
+    {"OPTECH", new CarrotPanel(this)},
   };
 
 #ifdef ENABLE_MAPS
@@ -552,7 +552,7 @@ SettingsWindow::SettingsWindow(QWidget *parent) : QFrame(parent) {
     sidebar_layout->addWidget(btn, 0, Qt::AlignRight);
 
     // Network panel handles its own margins; the carrot panel is wide, so keep its sides tight
-    const int lr_margin = name == tr("Network") ? 0 : (name == "당근파일럿" ? 15 : 50);
+    const int lr_margin = name == tr("Network") ? 0 : (name == "OPTECH" ? 15 : 50);
     panel->setContentsMargins(lr_margin, 25, lr_margin, 25);
 
     ScrollView *panel_frame = new ScrollView(panel, this);
