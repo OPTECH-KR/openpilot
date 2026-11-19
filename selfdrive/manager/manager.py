@@ -258,8 +258,10 @@ def manager_init() -> None:
   params.put("GitCommit", get_commit(default=""))
   # release date of the code (commit time, as written by the release), shown as 브랜치 커밋 on the software page
   try:
-    commit_date = subprocess.check_output(["git", "log", "-1", "--format=%cd", "--date=format:%Y-%m-%d %H:%M:%S"],
-                                          cwd=BASEDIR, encoding="utf8", stderr=subprocess.DEVNULL).strip()
+    # always in Korea time, whatever time zone the commit was made in (POSIX TZ string, no tzdata needed)
+    commit_date = subprocess.check_output(["git", "log", "-1", "--format=%cd", "--date=format-local:%Y-%m-%d %H:%M:%S"],
+                                          cwd=BASEDIR, encoding="utf8", stderr=subprocess.DEVNULL,
+                                          env=dict(os.environ, TZ="KST-9")).strip()
   except Exception:
     commit_date = ""
   params.put("GitCommitDate", commit_date)
