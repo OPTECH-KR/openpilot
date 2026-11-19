@@ -680,7 +680,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   QWidget* toggles = new QWidget();
   QVBoxLayout* toggles_layout = new QVBoxLayout(toggles);
 
-  // ---- 시작: car, GPS check ----
+  // ---- 시작: car ----
   startToggles = new ListWidget(this);
   QString selected = QString::fromStdString(Params().get("SelectedCar"));
   QPushButton* selectCarBtn = new QPushButton(selected.length() ? car_menu_name(selected) : tr("차종 선택"));
@@ -732,7 +732,6 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     refresh.stop();
     Params().putBool("GpsCheck", false);
   });
-  startToggles->addItem(gps_btn);
   // EngageWithLong: what the cruise button turns on (controlsd / cruise_helper); no reboot needed
   auto engage_mode_btn = new ButtonControl("", "선택", "크루즈 버튼으로 openpilot을 켤 때 무엇을 켤지 고릅니다. 조향+가감속 사용: 조향과 가감속이 함께 켜지고, 설정 속도는 그때의 현재 속도입니다. 브레이크를 밟았다 떼면 원래 설정 속도로 다시 갑니다. 조향만 사용: 조향만 켜지고, 어떤 버튼이나 페달로도 가감속은 켜지지 않습니다. 어느 쪽이든 크루즈 버튼을 다시 누르면 모두 꺼지고, +/- 버튼은 가감속이 켜져 있을 때 설정 속도만 바꿉니다.");
   auto engage_mode_name = []() {
@@ -823,6 +822,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   // ---- 고급: experimental / developer ----
   advancedToggles = new ListWidget(this);
   advancedToggles->addItem(carrot_section("기기"));
+  advancedToggles->addItem(gps_btn);  // GPS 확인 (made with the 시작 items above)
   advancedToggles->addItem(new ParamControl("AutoShutdown", "자동 꺼짐", "켜 두면(초록색) 차량이나 충전기 전원 없이 배터리로만 켜져 있고 주행 중이 아닐 때, 약 10분 뒤 기기가 스스로 꺼져 배터리를 보호합니다. 끄면 배터리가 다 닳을 때까지 켜져 있습니다. 주행 중이거나 전원이 연결돼 있으면 이 설정과 상관없이 꺼지지 않습니다.", SHELL_ICON, this));
   advancedToggles->addItem(new ParamControl("OpkrHotspotOnBoot", "부팅 시 핫스팟 켜기", "켜 두면 기기가 켜질 때 핫스팟(테더링)이 자동으로 켜집니다.", SHELL_ICON, this));
   advancedToggles->addItem(carrot_section("주행 기록"));
