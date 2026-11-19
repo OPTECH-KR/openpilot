@@ -7,7 +7,7 @@ car per line as "CAR string|brand|display text" (the UI also accepts an old plai
 The same file is used on optech (CAN cars) and optech-fd (CAN FD cars); each branch lists its own cars.
 """
 
-BRANDS = ("현대", "기아", "제네시스", "쉐보레", "GMC", "캐딜락", "뷰익", "토요타", "렉서스", "혼다", "어큐라", "폭스바겐", "아우디", "세아트", "스코다", "마쓰다")
+BRANDS = ("현대", "기아", "제네시스", "쉐보레", "GMC", "캐딜락", "뷰익", "토요타", "렉서스", "혼다", "어큐라", "폭스바겐", "아우디", "세아트", "스코다", "마쓰다", "닛산", "스바루")
 
 # CAR string: (brand, model family, display text, first model year). Family + year give the order inside a brand.
 MENU = {
@@ -257,6 +257,16 @@ MENU = {
   # Mazda (optech, comma v0.9.2): only the cars that steer there
   "MAZDA CX-5 2022": ("마쓰다", "CX-5", "CX-5 KF 페이스리프트 (2022~2023)", 2022),
   "MAZDA CX-9 2021": ("마쓰다", "CX-9", "CX-9 TC 페이스리프트 (2021~2023)", 2021),
+  # Nissan / Subaru (optech, comma v0.9.2)
+  "NISSAN X-TRAIL 2017": ("닛산", "엑스트레일", "엑스트레일 T32 (2017)", 2017),
+  "NISSAN ROGUE 2019": ("닛산", "로그", "로그 T32 (2018~2020)", 2018),
+  "NISSAN LEAF 2018": ("닛산", "리프", "리프 ZE1 (2018~2023)", 2018),
+  "NISSAN LEAF 2018 Instrument Cluster": ("닛산", "리프", "리프 ZE1 · ADAS가 계기판 뒤 (2018~2023)", 2018),
+  "NISSAN ALTIMA 2020": ("닛산", "알티마", "알티마 L34 (2019~2020)", 2019),
+  "SUBARU ASCENT LIMITED 2019": ("스바루", "어센트", "어센트 WM (2019~2021)", 2019),
+  "SUBARU FORESTER 2019": ("스바루", "포레스터", "포레스터 SK (2019~2021)", 2019),
+  "SUBARU IMPREZA LIMITED 2019": ("스바루", "임프레자", "임프레자 · 크로스트렉 · XV GT (2017~2019)", 2017),
+  "SUBARU IMPREZA SPORT 2020": ("스바루", "임프레자", "임프레자 · 크로스트렉 · XV GT 페이스리프트 (2020~2023)", 2020),
 }
 
 
@@ -267,7 +277,8 @@ def _key(car):
 
 
 def _brand_guess(car):
-  return "마쓰다" if car.startswith("MAZDA") else \
+  return "닛산" if car.startswith("NISSAN") else "스바루" if car.startswith("SUBARU") else \
+    "마쓰다" if car.startswith("MAZDA") else \
     "폭스바겐" if car.startswith("VOLKSWAGEN") else "아우디" if car.startswith("AUDI") else \
     "세아트" if car.startswith("SEAT") else "스코다" if car.startswith("SKODA") else \
     "혼다" if car.startswith("HONDA") else "어큐라" if car.startswith("ACURA") else \
@@ -276,7 +287,7 @@ def _brand_guess(car):
     "쉐보레" if car.startswith("CHEVROLET") else "제네시스" if car.startswith("GENESIS") else "기아" if car.startswith("KIA") else "현대" if car.startswith("HYUNDAI") else "기타"
 
 
-BRAND_EN = {"현대": "HYUNDAI", "기아": "KIA", "제네시스": "GENESIS", "쉐보레": "CHEVROLET", "GMC": "GMC", "캐딜락": "CADILLAC", "뷰익": "BUICK", "토요타": "TOYOTA", "렉서스": "LEXUS", "혼다": "HONDA", "어큐라": "ACURA", "폭스바겐": "VOLKSWAGEN", "아우디": "AUDI", "세아트": "SEAT", "스코다": "SKODA", "마쓰다": "MAZDA"}
+BRAND_EN = {"현대": "HYUNDAI", "기아": "KIA", "제네시스": "GENESIS", "쉐보레": "CHEVROLET", "GMC": "GMC", "캐딜락": "CADILLAC", "뷰익": "BUICK", "토요타": "TOYOTA", "렉서스": "LEXUS", "혼다": "HONDA", "어큐라": "ACURA", "폭스바겐": "VOLKSWAGEN", "아우디": "AUDI", "세아트": "SEAT", "스코다": "SKODA", "마쓰다": "MAZDA", "닛산": "NISSAN", "스바루": "SUBARU"}
 
 # What the menu shows: BRAND MODEL [TRIM] CODE YEARS, with the Korean market model name (AVANTE, K3, K5) where
 # the CAR string uses the overseas one and NO SCC for the trims without smart cruise control. Only the text changes;
@@ -523,6 +534,15 @@ DISPLAY = {
   "SKODA SUPERB 3RD GEN": "SKODA SUPERB MK3 3V 2015-2022",
   "MAZDA CX-5 2022": "MAZDA CX-5 KF FACELIFT 2022-2023",
   "MAZDA CX-9 2021": "MAZDA CX-9 TC FACELIFT 2021-2023",
+  "NISSAN X-TRAIL 2017": "NISSAN X-TRAIL T32 2017",
+  "NISSAN ROGUE 2019": "NISSAN ROGUE T32 2018-2020",
+  "NISSAN LEAF 2018": "NISSAN LEAF ZE1 2018-2023",
+  "NISSAN LEAF 2018 Instrument Cluster": "NISSAN LEAF ZE1 (ADAS BEHIND CLUSTER) 2018-2023",
+  "NISSAN ALTIMA 2020": "NISSAN ALTIMA L34 2019-2020",
+  "SUBARU ASCENT LIMITED 2019": "SUBARU ASCENT WM 2019-2021",
+  "SUBARU FORESTER 2019": "SUBARU FORESTER SK 2019-2021",
+  "SUBARU IMPREZA LIMITED 2019": "SUBARU IMPREZA / CROSSTREK / XV GT 2017-2019",
+  "SUBARU IMPREZA SPORT 2020": "SUBARU IMPREZA / CROSSTREK / XV GT FACELIFT 2020-2023",
 }
 
 
