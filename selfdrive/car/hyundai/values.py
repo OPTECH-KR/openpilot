@@ -1988,6 +1988,9 @@ def main():
   # this panda) or pre-global (dashcam only in comma v0.9.2)
   from selfdrive.car.subaru.values import CAR as SUBARU_CAR, GLOBAL_GEN2 as SUBARU_GEN2, PREGLOBAL_CARS as SUBARU_PREGLOBAL
   cars += [v for k, v in vars(SUBARU_CAR).items() if not k.startswith("_") and v not in SUBARU_GEN2 + SUBARU_PREGLOBAL]
+  # Chrysler / Jeep (selfdrive/car/chrysler, comma v0.9.2): Pacifica and Grand Cherokee; not RAM (dashcam only here)
+  from selfdrive.car.chrysler.values import CAR as CHRYSLER_CAR, RAM_CARS as CHRYSLER_RAM
+  cars += [v for k, v in vars(CHRYSLER_CAR).items() if not k.startswith("_") and v not in CHRYSLER_RAM]
   # grouped by brand / model / year with Korean names (car_menu.py); utf-8 whatever the locale
   from selfdrive.car.hyundai.car_menu import menu_lines
   for line in menu_lines(cars):

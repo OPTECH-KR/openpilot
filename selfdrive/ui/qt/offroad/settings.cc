@@ -1163,7 +1163,8 @@ SelectCar::SelectCar(QWidget* parent): QWidget(parent) {
                                                   {"GMC", ""}, {"CADILLAC", "캐딜락"}, {"BUICK", "뷰익"},
                                                   {"TOYOTA", "토요타"}, {"LEXUS", "렉서스"}, {"HONDA", "혼다"}, {"ACURA", "어큐라"},
                                                   {"VOLKSWAGEN", "폭스바겐"}, {"AUDI", "아우디"}, {"SEAT", "세아트"}, {"SKODA", "스코다"}, {"MAZDA", "마쓰다"},
-                                                  {"NISSAN", "닛산"}, {"SUBARU", "스바루"}};
+                                                  {"NISSAN", "닛산"}, {"SUBARU", "스바루"},
+                                                  {"CHRYSLER", "크라이슬러"}, {"JEEP", "지프"}};
   auto cur_brand = std::make_shared<QString>();
 
   auto show_brands = [=]() {

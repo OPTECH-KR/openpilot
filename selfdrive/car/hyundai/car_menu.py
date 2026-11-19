@@ -7,7 +7,7 @@ car per line as "CAR string|brand|display text" (the UI also accepts an old plai
 The same file is used on optech (CAN cars) and optech-fd (CAN FD cars); each branch lists its own cars.
 """
 
-BRANDS = ("현대", "기아", "제네시스", "쉐보레", "GMC", "캐딜락", "뷰익", "토요타", "렉서스", "혼다", "어큐라", "폭스바겐", "아우디", "세아트", "스코다", "마쓰다", "닛산", "스바루")
+BRANDS = ("현대", "기아", "제네시스", "쉐보레", "GMC", "캐딜락", "뷰익", "토요타", "렉서스", "혼다", "어큐라", "폭스바겐", "아우디", "세아트", "스코다", "마쓰다", "닛산", "스바루", "크라이슬러", "지프")
 
 # CAR string: (brand, model family, display text, first model year). Family + year give the order inside a brand.
 MENU = {
@@ -267,6 +267,14 @@ MENU = {
   "SUBARU FORESTER 2019": ("스바루", "포레스터", "포레스터 SK (2019~2021)", 2019),
   "SUBARU IMPREZA LIMITED 2019": ("스바루", "임프레자", "임프레자 · 크로스트렉 · XV GT (2017~2019)", 2017),
   "SUBARU IMPREZA SPORT 2020": ("스바루", "임프레자", "임프레자 · 크로스트렉 · XV GT 페이스리프트 (2020~2023)", 2020),
+  # Chrysler / Jeep (optech, comma v0.9.2)
+  "CHRYSLER PACIFICA 2018": ("크라이슬러", "퍼시피카", "퍼시피카 RU (2017~2018)", 2017),
+  "CHRYSLER PACIFICA 2020": ("크라이슬러", "퍼시피카", "퍼시피카 RU (2019~2021)", 2019),
+  "CHRYSLER PACIFICA HYBRID 2017": ("크라이슬러", "퍼시피카", "퍼시피카 하이브리드 RU (2017)", 2017),
+  "CHRYSLER PACIFICA HYBRID 2018": ("크라이슬러", "퍼시피카", "퍼시피카 하이브리드 RU (2018)", 2018),
+  "CHRYSLER PACIFICA HYBRID 2019": ("크라이슬러", "퍼시피카", "퍼시피카 하이브리드 RU (2019~2023)", 2019),
+  "JEEP GRAND CHEROKEE V6 2018": ("지프", "그랜드 체로키", "그랜드 체로키 WK2 (2016~2018)", 2016),
+  "JEEP GRAND CHEROKEE 2019": ("지프", "그랜드 체로키", "그랜드 체로키 WK2 (2019~2021)", 2019),
 }
 
 
@@ -277,7 +285,8 @@ def _key(car):
 
 
 def _brand_guess(car):
-  return "닛산" if car.startswith("NISSAN") else "스바루" if car.startswith("SUBARU") else \
+  return "크라이슬러" if car.startswith("CHRYSLER") else "지프" if car.startswith("JEEP") else \
+    "닛산" if car.startswith("NISSAN") else "스바루" if car.startswith("SUBARU") else \
     "마쓰다" if car.startswith("MAZDA") else \
     "폭스바겐" if car.startswith("VOLKSWAGEN") else "아우디" if car.startswith("AUDI") else \
     "세아트" if car.startswith("SEAT") else "스코다" if car.startswith("SKODA") else \
@@ -287,7 +296,7 @@ def _brand_guess(car):
     "쉐보레" if car.startswith("CHEVROLET") else "제네시스" if car.startswith("GENESIS") else "기아" if car.startswith("KIA") else "현대" if car.startswith("HYUNDAI") else "기타"
 
 
-BRAND_EN = {"현대": "HYUNDAI", "기아": "KIA", "제네시스": "GENESIS", "쉐보레": "CHEVROLET", "GMC": "GMC", "캐딜락": "CADILLAC", "뷰익": "BUICK", "토요타": "TOYOTA", "렉서스": "LEXUS", "혼다": "HONDA", "어큐라": "ACURA", "폭스바겐": "VOLKSWAGEN", "아우디": "AUDI", "세아트": "SEAT", "스코다": "SKODA", "마쓰다": "MAZDA", "닛산": "NISSAN", "스바루": "SUBARU"}
+BRAND_EN = {"현대": "HYUNDAI", "기아": "KIA", "제네시스": "GENESIS", "쉐보레": "CHEVROLET", "GMC": "GMC", "캐딜락": "CADILLAC", "뷰익": "BUICK", "토요타": "TOYOTA", "렉서스": "LEXUS", "혼다": "HONDA", "어큐라": "ACURA", "폭스바겐": "VOLKSWAGEN", "아우디": "AUDI", "세아트": "SEAT", "스코다": "SKODA", "마쓰다": "MAZDA", "닛산": "NISSAN", "스바루": "SUBARU", "크라이슬러": "CHRYSLER", "지프": "JEEP"}
 
 # What the menu shows: BRAND MODEL [TRIM] CODE YEARS, with the Korean market model name (AVANTE, K3, K5) where
 # the CAR string uses the overseas one and NO SCC for the trims without smart cruise control. Only the text changes;
@@ -543,6 +552,13 @@ DISPLAY = {
   "SUBARU FORESTER 2019": "SUBARU FORESTER SK 2019-2021",
   "SUBARU IMPREZA LIMITED 2019": "SUBARU IMPREZA / CROSSTREK / XV GT 2017-2019",
   "SUBARU IMPREZA SPORT 2020": "SUBARU IMPREZA / CROSSTREK / XV GT FACELIFT 2020-2023",
+  "CHRYSLER PACIFICA 2018": "CHRYSLER PACIFICA RU 2017-2018",
+  "CHRYSLER PACIFICA 2020": "CHRYSLER PACIFICA RU 2019-2021",
+  "CHRYSLER PACIFICA HYBRID 2017": "CHRYSLER PACIFICA HYBRID RU 2017",
+  "CHRYSLER PACIFICA HYBRID 2018": "CHRYSLER PACIFICA HYBRID RU 2018",
+  "CHRYSLER PACIFICA HYBRID 2019": "CHRYSLER PACIFICA HYBRID RU 2019-2023",
+  "JEEP GRAND CHEROKEE V6 2018": "JEEP GRAND CHEROKEE WK2 2016-2018",
+  "JEEP GRAND CHEROKEE 2019": "JEEP GRAND CHEROKEE WK2 2019-2021",
 }
 
 

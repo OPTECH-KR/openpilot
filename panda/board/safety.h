@@ -8,7 +8,7 @@
 #include "safety/safety_gm.h"
 //#include "safety/safety_ford.h"
 #include "safety/safety_hyundai.h"
-//#include "safety/safety_chrysler.h"
+#include "safety/safety_chrysler.h"
 #include "safety/safety_subaru.h"
 #include "safety/safety_mazda.h"
 #include "safety/safety_nissan.h"
@@ -251,6 +251,7 @@ const safety_hook_config safety_hook_registry[] = {
   {SAFETY_MAZDA, &mazda_hooks},
   {SAFETY_NISSAN, &nissan_hooks},
   {SAFETY_SUBARU, &subaru_hooks},
+  {SAFETY_CHRYSLER, &chrysler_hooks},
 #ifdef ALLOW_DEBUG
   //{SAFETY_TESLA, &tesla_hooks},
   //{SAFETY_SUBARU_LEGACY, &subaru_legacy_hooks},
