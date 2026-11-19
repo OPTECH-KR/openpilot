@@ -715,8 +715,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     }
     main_layout->setCurrentWidget(homeScreen);
     if (!title.isEmpty()) {
-      ConfirmationDialog::alert("이 차량은 따로 확인할 설정이 있어요.
-차종 버튼 아래의 '" + title + "'을 확인해 주세요.", this);
+      ConfirmationDialog::alert("이 차량은 따로 확인할 설정이 있어요.\n차종 버튼 아래의 '" + title + "'을 확인해 주세요.", this);
     }
   });
   startToggles->addItem(selectCarBtn);
