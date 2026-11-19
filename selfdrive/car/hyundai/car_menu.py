@@ -7,7 +7,7 @@ car per line as "CAR string|brand|display text" (the UI also accepts an old plai
 The same file is used on optech (CAN cars) and optech-fd (CAN FD cars); each branch lists its own cars.
 """
 
-BRANDS = ("현대", "기아", "제네시스", "쉐보레", "GMC", "캐딜락", "뷰익")
+BRANDS = ("현대", "기아", "제네시스", "쉐보레", "GMC", "캐딜락", "뷰익", "토요타", "렉서스")
 
 # CAR string: (brand, model family, display text, first model year). Family + year give the order inside a brand.
 MENU = {
@@ -159,6 +159,55 @@ MENU = {
   "CADILLAC XT4 NO ACC": ("캐딜락", "XT4", "XT4 ACC 없음 (2023)", 2023),
   "CADILLAC XT5 NO ACC": ("캐딜락", "XT5", "XT5 ACC 없음 (2022)", 2022),
   "BUICK LACROSSE 2017": ("뷰익", "라크로스", "라크로스 (2017~2019)", 2017),
+  # Toyota / Lexus (optech, comma v0.9.2)
+  "TOYOTA ALPHARD 2020": ("토요타", "알파드", "알파드 AH30 (2019~2020)", 2019),
+  "TOYOTA ALPHARD HYBRID 2021": ("토요타", "알파드", "알파드 하이브리드 AH30 (2021)", 2021),
+  "TOYOTA AVALON 2016": ("토요타", "아발론", "아발론 XX40 (2016~2018)", 2016),
+  "TOYOTA AVALON 2019": ("토요타", "아발론", "아발론 XX50 (2019~2021)", 2019),
+  "TOYOTA AVALON HYBRID 2019": ("토요타", "아발론", "아발론 하이브리드 XX50 (2019~2021)", 2019),
+  "TOYOTA AVALON 2022": ("토요타", "아발론", "아발론 XX50 (2022)", 2022),
+  "TOYOTA AVALON HYBRID 2022": ("토요타", "아발론", "아발론 하이브리드 XX50 (2022)", 2022),
+  "TOYOTA CAMRY 2018": ("토요타", "캠리", "캠리 XV70 (2018~2020)", 2018),
+  "TOYOTA CAMRY HYBRID 2018": ("토요타", "캠리", "캠리 하이브리드 XV70 (2018~2020)", 2018),
+  "TOYOTA CAMRY 2021": ("토요타", "캠리", "캠리 XV70 페이스리프트 (2021~2023)", 2021),
+  "TOYOTA CAMRY HYBRID 2021": ("토요타", "캠리", "캠리 하이브리드 XV70 페이스리프트 (2021~2023)", 2021),
+  "TOYOTA C-HR 2018": ("토요타", "C-HR", "C-HR AX10 (2017~2020)", 2017),
+  "TOYOTA C-HR HYBRID 2018": ("토요타", "C-HR", "C-HR 하이브리드 AX10 (2017~2020)", 2017),
+  "TOYOTA C-HR 2021": ("토요타", "C-HR", "C-HR AX10 페이스리프트 (2021)", 2021),
+  "TOYOTA C-HR HYBRID 2022": ("토요타", "C-HR", "C-HR 하이브리드 AX10 페이스리프트 (2021~2022)", 2021),
+  "TOYOTA COROLLA 2017": ("토요타", "코롤라", "코롤라 E170 (2017~2019)", 2017),
+  "TOYOTA COROLLA TSS2 2019": ("토요타", "코롤라", "코롤라 · 코롤라 크로스 · 해치백 E210 (2019~2023)", 2019),
+  "TOYOTA COROLLA HYBRID TSS2 2019": ("토요타", "코롤라", "코롤라 · 코롤라 크로스 하이브리드 E210, 렉서스 UX 하이브리드 (2019~2023)", 2019),
+  "TOYOTA HIGHLANDER 2017": ("토요타", "하이랜더", "하이랜더 XU50 (2017~2019)", 2017),
+  "TOYOTA HIGHLANDER HYBRID 2018": ("토요타", "하이랜더", "하이랜더 하이브리드 XU50 (2017~2019)", 2017),
+  "TOYOTA HIGHLANDER 2020": ("토요타", "하이랜더", "하이랜더 XU70 (2020~2023)", 2020),
+  "TOYOTA HIGHLANDER HYBRID 2020": ("토요타", "하이랜더", "하이랜더 하이브리드 XU70 (2020~2023)", 2020),
+  "TOYOTA MIRAI 2021": ("토요타", "미라이", "미라이 JPD20 (2021)", 2021),
+  "TOYOTA PRIUS 2017": ("토요타", "프리우스", "프리우스 · 프리우스 프라임 XW50 (2016~2020)", 2016),
+  "TOYOTA PRIUS v 2017": ("토요타", "프리우스", "프리우스 v ZVW40 (2017)", 2017),
+  "TOYOTA PRIUS TSS2 2021": ("토요타", "프리우스", "프리우스 · 프리우스 프라임 XW50 페이스리프트 (2021~2022)", 2021),
+  "TOYOTA RAV4 2017": ("토요타", "RAV4", "RAV4 XA40 (2016~2018)", 2016),
+  "TOYOTA RAV4 HYBRID 2017": ("토요타", "RAV4", "RAV4 하이브리드 XA40 (2016~2018)", 2016),
+  "TOYOTA RAV4 2019": ("토요타", "RAV4", "RAV4 XA50 (2019~2021)", 2019),
+  "TOYOTA RAV4 HYBRID 2019": ("토요타", "RAV4", "RAV4 하이브리드 XA50 (2019~2021)", 2019),
+  "TOYOTA RAV4 2022": ("토요타", "RAV4", "RAV4 XA50 (2022)", 2022),
+  "TOYOTA RAV4 HYBRID 2022": ("토요타", "RAV4", "RAV4 하이브리드 XA50 (2022)", 2022),
+  "TOYOTA SIENNA 2018": ("토요타", "시에나", "시에나 XL30 (2018~2020)", 2018),
+  "LEXUS CT HYBRID 2018": ("렉서스", "CT", "CT 하이브리드 ZWA10 (2017~2018)", 2017),
+  "LEXUS ES 2018": ("렉서스", "ES", "ES XV60 (2017~2018)", 2017),
+  "LEXUS ES HYBRID 2018": ("렉서스", "ES", "ES 하이브리드 XV60 (2017~2018)", 2017),
+  "LEXUS ES 2019": ("렉서스", "ES", "ES XZ10 (2019~2022)", 2019),
+  "LEXUS ES HYBRID 2019": ("렉서스", "ES", "ES 하이브리드 XZ10 (2019~2023)", 2019),
+  "LEXUS IS 2018": ("렉서스", "IS", "IS XE30 (2017~2019)", 2017),
+  "LEXUS NX 2018": ("렉서스", "NX", "NX AZ10 (2018~2019)", 2018),
+  "LEXUS NX HYBRID 2018": ("렉서스", "NX", "NX 하이브리드 AZ10 (2018~2019)", 2018),
+  "LEXUS NX 2020": ("렉서스", "NX", "NX AZ10 TSS2 (2020~2021)", 2020),
+  "LEXUS NX HYBRID 2020": ("렉서스", "NX", "NX 하이브리드 AZ10 TSS2 (2020~2021)", 2020),
+  "LEXUS RC 2020": ("렉서스", "RC", "RC XC10 (2018~2020)", 2018),
+  "LEXUS RX 2016": ("렉서스", "RX", "RX AL20 (2016~2019)", 2016),
+  "LEXUS RX HYBRID 2017": ("렉서스", "RX", "RX 하이브리드 AL20 (2016~2019)", 2016),
+  "LEXUS RX 2020": ("렉서스", "RX", "RX AL20 페이스리프트 (2020~2022)", 2020),
+  "LEXUS RX HYBRID 2020": ("렉서스", "RX", "RX 하이브리드 AL20 페이스리프트 (2020~2021)", 2020),
 }
 
 
@@ -169,11 +218,12 @@ def _key(car):
 
 
 def _brand_guess(car):
-  return "GMC" if car.startswith("GMC") else "캐딜락" if car.startswith("CADILLAC") else "뷰익" if car.startswith("BUICK") else \
+  return "토요타" if car.startswith("TOYOTA") else "렉서스" if car.startswith("LEXUS") else \
+    "GMC" if car.startswith("GMC") else "캐딜락" if car.startswith("CADILLAC") else "뷰익" if car.startswith("BUICK") else \
     "쉐보레" if car.startswith("CHEVROLET") else "제네시스" if car.startswith("GENESIS") else "기아" if car.startswith("KIA") else "현대" if car.startswith("HYUNDAI") else "기타"
 
 
-BRAND_EN = {"현대": "HYUNDAI", "기아": "KIA", "제네시스": "GENESIS", "쉐보레": "CHEVROLET", "GMC": "GMC", "캐딜락": "CADILLAC", "뷰익": "BUICK"}
+BRAND_EN = {"현대": "HYUNDAI", "기아": "KIA", "제네시스": "GENESIS", "쉐보레": "CHEVROLET", "GMC": "GMC", "캐딜락": "CADILLAC", "뷰익": "BUICK", "토요타": "TOYOTA", "렉서스": "LEXUS"}
 
 # What the menu shows: BRAND MODEL [TRIM] CODE YEARS, with the Korean market model name (AVANTE, K3, K5) where
 # the CAR string uses the overseas one and NO SCC for the trims without smart cruise control. Only the text changes;
@@ -326,6 +376,54 @@ DISPLAY = {
   "CADILLAC XT4 NO ACC": "CADILLAC XT4 2023 NO ACC",
   "CADILLAC XT5 NO ACC": "CADILLAC XT5 2022 NO ACC",
   "BUICK LACROSSE 2017": "BUICK LACROSSE 2017-2019",
+  "TOYOTA ALPHARD 2020": "TOYOTA ALPHARD AH30 2019-2020",
+  "TOYOTA ALPHARD HYBRID 2021": "TOYOTA ALPHARD HYBRID AH30 2021",
+  "TOYOTA AVALON 2016": "TOYOTA AVALON XX40 2016-2018",
+  "TOYOTA AVALON 2019": "TOYOTA AVALON XX50 2019-2021",
+  "TOYOTA AVALON HYBRID 2019": "TOYOTA AVALON HYBRID XX50 2019-2021",
+  "TOYOTA AVALON 2022": "TOYOTA AVALON XX50 2022",
+  "TOYOTA AVALON HYBRID 2022": "TOYOTA AVALON HYBRID XX50 2022",
+  "TOYOTA CAMRY 2018": "TOYOTA CAMRY XV70 2018-2020",
+  "TOYOTA CAMRY HYBRID 2018": "TOYOTA CAMRY HYBRID XV70 2018-2020",
+  "TOYOTA CAMRY 2021": "TOYOTA CAMRY XV70 FACELIFT 2021-2023",
+  "TOYOTA CAMRY HYBRID 2021": "TOYOTA CAMRY HYBRID XV70 FACELIFT 2021-2023",
+  "TOYOTA C-HR 2018": "TOYOTA C-HR AX10 2017-2020",
+  "TOYOTA C-HR HYBRID 2018": "TOYOTA C-HR HYBRID AX10 2017-2020",
+  "TOYOTA C-HR 2021": "TOYOTA C-HR AX10 FACELIFT 2021",
+  "TOYOTA C-HR HYBRID 2022": "TOYOTA C-HR HYBRID AX10 FACELIFT 2021-2022",
+  "TOYOTA COROLLA 2017": "TOYOTA COROLLA E170 2017-2019",
+  "TOYOTA COROLLA TSS2 2019": "TOYOTA COROLLA / CROSS / HATCHBACK E210 2019-2023",
+  "TOYOTA COROLLA HYBRID TSS2 2019": "TOYOTA COROLLA / CROSS HYBRID E210, LEXUS UX HYBRID 2019-2023",
+  "TOYOTA HIGHLANDER 2017": "TOYOTA HIGHLANDER XU50 2017-2019",
+  "TOYOTA HIGHLANDER HYBRID 2018": "TOYOTA HIGHLANDER HYBRID XU50 2017-2019",
+  "TOYOTA HIGHLANDER 2020": "TOYOTA HIGHLANDER XU70 2020-2023",
+  "TOYOTA HIGHLANDER HYBRID 2020": "TOYOTA HIGHLANDER HYBRID XU70 2020-2023",
+  "TOYOTA MIRAI 2021": "TOYOTA MIRAI JPD20 2021",
+  "TOYOTA PRIUS 2017": "TOYOTA PRIUS / PRIME XW50 2016-2020",
+  "TOYOTA PRIUS v 2017": "TOYOTA PRIUS V ZVW40 2017",
+  "TOYOTA PRIUS TSS2 2021": "TOYOTA PRIUS / PRIME XW50 FACELIFT 2021-2022",
+  "TOYOTA RAV4 2017": "TOYOTA RAV4 XA40 2016-2018",
+  "TOYOTA RAV4 HYBRID 2017": "TOYOTA RAV4 HYBRID XA40 2016-2018",
+  "TOYOTA RAV4 2019": "TOYOTA RAV4 XA50 2019-2021",
+  "TOYOTA RAV4 HYBRID 2019": "TOYOTA RAV4 HYBRID XA50 2019-2021",
+  "TOYOTA RAV4 2022": "TOYOTA RAV4 XA50 2022",
+  "TOYOTA RAV4 HYBRID 2022": "TOYOTA RAV4 HYBRID XA50 2022",
+  "TOYOTA SIENNA 2018": "TOYOTA SIENNA XL30 2018-2020",
+  "LEXUS CT HYBRID 2018": "LEXUS CT HYBRID ZWA10 2017-2018",
+  "LEXUS ES 2018": "LEXUS ES XV60 2017-2018",
+  "LEXUS ES HYBRID 2018": "LEXUS ES HYBRID XV60 2017-2018",
+  "LEXUS ES 2019": "LEXUS ES XZ10 2019-2022",
+  "LEXUS ES HYBRID 2019": "LEXUS ES HYBRID XZ10 2019-2023",
+  "LEXUS IS 2018": "LEXUS IS XE30 2017-2019",
+  "LEXUS NX 2018": "LEXUS NX AZ10 2018-2019",
+  "LEXUS NX HYBRID 2018": "LEXUS NX HYBRID AZ10 2018-2019",
+  "LEXUS NX 2020": "LEXUS NX AZ10 TSS2 2020-2021",
+  "LEXUS NX HYBRID 2020": "LEXUS NX HYBRID AZ10 TSS2 2020-2021",
+  "LEXUS RC 2020": "LEXUS RC XC10 2018-2020",
+  "LEXUS RX 2016": "LEXUS RX AL20 2016-2019",
+  "LEXUS RX HYBRID 2017": "LEXUS RX HYBRID AL20 2016-2019",
+  "LEXUS RX 2020": "LEXUS RX AL20 FACELIFT 2020-2022",
+  "LEXUS RX HYBRID 2020": "LEXUS RX HYBRID AL20 FACELIFT 2020-2021",
 }
 
 

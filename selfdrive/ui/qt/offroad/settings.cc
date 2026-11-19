@@ -1160,7 +1160,8 @@ SelectCar::SelectCar(QWidget* parent): QWidget(parent) {
     (*cars)[brand].append(qMakePair(car, name));
   }
   static const QMap<QString, QString> BRAND_KO = {{"HYUNDAI", "현대"}, {"KIA", "기아"}, {"GENESIS", "제네시스"}, {"CHEVROLET", "쉐보레"},
-                                                  {"GMC", ""}, {"CADILLAC", "캐딜락"}, {"BUICK", "뷰익"}};
+                                                  {"GMC", ""}, {"CADILLAC", "캐딜락"}, {"BUICK", "뷰익"},
+                                                  {"TOYOTA", "토요타"}, {"LEXUS", "렉서스"}};
   auto cur_brand = std::make_shared<QString>();
 
   auto show_brands = [=]() {

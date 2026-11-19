@@ -183,6 +183,8 @@ class Panda(object):
   FLAG_HONDA_ALT_BRAKE = 1
 
   # GM camera harness (Bolt EUV 2022-23), panda/board/safety/safety_gm.h
+  FLAG_TOYOTA_ALT_BRAKE = (1 << 8)  # optech: backported to this panda's toyota safety (bit 8, as in comma's 16-bit param)
+
   FLAG_GM_HW_CAM = 1
   FLAG_GM_HW_CAM_LONG = 2
   FLAG_GM_CC_ONLY = 4  # Bolt EV 2017-21 without ACC on the camera harness

@@ -1968,7 +1968,10 @@ def main():
   cars += [GM_CAR.VOLT, GM_CAR.VOLT_CC, GM_CAR.ACADIA, GM_CAR.BUICK_LACROSSE, GM_CAR.ESCALADE, GM_CAR.ESCALADE_ESV,
            GM_CAR.ESCALADE_ESV_2019, GM_CAR.SILVERADO, GM_CAR.SILVERADO_CC, GM_CAR.EQUINOX, GM_CAR.EQUINOX_CC,
            GM_CAR.TRAILBLAZER, GM_CAR.TRAILBLAZER_CC, GM_CAR.TRAX, GM_CAR.SUBURBAN, GM_CAR.SUBURBAN_CC, GM_CAR.YUKON_CC,
-           GM_CAR.MALIBU_CC, GM_CAR.CT6_CC, GM_CAR.XT4_CC, GM_CAR.XT5_CC]  # Bolt EV 2017-21 without ACC, camera harness; comma pedal optional (ds5ajd/openpilot 0814)
+           GM_CAR.MALIBU_CC, GM_CAR.CT6_CC, GM_CAR.XT4_CC, GM_CAR.XT5_CC]
+  # Toyota / Lexus (selfdrive/car/toyota, comma v0.9.2): all but the LTA (angle) cars, which are dashcam only here
+  from selfdrive.car.toyota.values import CAR as TOYOTA_CAR, ANGLE_CONTROL_CAR as TOYOTA_ANGLE_CAR
+  cars += [v for k, v in vars(TOYOTA_CAR).items() if not k.startswith("_") and v not in TOYOTA_ANGLE_CAR]  # Bolt EV 2017-21 without ACC, camera harness; comma pedal optional (ds5ajd/openpilot 0814)
   # grouped by brand / model / year with Korean names (car_menu.py); utf-8 whatever the locale
   from selfdrive.car.hyundai.car_menu import menu_lines
   for line in menu_lines(cars):
