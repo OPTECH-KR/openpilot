@@ -1225,17 +1225,17 @@ static const char *NON_SCC_PEDAL =
   "페달 장치가 인식되지 않으면 켜 두어도 조향만 합니다. 재부팅해야 적용됩니다.";
 static const CcOnlyCarEntry CC_ONLY_CARS[] = {
   {"KIA RAY EV 2024", "레이 EV", "Ray", 70, 10, 70, true, NON_SCC_INTRO, NON_SCC_PEDAL,
-   "페달 보정값은 스타파일럿이 실제 레이 EV로 맞춘 값을 씁니다."},
+   "페달 보정값은 스타파일럿이 실제 레이 EV로 맞춘 값을 씁니다(당근파일럿도 같은 값). 아래 '페달 세게'와 '속도 오차 보정'은 당근파일럿 방식입니다."},
   {"HYUNDAI PORTER II EV 2024", "포터 II EV", "Porter", 40, 10, 70, true, NON_SCC_INTRO, NON_SCC_PEDAL,
    "포터는 아직 실제 차로 맞춘 페달 보정값이 없어 레이 EV 값을 임시로 씁니다. 안전한 곳에서 낮은 상한으로 먼저 확인하고, 필요하면 보정값을 맞춰야 합니다."},
-  {"CHEVROLET BOLT EV NO ACC", "볼트 EV", "Bolt", 33, 20, 60, false,
+  {"CHEVROLET BOLT EV NO ACC", "볼트 EV", "Bolt", 100, 20, 100, false,
    "어댑티브 크루즈(ACC)가 없는 볼트 EV(2017~2021)입니다. 카메라 하네스로 연결합니다. 페달 장치가 없으면 openpilot은 조향만 하고, "
    "차의 일반 크루즈를 켜면 함께 켜집니다. 레이더가 없으니 앞차와의 거리는 항상 운전자가 지켜 주세요. "
    "아직 실제 차로 시험하지 않았으니, 처음에는 'openpilot 사용'을 끄고(읽기 전용) 짧게 달려 본 뒤 조향을 켜 주세요.",
-   "comma 페달 장치를 단 경우에만 켜세요(ds5ajd 볼트 EV 방식). 켜면 openpilot이 가속페달로 가감속을 맡습니다. "
+   "comma 페달 장치를 단 경우에만 켜세요(스타파일럿 볼트 EV 방식). 켜면 openpilot이 가속페달로 가감속을 맡습니다. "
    "기어는 L(원페달) 모드여야 하고, 차의 크루즈 메인 버튼은 꺼 둔 채 SET 또는 RES 버튼으로 켭니다. "
    "브레이크 장치가 없어 감속은 회생제동만큼만 됩니다. 페달 장치가 인식되지 않으면 켜 두어도 조향만 합니다. 재부팅해야 적용됩니다.",
-   "기본 33%는 ds5ajd 볼트 EV 값(0.331)입니다."},
+   "기본 100%는 스타파일럿 그대로입니다. 저속에서는 스타파일럿이 따로 정한 상한(정지 근처 20%부터)이 먼저 적용됩니다."},
 };
 
 int CcOnlyCarPage::count() { return sizeof(CC_ONLY_CARS) / sizeof(CC_ONLY_CARS[0]); }
@@ -1267,12 +1267,28 @@ CcOnlyCarPage::CcOnlyCarPage(int index, QWidget* parent): QWidget(parent) {
       "페달을 쓰지 않을 때, openpilot이 크루즈 버튼을 대신 눌러 설정 속도를 바꿉니다(커브·과속카메라 감속 등). 크루즈가 브레이크를 세게 걸지 못하므로 앞차와의 거리는 항상 운전자가 지켜야 합니다. 기본은 꺼짐(조향만).", SHELL_ICON, this));
   }
 
+  if (prefix == "Bolt") {
+    list->addItem(new ParamControl("BoltYear2017", "2017년식",
+      "2017년식 볼트 EV면 켜세요. 2017년식은 핸들 모터(EPS)가 약해서, 스타파일럿의 2017년식 조향 튜닝과 더 큰 조향 힘 한도를 씁니다. "
+      "2018~2021년식은 끈 채로 두세요. 재부팅해야 적용됩니다.", SHELL_ICON, this));
+  }
+
   list->addItem(carrot_section("페달 (comma 페달 장치)"));
   list->addItem(new ParamControl(prefix + "Pedal", "페달 사용", e.pedal_desc, SHELL_ICON, this));
   list->addItem(new CValueControl(prefix + "PedalMax", "페달 최대 밟는 양",
     QString("openpilot이 가속페달을 최대 몇 %까지 밟을지 정합니다. 처음에는 낮게 시작해 보세요. %1~%2, 기본 %3. ")
       .arg(e.pedal_lo).arg(e.pedal_hi).arg(e.pedal_max_default) + e.note,
-    ROAD_ICON, e.pedal_lo, e.pedal_hi, e.pedal_lo == 20 ? 1 : 5));
+    ROAD_ICON, e.pedal_lo, e.pedal_hi, 5));
+  if (prefix == "Ray") {
+    list->addItem(new ParamControl("RayPedalStrong", "페달 세게 (당근)",
+      "같은 명령에 페달을 약 2배 더 밟습니다. 당근파일럿에서 2024년식 레이 EV 차주가 '가속이 약하다'고 해서 바꾼 값입니다. "
+      "당근파일럿의 주행 기록 분석에서는 이 설정으로 감속해야 할 때 오히려 가속한 경우가 있었으니, 가속이 정말 약할 때만 켜고 처음에는 조심해서 확인하세요. "
+      "기본은 꺼짐(스타파일럿 값). 재부팅해야 적용됩니다.", SHELL_ICON, this));
+    list->addItem(new CValueControl("RayPedalKi", "속도 오차 보정 (Ki)",
+      "설정 속도와 실제 속도가 계속 어긋날 때(오르막에서 처지거나 내리막에서 빨라질 때) 조금씩 페달을 더하거나 빼서 맞춥니다(당근파일럿 방식). "
+      "값 ×0.001이 Ki입니다. 0이면 끔, 기본 50(당근파일럿 레이 추천값). 너무 크면 속도가 출렁입니다. 재부팅해야 적용됩니다.",
+      ROAD_ICON, 0, 200, 10));
+  }
 
   main_layout->addWidget(new ScrollView(list, this));
 }

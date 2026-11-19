@@ -381,11 +381,18 @@ class CarInterface(CarInterfaceBase):
         ret.radarUnavailable = True  # no radar: the camera finds the lead
         ret.minEnableSpeed = -1.
         ret.autoResumeSng = False    # no brake to hold the car: no stop and go
-        # StarPilot Ray EV pedal tune
-        ret.longitudinalTuning.kpBP = [0., 5., 15., 35.]
-        ret.longitudinalTuning.kpV = [0.095, 0.085, 0.065, 0.050]
-        ret.longitudinalTuning.kiBP = [0., 3., 6., 35.]
-        ret.longitudinalTuning.kiV = [0.07, 0.10, 0.15, 0.24]
+        # carrot Ray EV pedal long: this base's long control is a PID on the speed error like carrot's (StarPilot's
+        # 0.05~0.1 gains were for an accel error), so Kp 1, Kf 1 and the Ray menu's Ki. Two breakpoints so the
+        # global long tuning menu (single breakpoint only, longcontrol.py) does not replace it.
+        from selfdrive.car.hyundai.pedal import KI_PARAM, STRONG_PARAM, ray_ki
+        ki = ray_ki(Params().get(KI_PARAM, encoding="utf8")) if candidate == CAR.KIA_RAY_EV else 0.05
+        ret.longitudinalTuning.kpBP = [0., 35.]
+        ret.longitudinalTuning.kpV = [1.0, 1.0]
+        ret.longitudinalTuning.kiBP = [0., 35.]
+        ret.longitudinalTuning.kiV = [ki, ki]
+        ret.longitudinalTuning.kf = 1.0
+        if candidate == CAR.KIA_RAY_EV and Params().get_bool(STRONG_PARAM):
+          ret.flags |= HyundaiFlags.NON_SCC_PEDAL_STRONG.value
 
     ret.stoppingControl = True
     ret.startingState = False # True # startAccel을 적용하는 startingState를 막음.
@@ -424,6 +431,8 @@ class CarInterface(CarInterfaceBase):
         ret.safetyConfigs[0].safetyParam |= Panda.FLAG_HYUNDAI_NON_SCC
         if ret.flags & HyundaiFlags.NON_SCC_PEDAL:
           ret.safetyConfigs[0].safetyParam |= Panda.FLAG_HYUNDAI_NON_SCC_PEDAL
+          if ret.flags & HyundaiFlags.NON_SCC_PEDAL_STRONG:
+            ret.safetyConfigs[0].safetyParam |= Panda.FLAG_HYUNDAI_NON_SCC_PEDAL_STRONG
       elif candidate in LEGACY_SAFETY_MODE_CAR:
         # these cars require a special panda safety mode due to missing counters and checksums in the messages
         ret.safetyConfigs = [get_safety_config(car.CarParams.SafetyModel.hyundaiLegacy)]

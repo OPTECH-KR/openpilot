@@ -9,6 +9,13 @@ Each car has its own menu switch, its own cap and its own DBC (the pedal command
   Ray EV: StarPilot's Ray calibration (zero command raw 264 / 497).
   Porter II EV: no calibration exists yet; it starts from the Ray values with a lower cap and must be checked on the car.
 The red panda / uno safety (panda/board/safety/safety_hyundai.h) only lets these commands through in the same ranges.
+
+Carrot (ajouatom, carrot-wip, Ray EV comma pedal from the same StarPilot calibration) adds two Ray options, both here:
+  '페달 세게' (RayPedalStrong): carrot PR 570, a 2024 Ray EV owner's fix for weak acceleration: the command DBC has half the
+    factor, so the same command is about twice the pedal (command 0.70 = raw 795/1572; the panda allows that only with
+    FLAG_HYUNDAI_NON_SCC_PEDAL_STRONG).
+  '속도 오차 보정' (RayPedalKi): carrot's long control for the Ray pedal, a PID on the speed error with Kp 1, Kf 1 and a
+    small Ki (owner's candidate 0.05). This base has the same speed-error long control (apilot is carrot's ancestor).
 """
 from common.numpy_fast import clip, interp
 from selfdrive.car.hyundai.values import CAR
@@ -22,6 +29,10 @@ PEDAL_PARAMS = {
   CAR.KIA_RAY_EV: ("RayPedal", "RayPedalMax", "RaySpeedButtons"),
   CAR.PORTER_II_EV: ("PorterPedal", "PorterPedalMax", "PorterSpeedButtons"),
 }
+PEDAL_DBC_STRONG = "hyundai_kia_ray_pedal_strong"
+STRONG_PARAM = "RayPedalStrong"
+KI_PARAM = "RayPedalKi"  # x0.001
+KI_DEFAULT = 50
 PEDAL_SENSOR_ADDR = 0x201
 PEDAL_SENSOR_LEN = 6
 
@@ -62,6 +73,21 @@ def pedal_target(accel: float, v_ego: float, set_speed: float, max_cap: float = 
   elif speed_error < TAPER_BELOW_TARGET:
     target *= 0.65 + 0.35 * speed_error / TAPER_BELOW_TARGET
   return target
+
+
+def command_dbc(CP) -> str:
+  from selfdrive.car.hyundai.values import HyundaiFlags
+  if CP.flags & HyundaiFlags.NON_SCC_PEDAL_STRONG:
+    return PEDAL_DBC_STRONG
+  return PEDAL_DBC[CP.carFingerprint]
+
+
+def ray_ki(raw) -> float:
+  try:
+    v = int(raw)
+  except (TypeError, ValueError):
+    v = KI_DEFAULT
+  return min(max(v, 0), 200) * 0.001
 
 
 def next_command(target: float, last: float) -> float:

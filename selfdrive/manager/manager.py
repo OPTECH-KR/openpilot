@@ -62,12 +62,15 @@ def manager_init() -> None:
     ("RaySpeedButtons", "0"),      # let openpilot press the cruise buttons to set the speed (no pedal)
     ("RayPedal", "0"),             # comma pedal: openpilot long through the accelerator
     ("RayPedalMax", "70"),         # pedal command cap, % (StarPilot Ray calibration allows 70)
+    ("RayPedalStrong", "0"),       # carrot PR 570: twice the pedal for the same command (2024 Ray EV owner's fix)
+    ("RayPedalKi", "50"),          # speed error integral gain x0.001 with the pedal (carrot's Ray candidate 50)
     ("PorterSpeedButtons", "0"),
     ("PorterPedal", "0"),
     ("PorterPedalMax", "40"),      # no Porter calibration yet: lower cap
     # Chevrolet Bolt EV 2017-21 without ACC (ds5ajd/openpilot 0814)
     ("BoltPedal", "0"),            # comma pedal: openpilot long through the accelerator
-    ("BoltPedalMax", "33"),        # pedal command cap, % (ds5ajd pedalMaxValue 0.331)
+    ("BoltPedalMax", "100"),       # pedal command cap, % on top of StarPilot's own speed cap (100 = StarPilot as is)
+    ("BoltYear2017", "0"),         # 2017 Bolt EV: StarPilot's 2017 steering tune and limits
     ("ShowConnInfo", "1"),
     ("ShowLaneInfo", "1"),
     ("ShowBlindSpot", "1"),

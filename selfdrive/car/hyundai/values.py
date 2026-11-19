@@ -76,6 +76,7 @@ class HyundaiFlags(IntFlag):
   NON_SCC = 65536                # no SCC, stock cruise control only (Kia Ray EV, Porter II EV)
   NON_SCC_NO_TCS = 131072        # ... and no TCS13 (brake from E_EMS11)
   NON_SCC_PEDAL = 262144         # ... with a comma pedal: openpilot long through the accelerator (selfdrive/car/hyundai/pedal.py)
+  NON_SCC_PEDAL_STRONG = 524288  # ... Ray EV with carrot's strong pedal scaling (hyundai_kia_ray_pedal_strong)
 
 
 class CAR:

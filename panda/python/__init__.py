@@ -187,6 +187,7 @@ class Panda(object):
   FLAG_GM_HW_CAM_LONG = 2
   FLAG_GM_CC_ONLY = 4  # Bolt EV 2017-21 without ACC on the camera harness
   FLAG_GM_PEDAL = 8    # ... with the comma pedal
+  FLAG_GM_BOLT_2017 = 16  # ... a 2017 Bolt EV: StarPilot's larger steering limits for its weaker EPS
   FLAG_HONDA_BOSCH_LONG = 2
   FLAG_HONDA_NIDEC_ALT = 4
 
@@ -200,6 +201,7 @@ class Panda(object):
   FLAG_HYUNDAI_AUTO_ENGAGE = 128
   FLAG_HYUNDAI_NON_SCC = 1024
   FLAG_HYUNDAI_NON_SCC_PEDAL = 2048
+  FLAG_HYUNDAI_NON_SCC_PEDAL_STRONG = 4096  # Ray EV, carrot's strong pedal scaling: larger raw command range
 
   FLAG_TESLA_POWERTRAIN = 1
   FLAG_TESLA_LONG_CONTROL = 2

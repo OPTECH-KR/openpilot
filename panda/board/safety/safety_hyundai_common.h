@@ -11,6 +11,8 @@ const int HYUNDAI_PARAM_AUTO_ENGAGE = 128;
 const int HYUNDAI_PARAM_NON_SCC = 1024;
 // ... with a comma pedal (Ray EV / Porter II EV): openpilot sends GAS_COMMAND 0x200 (StarPilot Ray pedal checks)
 const int HYUNDAI_PARAM_NON_SCC_PEDAL = 2048;
+// ... Ray EV with carrot's strong pedal scaling (PR 570): command 0.70 is raw 795/1572 instead of 530/1035
+const int HYUNDAI_PARAM_NON_SCC_PEDAL_STRONG = 4096;
 
 const uint8_t HYUNDAI_PREV_BUTTON_SAMPLES = 8;  // roughly 160 ms
 const uint32_t HYUNDAI_STANDSTILL_THRSLD = 12;  // 0.375 kph
@@ -31,6 +33,7 @@ bool hyundai_alt_limits = false;
 bool hyundai_auto_engage = false;
 bool hyundai_non_scc = false;
 bool hyundai_non_scc_pedal = false;
+bool hyundai_non_scc_pedal_strong = false;
 uint8_t hyundai_last_button_interaction;  // button messages since the user pressed an enable button
 
 void hyundai_common_init(uint16_t param) {
@@ -49,6 +52,7 @@ void hyundai_common_init(uint16_t param) {
   hyundai_auto_engage = GET_FLAG(param, HYUNDAI_PARAM_AUTO_ENGAGE);
   hyundai_non_scc = GET_FLAG(param, HYUNDAI_PARAM_NON_SCC);
   hyundai_non_scc_pedal = hyundai_non_scc && GET_FLAG(param, HYUNDAI_PARAM_NON_SCC_PEDAL);
+  hyundai_non_scc_pedal_strong = hyundai_non_scc_pedal && GET_FLAG(param, HYUNDAI_PARAM_NON_SCC_PEDAL_STRONG);
 }
 
 void hyundai_common_cruise_state_check(const int cruise_engaged) {

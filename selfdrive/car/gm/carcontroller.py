@@ -51,9 +51,10 @@ class CarController:
     self.last_button_frame = 0
     self.cancel_counter = 0
     self.pedal_steady = 0.
-    # Bolt EV without ACC: ds5ajd pedal model, capped by the Bolt EV settings page
+    # Bolt EV without ACC: StarPilot pedal model, capped by the Bolt EV settings page
     self.bolt_pedal = CP.carFingerprint == CAR.BOLT_CC and CP.enableGasInterceptor
     self.bolt_pedal_max = bolt_pedal.pedal_max(Params().get(bolt_pedal.PEDAL_MAX_PARAM)) if self.bolt_pedal else 0.
+    self.bolt_pedal_active_last = False
 
     self.lka_steering_cmd_counter = 0
     self.lka_icon_status_last = (False, False)
@@ -154,9 +155,13 @@ class CarController:
             # apply pedal hysteresis and clip the final output to valid values.
             pedal_final, self.pedal_steady = actuator_hystereses(pedal_gas, self.pedal_steady)
             pedal_gas = clip(pedal_final, 0., 1.)
-          else:
+          elif CC.longActive:
             pedal_gas, self.pedal_steady = bolt_pedal.pedal_command(actuators.accel, CS.out.vEgo, self.pedal_steady,
-                                                                    self.bolt_pedal_max)
+                                                                    self.bolt_pedal_active_last, self.bolt_pedal_max)
+            self.bolt_pedal_active_last = True
+          else:
+            self.pedal_steady = 0.
+            self.bolt_pedal_active_last = False
 
           if not CC.longActive:
             pedal_gas = 0.0  # May not be needed with the enable param

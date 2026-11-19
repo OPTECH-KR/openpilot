@@ -9,6 +9,10 @@ from selfdrive.car.docs_definitions import CarFootnote, CarInfo, Column, Harness
 Ecu = car.CarParams.Ecu
 
 
+class GMFlags:
+  BOLT_2017 = 1  # Bolt EV without ACC, 2017 (Bolt EV settings page): its own steering tune and limits
+
+
 class CarControllerParams:
   STEER_MAX = 300  # GM limit is 3Nm. Used by carcontroller to generate LKA output
   STEER_STEP = 3  # Active control frames per command (~33hz)
@@ -33,6 +37,14 @@ class CarControllerParams:
   ACCEL_MIN = -4.  # m/s^2
 
   def __init__(self, CP):
+    # Bolt EV 2017: StarPilot's GM_BOLT_2017_STEERING_LIMITS (the panda checks the same with FLAG_GM_BOLT_2017)
+    if CP.flags & GMFlags.BOLT_2017:
+      self.STEER_MAX = 450
+      self.STEER_DELTA_UP = 15
+      self.STEER_DELTA_DOWN = 34
+      self.STEER_DRIVER_ALLOWANCE = 78
+      self.STEER_DRIVER_MULTIPLIER = 6
+
     # Gas/brake lookups
     self.ZERO_GAS = 2048  # Coasting
     self.MAX_BRAKE = 400  # ~ -4.0 m/s^2 with regen
