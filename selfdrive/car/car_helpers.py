@@ -84,6 +84,22 @@ interface_names = _get_interface_names()
 interfaces = load_interfaces(interface_names)
 
 
+def bolt_from_can(candidate, pt):
+  """StarPilot's Bolt rule (opendbc car_helpers _normalize_gm_bolt_candidate) for this tree's two Bolt entries.
+  2022+ Bolts (EUV, EV with ACC) and one 2022 no-ACC capture share the same powertrain CAN, so CAN fingerprinting
+  can stay ambiguous or land on the no-ACC car. Like StarPilot, a 2022+ Bolt defaults to the ACC car (a real no-ACC
+  2022 car is picked in the car menu); a 2017-21 Bolt (0xD3 2 bytes) is the no-ACC car."""
+  from selfdrive.car.gm.values import CAR as GM_CAR
+  if candidate not in (None, GM_CAR.BOLT_CC):
+    return candidate
+  bolt_2022 = pt.get(190) == 7 and pt.get(211) == 3 and pt.get(566) == 8 and pt.get(458) == 5
+  if bolt_2022:
+    return GM_CAR.BOLT_EUV
+  if candidate is None and 170 in pt and 188 in pt and pt.get(211) == 2:
+    return GM_CAR.BOLT_CC
+  return candidate
+
+
 # **** for use live only ****
 def fingerprint(logcan, sendcan):
   fixed_fingerprint = os.environ.get('FINGERPRINT', "")
@@ -152,6 +168,12 @@ def fingerprint(logcan, sendcan):
     done = failed or succeeded
 
     frame += 1
+
+  # optech (StarPilot rule): sort out the Bolts that CAN fingerprinting cannot tell apart (see bolt_from_can)
+  bolt = bolt_from_can(car_fingerprint, finger.get(0, {}))
+  if bolt != car_fingerprint:
+    cloudlog.warning("Bolt from CAN: %s -> %s", car_fingerprint, bolt)
+    car_fingerprint = bolt
 
   exact_match = True
   source = car.CarParams.FingerprintSource.can
