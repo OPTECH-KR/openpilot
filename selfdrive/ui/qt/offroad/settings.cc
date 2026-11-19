@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cmath>
 #include <string>
+#include <memory>
 
 #include <QDebug>
 
@@ -33,6 +34,7 @@
 #include <QScroller>
 #include <QListView>
 #include <QListWidget>
+#include <QMap>
 
 #include <QProcess> // opkr
 #include <QDateTime> // opkr
@@ -476,10 +478,13 @@ static QString lfa2_title(const QString &car) {
 }
 
 static QString car_menu_name(const QString &car) {
+  // the menu file has the name without the brand ("K5 DL3 2020-2023"); the car button shows "KIA K5 DL3 2020-2023"
   if (car.isEmpty()) return QString();
   for (const QString &line : get_list_utf8("/data/params/d/SupportedCars")) {
     const QStringList parts = line.split('|');
-    if (parts.size() >= 3 && parts[0] == car) return parts[2];
+    if (parts.size() >= 3 && parts[0] == car) {
+      return parts[2].startsWith(parts[1] + " ") ? parts[2] : parts[1] + " " + parts[2];
+    }
   }
   return car;
 }
@@ -1191,54 +1196,95 @@ SelectCar::SelectCar(QWidget* parent): QWidget(parent) {
   main_layout->setMargin(20);
   main_layout->setSpacing(20);
 
-  // Back button
+  // Back button: from a brand's cars back to the brands, from the brands back to the settings
   QPushButton* back = new QPushButton(tr("Back"));
   back->setObjectName("back_btn");
   back->setFixedSize(500, 100);
-  connect(back, &QPushButton::clicked, [=]() { emit backPress(); });
   main_layout->addWidget(back, 0, Qt::AlignLeft);
 
   QListWidget* list = new QListWidget(this);
   list->setStyleSheet("QListView {padding: 40px; background-color: #393939; border-radius: 15px; height: 140px;} QListView::item{height: 100px}");
-  //list->setAttribute(Qt::WA_AcceptTouchEvents, true);
   QScroller::grabGesture(list->viewport(), QScroller::LeftMouseButtonGesture);
   list->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
 
-  // [선택 안 함], then 현대 / 기아 / 제네시스 headers with their cars in model and year order (car_menu.py).
-  // Each car row keeps its CAR string in UserRole; that is what SelectedCar stores.
-  QListWidgetItem* none_item = new QListWidgetItem(tr("[ 선택 안 함 ]"));
-  none_item->setData(Qt::UserRole, QString());
-  list->addItem(none_item);
-  list->setCurrentItem(none_item);
-
-  const QString selected = QString::fromStdString(Params().get("SelectedCar"));
+  // menu file lines "CAR|brand|name" in brand, model and year order (car_menu.py). The brand list comes first; a brand
+  // shows only its cars. Each car row keeps its CAR string in UserRole; that is what SelectedCar stores.
   QStringList lines = get_list_utf8("/data/params/d/SupportedCars");
   lines += get_list_utf8("/data/params/d/SupportedCars_gm");
-  QString brand_prev;
+  auto brands = std::make_shared<QStringList>();
+  auto cars = std::make_shared<QMap<QString, QList<QPair<QString, QString>>>>();  // brand -> (CAR, name)
   for (const QString &line : lines) {
     const QStringList parts = line.split('|');
     const QString car = parts[0];
-    const QString brand = parts.size() >= 3 ? parts[1] : QString();
+    if (car.isEmpty()) continue;
+    const QString brand = parts.size() >= 3 ? parts[1] : QString("OTHER");
     const QString name = parts.size() >= 3 ? parts[2] : car;
-    if (!brand.isEmpty() && brand != brand_prev) {
-      QListWidgetItem* header = new QListWidgetItem("■ " + brand);
-      header->setFlags(Qt::NoItemFlags);  // not selectable
-      header->setForeground(QColor("#33ab4c"));
-      QFont f = header->font();
-      f.setBold(true);
-      header->setFont(f);
-      list->addItem(header);
-      brand_prev = brand;
-    }
-    QListWidgetItem* item = new QListWidgetItem("      " + name);
-    item->setData(Qt::UserRole, car);
-    list->addItem(item);
-    if (car == selected) list->setCurrentItem(item);
+    if (!brands->contains(brand)) brands->append(brand);
+    (*cars)[brand].append(qMakePair(car, name));
   }
-  if (list->currentItem()) list->scrollToItem(list->currentItem(), QAbstractItemView::PositionAtCenter);
+  static const QMap<QString, QString> BRAND_KO = {{"HYUNDAI", "현대"}, {"KIA", "기아"}, {"GENESIS", "제네시스"}, {"CHEVROLET", "쉐보레"}};
+  auto cur_brand = std::make_shared<QString>();
+
+  auto show_brands = [=]() {
+    cur_brand->clear();
+    list->clear();
+    const QString selected = QString::fromStdString(Params().get("SelectedCar"));
+    QListWidgetItem* none_item = new QListWidgetItem(tr("[ 선택 안 함 ]"));
+    none_item->setData(Qt::UserRole, QString());
+    list->addItem(none_item);
+    list->setCurrentItem(none_item);
+    for (const QString &b : *brands) {
+      const QString ko = BRAND_KO.value(b);
+      QListWidgetItem* item = new QListWidgetItem("   " + b + (ko.isEmpty() ? "" : "  " + ko) +
+                                                  QString("   (%1)   ▶").arg((*cars)[b].size()));
+      item->setData(Qt::UserRole + 1, b);
+      list->addItem(item);
+      for (const auto &c : (*cars)[b]) {
+        if (c.first == selected) list->setCurrentItem(item);
+      }
+    }
+    list->scrollToTop();
+  };
+
+  auto show_cars = [=](const QString &b) {
+    *cur_brand = b;
+    list->clear();
+    const QString selected = QString::fromStdString(Params().get("SelectedCar"));
+    const QString ko = BRAND_KO.value(b);
+    QListWidgetItem* header = new QListWidgetItem("■ " + b + (ko.isEmpty() ? "" : "  " + ko));
+    header->setFlags(Qt::NoItemFlags);  // not selectable
+    header->setForeground(QColor("#33ab4c"));
+    QFont f = header->font();
+    f.setBold(true);
+    header->setFont(f);
+    list->addItem(header);
+    for (const auto &c : (*cars)[b]) {
+      QListWidgetItem* item = new QListWidgetItem("      " + c.second);
+      item->setData(Qt::UserRole, c.first);
+      list->addItem(item);
+      if (c.first == selected) list->setCurrentItem(item);
+    }
+    if (list->currentItem()) list->scrollToItem(list->currentItem(), QAbstractItemView::PositionAtCenter);
+    else list->scrollToTop();
+  };
+
+  show_brands();
+
+  connect(back, &QPushButton::clicked, [=]() {
+    if (!cur_brand->isEmpty()) {
+      show_brands();
+    } else {
+      emit backPress();
+    }
+  });
 
   QObject::connect(list, QOverload<QListWidgetItem*>::of(&QListWidget::itemClicked),
     [=](QListWidgetItem* item){
+    const QString brand = item->data(Qt::UserRole + 1).toString();
+    if (!brand.isEmpty()) {  // a brand: show its cars
+      show_cars(brand);
+      return;
+    }
     if (!(item->flags() & Qt::ItemIsSelectable)) return;  // brand header
     const QString car = item->data(Qt::UserRole).toString();
     if (car.isEmpty())
@@ -1246,6 +1292,7 @@ SelectCar::SelectCar(QWidget* parent): QWidget(parent) {
     else
         Params().put("SelectedCar", car.toStdString());
 
+    show_brands();  // next time the list starts from the brands again
     emit selectedCar();
     });
 
