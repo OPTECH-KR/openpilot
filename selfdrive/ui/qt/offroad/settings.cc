@@ -697,25 +697,30 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   selectCar = new SelectCar(this);
   connect(selectCarBtn, &QPushButton::clicked, [=]() { main_layout->setCurrentWidget(selectCar); });
   connect(selectCar, &SelectCar::backPress, [=]() { main_layout->setCurrentWidget(homeScreen); });
-  // '레이 EV 설정' / '포터 II EV 설정': each only while that car is the chosen one (cars without SCC)
-  QList<ButtonControl*> cc_only_btns;
+  // '레이 EV 설정' / '포터 II EV 설정' / '볼트 EV 설정': shown open right under the car button while that car is the
+  // chosen one; choosing such a car also pops up a note to check them
   for (int i = 0; i < CcOnlyCarPage::count(); i++) {
     CcOnlyCarPage* page = new CcOnlyCarPage(i, this);
+    page->setVisible(selected == CcOnlyCarPage::carName(i));
     ccOnlyPages.append(page);
-    auto btn = new ButtonControl(CcOnlyCarPage::menuTitle(i), "열기", "스마트 크루즈(SCC)가 없는 차량 전용 설정입니다(크루즈 속도 자동 조절, 페달 사용). 차종을 이 차로 골랐을 때만 보입니다.");
-    QObject::connect(btn, &ButtonControl::clicked, [=]() { main_layout->setCurrentWidget(page); });
-    connect(page, &CcOnlyCarPage::backPress, [=]() { main_layout->setCurrentWidget(homeScreen); });
-    btn->setVisible(selected == CcOnlyCarPage::carName(i));
-    cc_only_btns.append(btn);
   }
   connect(selectCar, &SelectCar::selectedCar, [=]() {
     QString car = QString::fromStdString(Params().get("SelectedCar"));
     selectCarBtn->setText(car.length() ? car_menu_name(car) : tr("차종 선택"));
-    for (int i = 0; i < cc_only_btns.size(); i++) cc_only_btns[i]->setVisible(car == CcOnlyCarPage::carName(i));
+    QString title;
+    for (int i = 0; i < ccOnlyPages.size(); i++) {
+      const bool mine = car == CcOnlyCarPage::carName(i);
+      ccOnlyPages[i]->setVisible(mine);
+      if (mine) title = CcOnlyCarPage::menuTitle(i);
+    }
     main_layout->setCurrentWidget(homeScreen);
+    if (!title.isEmpty()) {
+      ConfirmationDialog::alert("이 차량은 따로 확인할 설정이 있어요.
+차종 버튼 아래의 '" + title + "'을 확인해 주세요.", this);
+    }
   });
   startToggles->addItem(selectCarBtn);
-  for (auto btn : cc_only_btns) startToggles->addItem(btn);
+  for (auto page : ccOnlyPages) startToggles->addItem(page);
   auto gps_btn = new ButtonControl("GPS 확인", "확인", "시동을 걸지 않아도 GPS를 켜서 잡힘 여부, 신호 세기, 위성 수, 위치 오차를 실시간으로 보여 줍니다. 창을 닫으면 GPS는 다시 꺼집니다. 기기 내장 GPS를 사용합니다.");
   QObject::connect(gps_btn, &ButtonControl::clicked, [=]() {
     Params().putBool("GpsCheck", true);  // boardd powers the uBlox while this is set (read about once a second)
@@ -910,7 +915,6 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   homeScreen->setLayout(carrotLayout);
   main_layout->addWidget(homeScreen);
   main_layout->addWidget(selectCar);
-  for (auto page : ccOnlyPages) main_layout->addWidget(page);
   main_layout->setCurrentWidget(homeScreen);
 
   togglesCarrot(0);
@@ -1225,15 +1229,10 @@ CcOnlyCarPage::CcOnlyCarPage(int index, QWidget* parent): QWidget(parent) {
   const CcOnlyCarEntry &e = CC_ONLY_CARS[index];
   const QString prefix = e.prefix;
 
+  // shown inside the 시작 tab (its scroll view), so no back button or scroll view of its own
   QVBoxLayout* main_layout = new QVBoxLayout(this);
-  main_layout->setMargin(20);
-  main_layout->setSpacing(20);
-
-  QPushButton* back = new QPushButton(tr("Back"));
-  back->setObjectName("back_btn");
-  back->setFixedSize(500, 100);
-  connect(back, &QPushButton::clicked, [=]() { emit backPress(); });
-  main_layout->addWidget(back, 0, Qt::AlignLeft);
+  main_layout->setMargin(0);
+  main_layout->setSpacing(0);
 
   ListWidget* list = new ListWidget(this);
   list->addItem(carrot_section(QString(e.title) + " 설정"));
@@ -1269,5 +1268,5 @@ CcOnlyCarPage::CcOnlyCarPage(int index, QWidget* parent): QWidget(parent) {
       ROAD_ICON, 0, 200, 10));
   }
 
-  main_layout->addWidget(new ScrollView(list, this));
+  main_layout->addWidget(list);
 }
