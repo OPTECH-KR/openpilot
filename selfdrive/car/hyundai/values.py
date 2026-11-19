@@ -344,7 +344,7 @@ CAR_INFO: Dict[str, Optional[Union[HyundaiCarInfo, List[HyundaiCarInfo]]]] = {
   # from carrot: CAN FD
   CAR.GRANDEUR_GN7: HyundaiCarInfo("Hyundai Grandeur (Azera) 2023-24", "All", harness=Harness.hyundai_a),
   CAR.KONA_EV_2ND_GEN: HyundaiCarInfo("Hyundai Kona Electric (with HDA II, Korea only) 2023", "Highway Driving Assist II", harness=Harness.hyundai_q),
-  CAR.KONA_HEV_2ND_GEN: HyundaiCarInfo("Hyundai Kona Hybrid 2024", "All", harness=Harness.hyundai_l),
+  CAR.KONA_HEV_2ND_GEN: HyundaiCarInfo("Hyundai Kona Hybrid 2024-26", "All", harness=Harness.hyundai_l),
   CAR.SONATA_2024: HyundaiCarInfo("Hyundai Sonata 2024-25", "All", harness=Harness.hyundai_a),
   CAR.STARIA_4TH_GEN: HyundaiCarInfo("Hyundai Staria 2023", "All", harness=Harness.hyundai_k),
   CAR.IONIQ_5_N: HyundaiCarInfo("Hyundai Ioniq 5 N (with HDA II) 2024", "Highway Driving Assist II", harness=Harness.hyundai_m),
@@ -1806,8 +1806,12 @@ FW_VERSIONS = {
   CAR.KONA_HEV_2ND_GEN: {
     (Ecu.fwdCamera, 0x7c4, None): [
       b'\xf1\x00SX2HMFC  AT EUR RHD 1.00 1.04 99211-BE000 231010',
+      b'\xf1\x00SX2HMFC  AT AUS RHD 1.00 1.00 99211-BE001 241015',  # sunnypilot opendbc b652b7f
+      b'\xf1\x00SX2HMFC  AT AUS RHD 1.00 1.01 99211-BE001 250117',
+      b'\xf1\x00SX2HMFC  AT EUR LHD 1.00 1.01 99211-BE001 250117',
     ],
     (Ecu.fwdRadar, 0x7d0, None): [
+      b'\xf1\x00SX2_ RDR -----      1.00 1.02 99110-BE000         ',
       b'\xf1\x00SX2_ RDR -----      1.00 1.02 99110-BE500         ',
     ],
   },
