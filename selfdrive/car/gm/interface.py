@@ -8,8 +8,10 @@ from common.params import Params
 from common.conversions import Conversions as CV
 from selfdrive.car import STD_CARGO_KG, create_button_event, scale_tire_stiffness, get_safety_config
 from selfdrive.car.gm.radar_interface import RADAR_HEADER_MSG
+from selfdrive.car.gm import bolt_pedal
 from selfdrive.car.gm.bolt_pedal import PEDAL_PARAM
-from selfdrive.car.gm.values import CAR, CruiseButtons, CarControllerParams, EV_CAR, CAMERA_ACC_CAR, CanBus, CC_ONLY_CAR
+from selfdrive.car.gm.bolt_tune import get_bolt_tune, make_torque_from_lateral_accel, apply_bolt_tune
+from selfdrive.car.gm.values import CAR, CruiseButtons, CarControllerParams, EV_CAR, CAMERA_ACC_CAR, CanBus, CC_ONLY_CAR, GMFlags
 from selfdrive.car.interfaces import CarInterfaceBase, TorqueFromLateralAccelCallbackType, FRICTION_THRESHOLD
 from selfdrive.controls.lib.drive_helpers import get_friction
 
@@ -25,6 +27,8 @@ BUTTONS_DICT = {CruiseButtons.RES_ACCEL: ButtonType.accelCruise, CruiseButtons.D
 class CarInterface(CarInterfaceBase):
   @staticmethod
   def get_pid_accel_limits(CP, current_speed, cruise_speed):
+    if CP.carFingerprint == CAR.BOLT_CC and CP.enableGasInterceptor:
+      return bolt_pedal.accel_limits(current_speed)  # StarPilot BOLT_PEDAL_LONG_CARS
     return CarControllerParams.ACCEL_MIN, CarControllerParams.ACCEL_MAX
 
   # Determined by iteratively plotting and minimizing error for f(angle, speed) = steer.
@@ -48,28 +52,11 @@ class CarInterface(CarInterfaceBase):
     else:
       return CarInterfaceBase.get_steer_feedforward_default
 
-  @staticmethod
-  def torque_from_lateral_accel_bolt(lateral_accel_value: float, torque_params: car.CarParams.LateralTorqueTuning,
-                                     lateral_accel_error: float, lateral_accel_deadzone: float, friction_compensation: bool) -> float:
-    friction = get_friction(lateral_accel_error, lateral_accel_deadzone, FRICTION_THRESHOLD, torque_params, friction_compensation)
-
-    def sig(val):
-      return 1 / (1 + exp(-val)) - 0.5
-
-    # The "lat_accel vs torque" relationship is assumed to be the sum of "sigmoid + linear" curves
-    # An important thing to consider is that the slope at 0 should be > 0 (ideally >1)
-    # This has big effect on the stability about 0 (noise when going straight)
-    # ToDo: To generalize to other GMs, explore tanh function as the nonlinear
-    a, b, c, _ = [2.6531724862969748, 1.0, 0.1919764879840985, 0.009054123646805178]  # weights computed offline
-
-    steer_torque = (sig(lateral_accel_value * a) * b) + (lateral_accel_value * c)
-    return float(steer_torque) + friction
-
   def torque_from_lateral_accel(self) -> TorqueFromLateralAccelCallbackType:
-    if self.CP.carFingerprint == CAR.BOLT_EUV:
-      return self.torque_from_lateral_accel_bolt
-    else:
-      return self.torque_from_lateral_accel_linear
+    tune = get_bolt_tune(self.CP)  # Bolt EUV / Bolt EV: StarPilot's curve per generation
+    if tune is not None:
+      return make_torque_from_lateral_accel(tune)
+    return self.torque_from_lateral_accel_linear
 
   @staticmethod
   def _get_params(ret, candidate, fingerprint, car_fw, experimental_long, docs=False):  # this base passes no docs
@@ -137,7 +124,8 @@ class CarInterface(CarInterfaceBase):
     # These cars have been put into dashcam only due to both a lack of users and test coverage.
     # These cars likely still work fine. Once a user confirms each car works and a test route is
     # added to selfdrive/car/tests/routes.py, we can remove it from this list.
-    ret.dashcamOnly = candidate in {CAR.CADILLAC_ATS, CAR.HOLDEN_ASTRA, CAR.MALIBU, CAR.BUICK_REGAL, CAR.EQUINOX} or \
+    # (Equinox: supported by StarPilot / sunnypilot / comma since)
+    ret.dashcamOnly = candidate in {CAR.CADILLAC_ATS, CAR.HOLDEN_ASTRA, CAR.MALIBU, CAR.BUICK_REGAL} or \
                       (ret.networkLocation == NetworkLocation.gateway and ret.radarUnavailable)
 
     # Start with a baseline tuning for all GM vehicles. Override tuning as needed in each model section below.
@@ -224,26 +212,29 @@ class CarInterface(CarInterfaceBase):
       ret.lateralTuning.pid.kf = 0.000045
       tire_stiffness_factor = 1.0
 
-    elif candidate == CAR.BOLT_CC:  # Bolt EV 2017-21, ds5ajd/openpilot 0814
+    elif candidate == CAR.BOLT_CC:  # Bolt EV 2017-21 without ACC: StarPilot tune (the 2017 one from the settings page)
       ret.mass = 1616. + STD_CARGO_KG
       ret.wheelbase = 2.60096
       ret.steerRatio = 16.8
       ret.centerToFront = ret.wheelbase * 0.4
       tire_stiffness_factor = 1.0
-      ret.steerActuatorDelay = 0.25
+      if Params().get_bool(bolt_pedal.YEAR_2017_PARAM):
+        ret.flags |= GMFlags.BOLT_2017
+        ret.safetyConfigs[0].safetyParam |= Panda.FLAG_GM_BOLT_2017
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+      apply_bolt_tune(ret, get_bolt_tune(ret))
 
-    elif candidate == CAR.BOLT_EUV:
+    elif candidate == CAR.BOLT_EUV:  # StarPilot CHEVROLET_BOLT_ACC_2022_2023 tune
       ret.mass = 1669. + STD_CARGO_KG
       ret.wheelbase = 2.63779
       ret.steerRatio = 16.8
       ret.centerToFront = ret.wheelbase * 0.4
       tire_stiffness_factor = 1.0
-      ret.steerActuatorDelay = 0.2
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+      apply_bolt_tune(ret, get_bolt_tune(ret))
 
     elif candidate == CAR.SILVERADO:
-      ret.mass = 2200. + STD_CARGO_KG
+      ret.mass = 2450. + STD_CARGO_KG  # optech: comma / FrogPilot / dragonpilot
       ret.wheelbase = 3.75
       ret.steerRatio = 16.3
       ret.centerToFront = ret.wheelbase * 0.5
@@ -255,6 +246,98 @@ class CarInterface(CarInterfaceBase):
       ret.wheelbase = 2.72
       ret.steerRatio = 14.4
       ret.centerToFront = ret.wheelbase * 0.4
+      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+
+    # ---- optech: more GM cars (StarPilot specs and tuning) ----
+    elif candidate == CAR.ESCALADE_ESV_2019:
+      ret.minEnableSpeed = -1.  # engage speed is decided by pcm
+      ret.mass = 2739. + STD_CARGO_KG
+      ret.wheelbase = 3.302
+      ret.steerRatio = 17.3
+      ret.centerToFront = ret.wheelbase * 0.5
+      tire_stiffness_factor = 1.0
+      ret.steerActuatorDelay = 0.2
+      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+
+    elif candidate in (CAR.TRAILBLAZER, CAR.TRAILBLAZER_CC):
+      ret.mass = 1345. + STD_CARGO_KG
+      ret.wheelbase = 2.64
+      ret.steerRatio = 16.8
+      ret.centerToFront = ret.wheelbase * 0.4
+      tire_stiffness_factor = 1.0
+      ret.steerActuatorDelay = 0.2
+      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+
+    elif candidate == CAR.TRAX:
+      ret.mass = 1365. + STD_CARGO_KG
+      ret.wheelbase = 2.7
+      ret.steerRatio = 16.4
+      ret.centerToFront = ret.wheelbase * 0.4
+      ret.steerActuatorDelay = 0.46
+      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+
+    elif candidate in (CAR.SUBURBAN, CAR.SUBURBAN_CC):
+      ret.mass = 2731. + STD_CARGO_KG
+      ret.wheelbase = 3.302
+      ret.steerRatio = 17.3
+      ret.centerToFront = ret.wheelbase * 0.49
+      ret.steerActuatorDelay = 0.2
+      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+
+    elif candidate == CAR.YUKON_CC:
+      ret.mass = 2541. + STD_CARGO_KG
+      ret.wheelbase = 2.95
+      ret.steerRatio = 16.3
+      ret.centerToFront = ret.wheelbase * 0.4
+      ret.steerActuatorDelay = 0.2
+      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+
+    elif candidate == CAR.EQUINOX_CC:
+      ret.mass = 3500. * CV.LB_TO_KG + STD_CARGO_KG
+      ret.wheelbase = 2.72
+      ret.steerRatio = 14.4
+      ret.centerToFront = ret.wheelbase * 0.4
+      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+
+    elif candidate == CAR.MALIBU_CC:
+      ret.mass = 1450. + STD_CARGO_KG
+      ret.wheelbase = 2.8
+      ret.steerRatio = 18.25
+      ret.centerToFront = ret.wheelbase * 0.4
+      tire_stiffness_factor = 0.997
+      ret.steerActuatorDelay = 0.2
+      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+
+    elif candidate == CAR.SILVERADO_CC:
+      ret.mass = 2450. + STD_CARGO_KG  # optech: comma / FrogPilot / dragonpilot
+      ret.wheelbase = 3.75
+      ret.steerRatio = 16.3
+      ret.centerToFront = ret.wheelbase * 0.5
+      tire_stiffness_factor = 1.0
+      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+
+    elif candidate == CAR.CT6_CC:
+      ret.mass = 2358. + STD_CARGO_KG
+      ret.wheelbase = 3.11
+      ret.steerRatio = 17.7
+      ret.centerToFront = ret.wheelbase * 0.4
+      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+
+    elif candidate == CAR.XT4_CC:
+      ret.mass = 1660. + STD_CARGO_KG
+      ret.wheelbase = 2.78
+      ret.steerRatio = 14.4
+      ret.centerToFront = ret.wheelbase * 0.4
+      ret.steerActuatorDelay = 0.2
+      ret.minSteerSpeed = 30 * CV.MPH_TO_MS  # StarPilot
+      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+
+    elif candidate == CAR.XT5_CC:
+      ret.mass = 1810. + STD_CARGO_KG
+      ret.wheelbase = 2.86
+      ret.steerRatio = 16.34
+      ret.centerToFront = ret.wheelbase * 0.5
+      ret.steerActuatorDelay = 0.2
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
     if ret.enableGasInterceptor:
@@ -273,6 +356,18 @@ class CarInterface(CarInterfaceBase):
       ret.vEgoStarting = 0.5  # Speed at which the car goes into starting state, when car starts requesting starting accel,
       # vEgoStarting needs to be > or == vEgoStopping to avoid state transition oscillation
       ret.stoppingControl = True
+
+      if candidate == CAR.BOLT_CC:
+        # this base's long control is a PID on the speed error (StarPilot's gains are for an accel error), so the
+        # gains are ds5ajd's, tuned on a Bolt EV with the same kind of controller; StarPilot's pedal map and limits
+        # turn its output into the pedal (bolt_pedal.py)
+        ret.longitudinalTuning.kpBP = [0., 18.0 * CV.KPH_TO_MS, 80.0 * CV.KPH_TO_MS]
+        ret.longitudinalTuning.kpV = [1.10, 1.0, 0.76]
+        ret.longitudinalTuning.kiBP = [0., 18.0 * CV.KPH_TO_MS, 80.0 * CV.KPH_TO_MS]
+        ret.longitudinalTuning.kiV = [0.140, 0.125, 0.115]
+        ret.longitudinalTuning.kf = 1.0
+        ret.longitudinalTuning.deadzoneBP = [0., 30. * CV.KPH_TO_MS]
+        ret.longitudinalTuning.deadzoneV = [0., 0.10]
 
     # TODO: start from empirically derived lateral slip stiffness for the civic and scale by
     # mass and CG position, so all cars will have approximately similar dyn behaviors

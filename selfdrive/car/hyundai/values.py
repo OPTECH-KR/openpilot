@@ -35,7 +35,7 @@ class CarControllerParams:
 
     # To determine the limit for your car, find the maximum value that the stock LKAS will request.
     # If the max stock LKAS request is <384, add your car to this list.
-    elif CP.carFingerprint in (CAR.GENESIS_G80, CAR.GENESIS_G90, CAR.ELANTRA, CAR.IONIQ,
+    elif CP.carFingerprint in (CAR.GENESIS_G80, CAR.GENESIS_G90, CAR.ELANTRA, CAR.IONIQ, CAR.KIA_FORTE_2019_NON_SCC, CAR.KIA_FORTE_2021_NON_SCC,
                                CAR.IONIQ_EV_LTD, CAR.SANTA_FE_PHEV_2022, CAR.SONATA_LF, CAR.KIA_FORTE, CAR.KIA_NIRO_PHEV,
                                CAR.KIA_OPTIMA_H, CAR.KIA_SORENTO, CAR.K7,
                                CAR.ELANTRA_GT_I30, CAR.KIA_OPTIMA_H_G4_FL):
@@ -76,6 +76,7 @@ class HyundaiFlags(IntFlag):
   NON_SCC = 65536                # no SCC, stock cruise control only (Kia Ray EV, Porter II EV)
   NON_SCC_NO_TCS = 131072        # ... and no TCS13 (brake from E_EMS11)
   NON_SCC_PEDAL = 262144         # ... with a comma pedal: openpilot long through the accelerator (selfdrive/car/hyundai/pedal.py)
+  NON_SCC_PEDAL_STRONG = 524288  # ... Ray EV with carrot's strong pedal scaling (hyundai_kia_ray_pedal_strong)
 
 
 class CAR:
@@ -169,6 +170,16 @@ class CAR:
   # 기타 차종: cruise-control-only cars (no SCC)
   KIA_RAY_EV = "KIA RAY EV 2024"
   PORTER_II_EV = "HYUNDAI PORTER II EV 2024"
+  # lower trims without SCC (StarPilot / sunnypilot non-SCC platforms): steering only, stock cruise control
+  ELANTRA_2022_NON_SCC = "HYUNDAI ELANTRA 2022 NON-SCC"
+  ELANTRA_HEV_2022_NON_SCC = "HYUNDAI ELANTRA HYBRID 2022 NON-SCC"
+  KONA_NON_SCC = "HYUNDAI KONA 2019 NON-SCC"
+  KONA_EV_NON_SCC = "HYUNDAI KONA ELECTRIC 2019 NON-SCC"
+  VENUE_2021_NON_SCC = "HYUNDAI VENUE 2021 NON-SCC"
+  KIA_SELTOS_2023_NON_SCC = "KIA SELTOS 2023 NON-SCC"
+  KIA_FORTE_2019_NON_SCC = "KIA FORTE 2019 NON-SCC"
+  KIA_FORTE_2021_NON_SCC = "KIA FORTE 2021 NON-SCC"
+  GENESIS_G70_2021_NON_SCC = "GENESIS G70 2021 NON-SCC"
 
 
 @dataclass
@@ -282,6 +293,15 @@ CAR_INFO: Dict[str, Optional[Union[HyundaiCarInfo, List[HyundaiCarInfo]]]] = {
   # 기타 차종
   CAR.KIA_RAY_EV: HyundaiCarInfo("Kia Ray EV 2024-25", "Cruise Control", harness=Harness.hyundai_h),
   CAR.PORTER_II_EV: HyundaiCarInfo("Hyundai Porter II EV 2024", "Cruise Control", harness=Harness.hyundai_h),
+  CAR.ELANTRA_2022_NON_SCC: HyundaiCarInfo("Hyundai Elantra Non-SCC 2022", "Cruise Control"),
+  CAR.ELANTRA_HEV_2022_NON_SCC: HyundaiCarInfo("Hyundai Elantra Hybrid Non-SCC 2022", "Cruise Control"),
+  CAR.KONA_NON_SCC: HyundaiCarInfo("Hyundai Kona Non-SCC 2019", "Cruise Control"),
+  CAR.KONA_EV_NON_SCC: HyundaiCarInfo("Hyundai Kona Electric Non-SCC 2019", "Cruise Control"),
+  CAR.VENUE_2021_NON_SCC: HyundaiCarInfo("Hyundai Venue Non-SCC 2021", "Cruise Control"),
+  CAR.KIA_SELTOS_2023_NON_SCC: HyundaiCarInfo("Kia Seltos Non-SCC 2023-24", "Cruise Control"),
+  CAR.KIA_FORTE_2019_NON_SCC: HyundaiCarInfo("Kia Forte Non-SCC 2019", "Cruise Control"),
+  CAR.KIA_FORTE_2021_NON_SCC: HyundaiCarInfo("Kia Forte Non-SCC 2021", "Cruise Control"),
+  CAR.GENESIS_G70_2021_NON_SCC: HyundaiCarInfo("Genesis G70 Non-SCC 2021", "Cruise Control"),
 }
 
 class Buttons:
@@ -1684,20 +1704,111 @@ FW_VERSIONS = {
       b'\xf1\x00JFH MFC  AT KOR LHD 1.00 1.01 95895-A8200 180323',
     ],
   },
+  CAR.ELANTRA_2022_NON_SCC: {  # star HYUNDAI_ELANTRA_2022_NON_SCC
+    (Ecu.eps, 0x7d4, None): [
+      b'\xf1\x00CN7 MDPS R 1.00 1.04 57700-IB000 4CNNP104',
+    ],
+    (Ecu.fwdCamera, 0x7c4, None): [
+      b'\xf1\x00CN7 MFC  AT USA LHD 1.00 1.00 99210-IB000 210531',
+    ],
+    (Ecu.abs, 0x7d1, None): [
+      b'\xf1\x00CN ESC \t 100!\x05\x01 58910-IB000',
+    ],
+    (Ecu.transmission, 0x7e1, None): [
+      b'\xf1\x00T02601BL  T02900A1  WCN7T20XXX900NS4\xf7\xccz\xf6',
+    ],
+  },
+  CAR.ELANTRA_HEV_2022_NON_SCC: {  # star HYUNDAI_ELANTRA_HEV_2022_NON_SCC
+    (Ecu.eps, 0x7d4, None): [
+      b'\xf1\x00CN7 MDPS C 1.00 1.02 56310/BY050 4CNHC102',
+    ],
+    (Ecu.fwdCamera, 0x7c4, None): [
+      b'\xf1\x00CN7HMFC  AT USA LHD 1.00 1.04 99210-AA000 210205',
+    ],
+    (Ecu.transmission, 0x7e1, None): [
+      b'\xf1\x006U3L0_C2\x00\x006U3K3051\x00\x00HCN0G16NS0\x00\x00\x00\x00',
+    ],
+  },
+  CAR.KONA_NON_SCC: {  # star HYUNDAI_KONA_NON_SCC
+    (Ecu.eps, 0x7d4, None): [
+      b'\xf1\x00OS  MDPS C 1.00 1.04 56310J9030\x00 4OSDC104',
+      b'\xf1\x00OS  MDPS C 1.00 1.05 56310/J9500 4OSDC105',
+    ],
+    (Ecu.fwdCamera, 0x7c4, None): [
+      b'\xf1\x00OS9 LKAS AT USA LHD 1.00 1.00 95740-J9200 g30',
+      b'\xf1\x00OS9 LKAS AT AUS RHD 1.00 1.00 95740-J9200 g30',
+    ],
+    (Ecu.fwdRadar, 0x7d0, None): [
+      b'\xf1\x00OS__ FCA --CUP      1.00 1.00 95655-J9100         ',
+    ],
+    (Ecu.transmission, 0x7e1, None): [
+      b'\xf1\x006T6J0_C2\x00\x006T6K1051\x00\x00TOS4N20NS2\x00\x00\x00\x00',
+      b'\xf1\x006U2V0_C2\x00\x006U2V1051\x00\x00DOS4T16AS2\x00\x00\x00\x00',
+    ],
+  },
+  CAR.KIA_SELTOS_2023_NON_SCC: {  # star KIA_SELTOS_2023_NON_SCC
+    (Ecu.abs, 0x7d1, None): [
+      b'\xf1\x00SP ESC \t 101\"\t\x01 58910-Q5510',
+      b'\xf1\x00SP ESC \r 100\"\x04\x01 58910-Q5510',
+    ],
+    (Ecu.eps, 0x7d4, None): [
+      b'\xf1\x00SP2 MDPS C 1.00 1.04 56310Q5240  4SPSC104',
+      b'\xf1\x00SP2 MDPS C 1.00 1.01 56300Q5920          ',
+    ],
+    (Ecu.fwdCamera, 0x7c4, None): [
+      b'\xf1\x00SP2 MFC  AT USA LHD 1.00 1.03 99210-Q5500 230208',
+      b'\xf1\x00SP2 MFC  AT AUS RHD 1.00 1.02 99210-Q5500 220624',
+    ],
+    (Ecu.transmission, 0x7e1, None): [
+      b'\xf1\x006V2B0_C2\x00\x006V2D5051\x00\x00CSP2N20NL0\x00\x00\x00\x00',
+      b'\xf1\x006V2B0_C2\x00\x006V2D4051\x00\x00CSP2N20KL1\x00\x00\x00\x00',
+    ],
+  },
+  CAR.KIA_FORTE_2019_NON_SCC: {  # star KIA_FORTE_2019_NON_SCC
+    (Ecu.eps, 0x7d4, None): [
+      b'\xf1\x00BD  MDPS C 1.00 1.04 56310/M6000 4BDDC104',
+      b'\xf1\x00BD  MDPS C 1.00 1.05 56310/M6000 4BDDC105',
+    ],
+    (Ecu.fwdCamera, 0x7c4, None): [
+      b'\xf1\x00BD  LKAS AT USA LHD 1.00 1.02 95740-M6000 J31',
+    ],
+  },
+  CAR.KIA_FORTE_2021_NON_SCC: {  # star KIA_FORTE_2021_NON_SCC
+    (Ecu.eps, 0x7d4, None): [
+      b'\xf1\x00BD  MDPS C 1.00 1.07 56310/M6300 4BDDC107',
+      b'\xf1\x00BD  MDPS C 1.00 1.08 56310M6000\x00 4BDDC108',
+    ],
+    (Ecu.fwdCamera, 0x7c4, None): [
+      b'\xf1\x00BD  LKAS AT USA LHD 1.00 1.02 95740-M6000 J31',
+    ],
+  },
+  CAR.GENESIS_G70_2021_NON_SCC: {  # star GENESIS_G70_2021_NON_SCC
+    (Ecu.eps, 0x7d4, None): [
+      b'\xf1\x00IK  MDPS R 1.00 1.08 57700-G9200 4I2CL108',
+    ],
+    (Ecu.fwdRadar, 0x7d0, None): [
+      b'\xf1\x00IK__ SCC --CUP      1.00 1.02 96400-G9100         ',
+    ],
+    (Ecu.fwdCamera, 0x7c4, None): [
+      b'\xf1\x00IK  MFC  MT USA LHD 1.00 1.01 95740-G9000 170920',
+    ],
+  },
 }
 
 CHECKSUM = {
   "crc8": [CAR.SANTA_FE, CAR.SONATA, CAR.PALISADE, CAR.KIA_SELTOS, CAR.ELANTRA_2021, CAR.ELANTRA_HEV_2021, CAR.SONATA_HYBRID, CAR.SANTA_FE_2022, CAR.KIA_K5_2021, CAR.SANTA_FE_HEV_2022, CAR.SANTA_FE_PHEV_2022, CAR.KIA_SOUL_EV_SK3, CAR.CASPER,
-           CAR.CUSTIN_1ST_GEN, CAR.CASPER_EV, CAR.KIA_K5_HEV_2020, CAR.KIA_RAY_EV],
+           CAR.CUSTIN_1ST_GEN, CAR.CASPER_EV, CAR.KIA_K5_HEV_2020, CAR.KIA_RAY_EV,
+           CAR.ELANTRA_2022_NON_SCC, CAR.ELANTRA_HEV_2022_NON_SCC, CAR.VENUE_2021_NON_SCC, CAR.KIA_SELTOS_2023_NON_SCC, CAR.GENESIS_G70_2021_NON_SCC],
   "6B": [CAR.KIA_SORENTO, CAR.HYUNDAI_GENESIS],
 }
 
 FEATURES = {
   # which message has the gear
-  "use_cluster_gears": {CAR.ELANTRA, CAR.KONA, CAR.GRANDEUR_IG, CAR.GRANDEUR_IG_FL, CAR.K7, CAR.ELANTRA_GT_I30},
-  "use_tcu_gears": {CAR.KIA_OPTIMA_G4, CAR.KIA_OPTIMA_G4_FL, CAR.SONATA_LF, CAR.VELOSTER, CAR.TUCSON, CAR.TUCSON_TL_SCC, CAR.KIA_K5_JF},
+  "use_cluster_gears": {CAR.ELANTRA, CAR.KONA, CAR.GRANDEUR_IG, CAR.GRANDEUR_IG_FL, CAR.K7, CAR.ELANTRA_GT_I30, CAR.KONA_NON_SCC},
+  "use_tcu_gears": {CAR.KIA_OPTIMA_G4, CAR.KIA_OPTIMA_G4_FL, CAR.SONATA_LF, CAR.VELOSTER, CAR.TUCSON, CAR.TUCSON_TL_SCC, CAR.KIA_K5_JF, CAR.VENUE_2021_NON_SCC},
   "use_elect_gears": {CAR.KIA_NIRO_EV, CAR.KIA_NIRO_PHEV, CAR.KIA_NIRO_HEV_2021, CAR.KIA_OPTIMA_H, CAR.IONIQ_EV_LTD, CAR.KONA_EV, CAR.IONIQ, CAR.IONIQ_EV_2020, CAR.IONIQ_PHEV, CAR.ELANTRA_HEV_2021, CAR.SONATA_HYBRID, CAR.KONA_HEV, CAR.IONIQ_HEV_2022, CAR.SANTA_FE_HEV_2022, CAR.SANTA_FE_PHEV_2022, CAR.IONIQ_PHEV_2019, CAR.KONA_EV_2022, CAR.GRANDEUR_IG_HEV, CAR.GRANDEUR_IG_FL_HEV, CAR.NEXO, CAR.K7_HEV, CAR.K7_HEV_PE, CAR.KIA_SOUL_EV_SK3,
-                      CAR.CASPER_EV, CAR.KIA_K5_HEV_2020, CAR.KIA_NIRO_PHEV_2022, CAR.KIA_OPTIMA_H_G4_FL, CAR.KIA_K5_HEV_JF, CAR.KIA_K5_HEV_2022, CAR.KIA_RAY_EV, CAR.PORTER_II_EV},
+                      CAR.CASPER_EV, CAR.KIA_K5_HEV_2020, CAR.KIA_NIRO_PHEV_2022, CAR.KIA_OPTIMA_H_G4_FL, CAR.KIA_K5_HEV_JF, CAR.KIA_K5_HEV_2022, CAR.KIA_RAY_EV, CAR.PORTER_II_EV,
+                      CAR.ELANTRA_HEV_2022_NON_SCC, CAR.KONA_EV_NON_SCC},
 
 
   "send_lfa_mfa": {CAR.SONATA, CAR.PALISADE, CAR.IONIQ, CAR.KIA_NIRO_EV, CAR.KIA_NIRO_HEV_2021, CAR.GRANDEUR_IG_FL, CAR.GRANDEUR_IG_FL_HEV,
@@ -1718,12 +1829,28 @@ CAMERA_SCC_CAR = {CAR.KONA_EV_2022, CAR.KONA_2022, CAR.CASPER_EV, CAR.CASPER, }
 
 # cars without SCC (stock cruise control only): in the normal car list; choosing one shows '레이·포터 설정' on the
 # start tab (selfdrive/ui/qt/offroad/settings.cc). This branch has no 기타 차종 page.
-NON_SCC_CAR = {CAR.KIA_RAY_EV, CAR.PORTER_II_EV}
+NON_SCC_CAR = {CAR.KIA_RAY_EV, CAR.PORTER_II_EV,
+               CAR.ELANTRA_2022_NON_SCC, CAR.ELANTRA_HEV_2022_NON_SCC, CAR.KONA_NON_SCC, CAR.KONA_EV_NON_SCC, CAR.VENUE_2021_NON_SCC,
+               CAR.KIA_SELTOS_2023_NON_SCC, CAR.KIA_FORTE_2019_NON_SCC, CAR.KIA_FORTE_2021_NON_SCC, CAR.GENESIS_G70_2021_NON_SCC}
 OTHER_CAR = set()
+# One menu entry for a model with and without SCC: choosing the model with SCC switches to its trim without SCC when the
+# car shows no SCC11 (1056) on either bus at start (interface.py). Those trims stay for the FW fingerprint and for a car
+# chosen before, but are not listed. The Venue and the G70 without SCC have no base here (G70: different checksum).
+NON_SCC_VARIANT = {
+  CAR.ELANTRA_2021: CAR.ELANTRA_2022_NON_SCC,
+  CAR.ELANTRA_HEV_2021: CAR.ELANTRA_HEV_2022_NON_SCC,
+  CAR.KONA: CAR.KONA_NON_SCC,
+  CAR.KONA_EV: CAR.KONA_EV_NON_SCC,
+  CAR.KIA_SELTOS: CAR.KIA_SELTOS_2023_NON_SCC,
+  CAR.KIA_FORTE: CAR.KIA_FORTE_2021_NON_SCC,  # 2019 and 2021 without SCC are the same here
+}
+MENU_HIDDEN = set(NON_SCC_VARIANT.values()) | {CAR.KIA_FORTE_2019_NON_SCC}
 
 HYBRID_CAR = {CAR.IONIQ_PHEV, CAR.ELANTRA_HEV_2021, CAR.KIA_NIRO_PHEV, CAR.KIA_NIRO_HEV_2021, CAR.SONATA_HYBRID, CAR.KONA_HEV, CAR.IONIQ, CAR.IONIQ_HEV_2022, CAR.SANTA_FE_HEV_2022, CAR.SANTA_FE_PHEV_2022, CAR.IONIQ_PHEV_2019, CAR.TUCSON_HYBRID_4TH_GEN, CAR.KIA_SPORTAGE_HYBRID_5TH_GEN, CAR.GRANDEUR_IG_HEV, CAR.GRANDEUR_IG_FL_HEV, CAR.K7_HEV, CAR.K7_HEV_PE,
-              CAR.KIA_K5_HEV_2020, CAR.KIA_NIRO_PHEV_2022, CAR.KIA_OPTIMA_H_G4_FL, CAR.KIA_K5_HEV_JF, CAR.KIA_K5_HEV_2022}  # these cars use a different gas signal
-EV_CAR = {CAR.IONIQ_EV_2020, CAR.IONIQ_EV_LTD, CAR.KONA_EV, CAR.KIA_NIRO_EV, CAR.KONA_EV_2022, CAR.KIA_EV6, CAR.IONIQ_5, CAR.NEXO, CAR.KIA_SOUL_EV_SK3, CAR.CASPER_EV, CAR.KIA_RAY_EV, CAR.PORTER_II_EV}
+              CAR.KIA_K5_HEV_2020, CAR.KIA_NIRO_PHEV_2022, CAR.KIA_OPTIMA_H_G4_FL, CAR.KIA_K5_HEV_JF, CAR.KIA_K5_HEV_2022,
+              CAR.ELANTRA_HEV_2022_NON_SCC}  # these cars use a different gas signal
+EV_CAR = {CAR.IONIQ_EV_2020, CAR.IONIQ_EV_LTD, CAR.KONA_EV, CAR.KIA_NIRO_EV, CAR.KONA_EV_2022, CAR.KIA_EV6, CAR.IONIQ_5, CAR.NEXO, CAR.KIA_SOUL_EV_SK3, CAR.CASPER_EV, CAR.KIA_RAY_EV, CAR.PORTER_II_EV,
+          CAR.KONA_EV_NON_SCC}
 
 # these cars require a special panda safety mode due to missing counters and checksums in the messages
 LEGACY_SAFETY_MODE_CAR = {CAR.HYUNDAI_GENESIS, CAR.IONIQ_EV_2020, CAR.IONIQ_EV_LTD, CAR.IONIQ_PHEV, CAR.IONIQ, CAR.KIA_SORENTO, CAR.SONATA_LF, CAR.KIA_OPTIMA_G4, CAR.KIA_OPTIMA_G4_FL, CAR.VELOSTER, CAR.KIA_STINGER, CAR.GENESIS_G70, CAR.GENESIS_G80, CAR.KIA_CEED, CAR.ELANTRA, CAR.IONIQ_HEV_2022, 
@@ -1810,6 +1937,15 @@ DBC = {
   CAR.CASPER: dbc_dict('hyundai_kia_generic', None),
   CAR.KIA_RAY_EV: dbc_dict('hyundai_kia_generic', None),
   CAR.PORTER_II_EV: dbc_dict('hyundai_kia_generic', None),
+  CAR.ELANTRA_2022_NON_SCC: dbc_dict('hyundai_kia_generic', None),
+  CAR.ELANTRA_HEV_2022_NON_SCC: dbc_dict('hyundai_kia_generic', None),
+  CAR.KONA_NON_SCC: dbc_dict('hyundai_kia_generic', None),
+  CAR.KONA_EV_NON_SCC: dbc_dict('hyundai_kia_generic', None),
+  CAR.VENUE_2021_NON_SCC: dbc_dict('hyundai_kia_generic', None),
+  CAR.KIA_SELTOS_2023_NON_SCC: dbc_dict('hyundai_kia_generic', None),
+  CAR.KIA_FORTE_2019_NON_SCC: dbc_dict('hyundai_kia_generic', None),
+  CAR.KIA_FORTE_2021_NON_SCC: dbc_dict('hyundai_kia_generic', None),
+  CAR.GENESIS_G70_2021_NON_SCC: dbc_dict('hyundai_kia_generic', None),
   CAR.GENESIS_GV70_1ST_GEN: dbc_dict('hyundai_canfd', None),
 }
 
@@ -1822,12 +1958,39 @@ def main():
   # the car menu list (manager writes it to /data/params/d/SupportedCars): this branch runs on the C2's own panda,
   # so only CAN cars; CAN FD cars need a red panda and are on optech-fd. 기타 차종 have their own page
   cars = [value for member, value in vars(CAR).items()
-          if not member.startswith("_") and value not in CANFD_CAR and value not in OTHER_CAR
+          if not member.startswith("_") and value not in CANFD_CAR and value not in OTHER_CAR and value not in MENU_HIDDEN
           and value in DBC]  # a name without a DBC entry (TUCSON_4TH_GEN) cannot start
   # Chevrolet (selfdrive/car/gm): the Bolt EUV 2022-23 with the camera harness, stock ACC
   from selfdrive.car.gm.values import CAR as GM_CAR
   cars.append(GM_CAR.BOLT_EUV)
-  cars.append(GM_CAR.BOLT_CC)  # Bolt EV 2017-21 without ACC, camera harness; comma pedal optional (ds5ajd/openpilot 0814)
+  cars.append(GM_CAR.BOLT_CC)
+  # more GM cars (optech, after StarPilot / sunnypilot / comma): ASCM, camera harness with stock ACC, without ACC
+  cars += [GM_CAR.VOLT, GM_CAR.VOLT_CC, GM_CAR.ACADIA, GM_CAR.BUICK_LACROSSE, GM_CAR.ESCALADE, GM_CAR.ESCALADE_ESV,
+           GM_CAR.ESCALADE_ESV_2019, GM_CAR.SILVERADO, GM_CAR.SILVERADO_CC, GM_CAR.EQUINOX, GM_CAR.EQUINOX_CC,
+           GM_CAR.TRAILBLAZER, GM_CAR.TRAILBLAZER_CC, GM_CAR.TRAX, GM_CAR.SUBURBAN, GM_CAR.SUBURBAN_CC, GM_CAR.YUKON_CC,
+           GM_CAR.MALIBU_CC, GM_CAR.CT6_CC, GM_CAR.XT4_CC, GM_CAR.XT5_CC]
+  # Toyota / Lexus (selfdrive/car/toyota, comma v0.9.2): all but the LTA (angle) cars, which are dashcam only here
+  from selfdrive.car.toyota.values import CAR as TOYOTA_CAR, ANGLE_CONTROL_CAR as TOYOTA_ANGLE_CAR
+  cars += [v for k, v in vars(TOYOTA_CAR).items() if not k.startswith("_") and v not in TOYOTA_ANGLE_CAR]
+  # Honda / Acura (selfdrive/car/honda, comma v0.9.2): not the radarless cars (dashcam only here) or Europe-only models
+  from selfdrive.car.honda.values import CAR as HONDA_CAR
+  cars += [v for k, v in vars(HONDA_CAR).items() if not k.startswith("_") and v not in ["HONDA CIVIC 2022", "HONDA CIVIC SEDAN 1.6 DIESEL 2019", "HONDA CR-V EU 2016", "HONDA HR-V 2023"]]
+  # Volkswagen group MQB (selfdrive/car/volkswagen, comma v0.9.2): stock ACC; not the PQ cars (dashcam only)
+  from selfdrive.car.volkswagen.values import CAR as VW_CAR, PQ_CARS as VW_PQ_CARS
+  cars += [v for k, v in vars(VW_CAR).items() if not k.startswith("_") and v not in VW_PQ_CARS]
+  # Mazda (selfdrive/car/mazda, comma v0.9.2): only CX-5 2022 and CX-9 2021 steer there; the older ones are dashcam only
+  from selfdrive.car.mazda.values import CAR as MAZDA_CAR
+  cars += [MAZDA_CAR.CX5_2022, MAZDA_CAR.CX9_2021]
+  # Nissan (selfdrive/car/nissan, comma v0.9.2): all
+  from selfdrive.car.nissan.values import CAR as NISSAN_CAR
+  cars += [v for k, v in vars(NISSAN_CAR).items() if not k.startswith("_")]
+  # Subaru (selfdrive/car/subaru, comma v0.9.2): global platform; not gen2 (Outback / Legacy 2020+, no gen2 mode in
+  # this panda) or pre-global (dashcam only in comma v0.9.2)
+  from selfdrive.car.subaru.values import CAR as SUBARU_CAR, GLOBAL_GEN2 as SUBARU_GEN2, PREGLOBAL_CARS as SUBARU_PREGLOBAL
+  cars += [v for k, v in vars(SUBARU_CAR).items() if not k.startswith("_") and v not in SUBARU_GEN2 + SUBARU_PREGLOBAL]
+  # Chrysler / Jeep (selfdrive/car/chrysler, comma v0.9.2): Pacifica and Grand Cherokee; not RAM (dashcam only here)
+  from selfdrive.car.chrysler.values import CAR as CHRYSLER_CAR, RAM_CARS as CHRYSLER_RAM
+  cars += [v for k, v in vars(CHRYSLER_CAR).items() if not k.startswith("_") and v not in CHRYSLER_RAM]
   # grouped by brand / model / year with Korean names (car_menu.py); utf-8 whatever the locale
   from selfdrive.car.hyundai.car_menu import menu_lines
   for line in menu_lines(cars):

@@ -347,7 +347,9 @@ static int hyundai_tx_hook(CANPacket_t *to_send, bool longitudinal_allowed) {
       bool violation = (GET_BYTE(to_send, 4) & 0x70U) != 0U;
       violation |= GET_BYTE(to_send, 5) != hyundai_pedal_checksum(to_send);
       if (enabled) {
-        violation |= (track1 < 264) || (track1 > 530) || (track2 < 497) || (track2 > 1035);
+        const int track1_max = hyundai_non_scc_pedal_strong ? 795 : 530;
+        const int track2_max = hyundai_non_scc_pedal_strong ? 1572 : 1035;
+        violation |= (track1 < 264) || (track1 > track1_max) || (track2 < 497) || (track2 > track2_max);
         violation |= ABS(track2 - expected_track2) > 40;
         violation |= !controls_allowed || hyundai_pedal_gas_pressed || hyundai_pedal_brake_pressed;
       } else {

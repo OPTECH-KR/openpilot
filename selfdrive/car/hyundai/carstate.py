@@ -25,6 +25,8 @@ def non_scc_cruise_signals(CP):
     return "LABEL11", "CC_React", "LABEL11", "CC_Engaged", "E_EMS11", "Cruise_Limit_Target"
   if CP.carFingerprint in EV_CAR:
     return "LABEL11", "CC_React", "EMS12", "ACC_ACT", "E_EMS11", "Cruise_Limit_Target"
+  if CP.carFingerprint in HYBRID_CAR:
+    return "E_CRUISE_CONTROL", "CRUISE_LAMP_M", "E_CRUISE_CONTROL", "CRUISE_LAMP_S", "ELECT_GEAR", "SLC_SET_SPEED"
   return "EMS16", "CRUISE_LAMP_M", "EMS16", "CRUISE_LAMP_S", "LVR12", "CF_Lvr_CruiseSet"
 
 

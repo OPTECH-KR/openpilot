@@ -9,6 +9,10 @@ from selfdrive.car.docs_definitions import CarFootnote, CarInfo, Column, Harness
 Ecu = car.CarParams.Ecu
 
 
+class GMFlags:
+  BOLT_2017 = 1  # Bolt EV without ACC, 2017 (Bolt EV settings page): its own steering tune and limits
+
+
 class CarControllerParams:
   STEER_MAX = 300  # GM limit is 3Nm. Used by carcontroller to generate LKA output
   STEER_STEP = 3  # Active control frames per command (~33hz)
@@ -33,6 +37,14 @@ class CarControllerParams:
   ACCEL_MIN = -4.  # m/s^2
 
   def __init__(self, CP):
+    # Bolt EV 2017: StarPilot's GM_BOLT_2017_STEERING_LIMITS (the panda checks the same with FLAG_GM_BOLT_2017)
+    if CP.flags & GMFlags.BOLT_2017:
+      self.STEER_MAX = 450
+      self.STEER_DELTA_UP = 15
+      self.STEER_DELTA_DOWN = 34
+      self.STEER_DRIVER_ALLOWANCE = 78
+      self.STEER_DRIVER_MULTIPLIER = 6
+
     # Gas/brake lookups
     self.ZERO_GAS = 2048  # Coasting
     self.MAX_BRAKE = 400  # ~ -4.0 m/s^2 with regen
@@ -78,6 +90,20 @@ class CAR:
   # TODO EB: 0x2cb in fingerprint[0] seems to indicate ASCM presence
   VOLT_CC = "CHEVROLET VOLT NO ACC"
   BOLT_CC = "CHEVROLET BOLT EV NO ACC"
+  # optech: more GM cars after StarPilot / sunnypilot / comma (chosen in 차종 선택; no CAN fingerprints)
+  ESCALADE_ESV_2019 = "CADILLAC ESCALADE ESV 2019"      # ASCM (OBD-II harness)
+  TRAILBLAZER = "CHEVROLET TRAILBLAZER 2021"            # camera harness, stock ACC
+  TRAX = "CHEVROLET TRAX 2024"                          # camera harness, stock ACC (StarPilot)
+  SUBURBAN = "CHEVROLET SUBURBAN 2016"                  # camera harness, stock ACC (StarPilot CHEVROLET_SUBURBAN_CAMERA)
+  TRAILBLAZER_CC = "CHEVROLET TRAILBLAZER NO ACC"       # camera harness, no ACC (like the Bolt EV without ACC)
+  EQUINOX_CC = "CHEVROLET EQUINOX NO ACC"
+  MALIBU_CC = "CHEVROLET MALIBU NO ACC"
+  SILVERADO_CC = "CHEVROLET SILVERADO 1500 NO ACC"
+  SUBURBAN_CC = "CHEVROLET SUBURBAN NO ACC"
+  YUKON_CC = "GMC YUKON NO ACC"
+  CT6_CC = "CADILLAC CT6 NO ACC"
+  XT4_CC = "CADILLAC XT4 NO ACC"
+  XT5_CC = "CADILLAC XT5 NO ACC"
 
 
 class Footnote(Enum):
@@ -120,6 +146,19 @@ CAR_INFO: Dict[str, Union[GMCarInfo, List[GMCarInfo]]] = {
   CAR.EQUINOX: GMCarInfo("Chevrolet Equinox 2019-22"),
   CAR.VOLT_CC: GMCarInfo("Chevrolet Volt No ACC"),
   CAR.BOLT_CC: GMCarInfo("Chevrolet Bolt No ACC"),
+  CAR.ESCALADE_ESV_2019: GMCarInfo("Cadillac Escalade ESV 2019", "Adaptive Cruise Control (ACC) & LKAS"),
+  CAR.TRAILBLAZER: GMCarInfo("Chevrolet Trailblazer 2021-22"),
+  CAR.TRAX: GMCarInfo("Chevrolet Trax 2024-25"),
+  CAR.SUBURBAN: GMCarInfo("Chevrolet Suburban Premier 2016-20", "Adaptive Cruise Control (ACC) & LKAS"),
+  CAR.TRAILBLAZER_CC: GMCarInfo("Chevrolet Trailblazer No ACC 2021-22"),
+  CAR.EQUINOX_CC: GMCarInfo("Chevrolet Equinox No ACC 2019-22"),
+  CAR.MALIBU_CC: GMCarInfo("Chevrolet Malibu No ACC 2023"),
+  CAR.SILVERADO_CC: [GMCarInfo("Chevrolet Silverado 1500 No ACC 2020-21"), GMCarInfo("GMC Sierra 1500 No ACC 2020-21")],
+  CAR.SUBURBAN_CC: GMCarInfo("Chevrolet Suburban Premier No ACC 2016-20"),
+  CAR.YUKON_CC: GMCarInfo("GMC Yukon No ACC 2019-20"),
+  CAR.CT6_CC: GMCarInfo("Cadillac CT6 No ACC 2016-20"),
+  CAR.XT4_CC: GMCarInfo("Cadillac XT4 No ACC 2023"),
+  CAR.XT5_CC: GMCarInfo("Cadillac XT5 No ACC 2022"),
 }
 
 
@@ -223,8 +262,10 @@ FINGERPRINTS = {
     309: 1, 848: 8, 849: 8, 850: 8, 851: 8, 852: 8, 853: 8, 854: 3, 1056: 6, 1057: 8, 1058: 8, 1059: 8, 1060: 8, 1061: 8, 1062: 8, 1063: 8, 1064: 8, 1065: 8, 1066: 8, 1067: 8, 1068: 8, 1120: 8, 1121: 8, 1122: 8, 1123: 8, 1124: 8, 1125: 8, 1126: 8, 1127: 8, 1128: 8, 1129: 8, 1130: 8, 1131: 8, 1132: 8, 1133: 8, 1134: 8, 1135: 8, 1136: 8, 1137: 8, 1138: 8, 1139: 8, 1140: 8, 1141: 8, 1142: 8, 1143: 8, 1146: 8, 1147: 8, 1148: 8, 1149: 8, 1150: 8, 1151: 8, 1216: 8, 1217: 8, 1218: 8, 1219: 8, 1220: 8, 1221: 8, 1222: 8, 1223: 8, 1224: 8, 1225: 8, 1226: 8, 1232: 8, 1233: 8, 1234: 8, 1235: 8, 1236: 8, 1237: 8, 1238: 8, 1239: 8, 1240: 8, 1241: 8, 1242: 8, 1787: 8, 1788: 8
   }],
   CAR.BOLT_EUV: [
+  # optech: 587 (0x24B camera) and 1611 (0x64B) as in comma v0.9.4+ / carrot / sunnypilot / StarPilot;
+  # without them a Bolt EV no-ACC fingerprint contains this whole one and the EUV is not recognised
   {
-    189: 7, 190: 7, 193: 8, 197: 8, 201: 8, 209: 7, 211: 3, 241: 6, 257: 8, 288: 5, 289: 8, 298: 8, 304: 3, 309: 8, 311: 8, 313: 8, 320: 4, 322: 7, 328: 1, 352: 5, 381: 8, 384: 4, 386: 8, 388: 8, 451: 8, 452: 8, 453: 6, 458: 5, 463: 3, 479: 3, 481: 7, 485: 8, 489: 8, 497: 8, 500: 6, 501: 8, 528: 5, 532: 6, 560: 8, 562: 8, 563: 5, 565: 5, 566: 8, 608: 8, 609: 6, 610: 6, 611: 6, 612: 8, 613: 8, 707: 8, 715: 8, 717: 5, 753: 5, 761: 7, 789: 5, 800: 6, 810: 8, 840: 5, 842: 5, 844: 8, 848: 4, 869: 4, 880: 6, 977: 8, 1001: 8, 1017: 8, 1020: 8, 1217: 8, 1221: 5, 1233: 8, 1249: 8, 1265: 8, 1280: 4, 1296: 4, 1300: 8, 1930: 7
+    189: 7, 190: 7, 193: 8, 197: 8, 201: 8, 209: 7, 211: 3, 241: 6, 257: 8, 288: 5, 289: 8, 298: 8, 304: 3, 309: 8, 311: 8, 313: 8, 320: 4, 322: 7, 328: 1, 352: 5, 381: 8, 384: 4, 386: 8, 388: 8, 451: 8, 452: 8, 453: 6, 458: 5, 463: 3, 479: 3, 481: 7, 485: 8, 489: 8, 497: 8, 500: 6, 501: 8, 528: 5, 532: 6, 560: 8, 562: 8, 563: 5, 565: 5, 566: 8, 587: 8, 608: 8, 609: 6, 610: 6, 611: 6, 612: 8, 613: 8, 707: 8, 715: 8, 717: 5, 753: 5, 761: 7, 789: 5, 800: 6, 810: 8, 840: 5, 842: 5, 844: 8, 848: 4, 869: 4, 880: 6, 977: 8, 1001: 8, 1017: 8, 1020: 8, 1217: 8, 1221: 5, 1233: 8, 1249: 8, 1265: 8, 1280: 4, 1296: 4, 1300: 8, 1611: 8, 1930: 7
   }],
   CAR.BOLT_CC: [
   # Bolt Premier w/o ACC 2017
@@ -280,10 +321,11 @@ FINGERPRINTS = {
 DBC: Dict[str, Dict[str, str]] = defaultdict(lambda: dbc_dict('gm_global_a_powertrain_generated', 'gm_global_a_object', chassis_dbc='gm_global_a_chassis'))
 
 EV_CAR = {CAR.VOLT, CAR.BOLT_EUV, CAR.VOLT_CC, CAR.BOLT_CC}
-CC_ONLY_CAR = {CAR.VOLT_CC, CAR.BOLT_CC}
+CC_ONLY_CAR = {CAR.VOLT_CC, CAR.BOLT_CC, CAR.TRAILBLAZER_CC, CAR.EQUINOX_CC, CAR.MALIBU_CC, CAR.SILVERADO_CC,
+               CAR.SUBURBAN_CC, CAR.YUKON_CC, CAR.CT6_CC, CAR.XT4_CC, CAR.XT5_CC}
 
 # We're integrated at the camera with VOACC on these cars (instead of ASCM w/ OBD-II harness)
-CAMERA_ACC_CAR = {CAR.BOLT_EUV, CAR.SILVERADO, CAR.EQUINOX, CAR.VOLT_CC, CAR.BOLT_CC}
+CAMERA_ACC_CAR = {CAR.BOLT_EUV, CAR.SILVERADO, CAR.EQUINOX, CAR.TRAILBLAZER, CAR.TRAX, CAR.SUBURBAN} | CC_ONLY_CAR
 
 STEER_THRESHOLD = 1.0
 

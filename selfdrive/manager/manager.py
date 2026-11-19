@@ -46,12 +46,12 @@ def manager_init() -> None:
     ("OpenpilotEnabledToggle", "1"),
     ("ShowDebugUI", "0"),
     ("OPKRServer", "0"),
-    ("ShowDateTime", "1"),
+    ("ShowDateTime", "0"),
     ("ShowHudMode", "6"),
     ("ShowSteerRotate", "1"),
     ("ShowPathEnd", "1"),
     ("ShowAccelRpm", "1"),
-    ("ShowTpms", "1"),
+    ("ShowTpms", "0"),
     ("ShowSteerMode", "2"),
     ("ShowDeviceState", "1"),
     ("ShowGpsInfo", "1"),
@@ -62,12 +62,15 @@ def manager_init() -> None:
     ("RaySpeedButtons", "0"),      # let openpilot press the cruise buttons to set the speed (no pedal)
     ("RayPedal", "0"),             # comma pedal: openpilot long through the accelerator
     ("RayPedalMax", "70"),         # pedal command cap, % (StarPilot Ray calibration allows 70)
+    ("RayPedalStrong", "0"),       # carrot PR 570: twice the pedal for the same command (2024 Ray EV owner's fix)
+    ("RayPedalKi", "50"),          # speed error integral gain x0.001 with the pedal (carrot's Ray candidate 50)
     ("PorterSpeedButtons", "0"),
     ("PorterPedal", "0"),
     ("PorterPedalMax", "40"),      # no Porter calibration yet: lower cap
     # Chevrolet Bolt EV 2017-21 without ACC (ds5ajd/openpilot 0814)
     ("BoltPedal", "0"),            # comma pedal: openpilot long through the accelerator
-    ("BoltPedalMax", "33"),        # pedal command cap, % (ds5ajd pedalMaxValue 0.331)
+    ("BoltPedalMax", "100"),       # pedal command cap, % on top of StarPilot's own speed cap (100 = StarPilot as is)
+    ("BoltYear2017", "0"),         # 2017 Bolt EV: StarPilot's 2017 steering tune and limits
     ("ShowConnInfo", "1"),
     ("ShowLaneInfo", "1"),
     ("ShowBlindSpot", "1"),
@@ -91,7 +94,7 @@ def manager_init() -> None:
     ("OpkrPrebuiltOn", "1"),
     ("OpkrHotspotOnBoot", "0"),
     ("OPKRTimeZone", "Asia/Seoul"),    
-    ("AutoCurveSpeedCtrlUse", "1"),
+    ("AutoCurveSpeedCtrlUse", "2"),
     ("CarrotTurnAccel", "0"),
     ("CarrotRadar", "0"),
     ("CarrotCutInPredecel", "0"),
@@ -105,7 +108,7 @@ def manager_init() -> None:
     ("AutoTurnControlSpeedTurn", "20"),
     ("AutoTurnControlTurnEnd", "3"),
     ("AutoLaneChangeSpeed", "30"),
-    ("AutoNaviSpeedCtrl", "1"),
+    ("AutoNaviSpeedCtrl", "0"),
     ("AutoNaviSpeedCtrlMode", "0"),
     ("AutoNaviSpeedCtrlStart", "22"),
     ("AutoNaviSpeedCtrlEnd", "6"),
@@ -166,7 +169,7 @@ def manager_init() -> None:
     ("PathCostApply", "100"),
     ("HapticFeedbackWhenSpeedCamera", "0"),       
     ("MaxAngleFrames", "89"),       
-    ("SoftHoldMode", "1"),       
+    ("SoftHoldMode", "0"),       
     ("ApplyModelDistOrder", "30"),       
     ("TrafficStopAdjustRatio", "90"),       
     ("SteeringRateCost", "700"),       
@@ -178,7 +181,7 @@ def manager_init() -> None:
     ("LateralTorqueFriction", "100"),       
     ("NNFF", "0"),
     ("NNFFLite", "0"),
-    ("ScreenAlwaysOn", "1"),
+    ("ScreenAlwaysOn", "0"),
     ("BrakeResumeSpeedMode", "1"),
     ("ShowAdvancedSettings", "0"),
     ("SteerActuatorDelay", "30"),       
@@ -258,8 +261,10 @@ def manager_init() -> None:
   params.put("GitCommit", get_commit(default=""))
   # release date of the code (commit time, as written by the release), shown as 브랜치 커밋 on the software page
   try:
-    commit_date = subprocess.check_output(["git", "log", "-1", "--format=%cd", "--date=format:%Y-%m-%d %H:%M:%S"],
-                                          cwd=BASEDIR, encoding="utf8", stderr=subprocess.DEVNULL).strip()
+    # always in Korea time, whatever time zone the commit was made in (POSIX TZ string, no tzdata needed)
+    commit_date = subprocess.check_output(["git", "log", "-1", "--format=%cd", "--date=format-local:%Y-%m-%d %H:%M:%S"],
+                                          cwd=BASEDIR, encoding="utf8", stderr=subprocess.DEVNULL,
+                                          env=dict(os.environ, TZ="KST-9")).strip()
   except Exception:
     commit_date = ""
   params.put("GitCommitDate", commit_date)

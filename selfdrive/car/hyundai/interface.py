@@ -3,7 +3,7 @@ from cereal import car
 from panda import Panda
 from common.numpy_fast import interp
 from common.conversions import Conversions as CV
-from selfdrive.car.hyundai.values import NON_SCC_CAR, HyundaiFlags, CAR, DBC, CANFD_CAR, CAMERA_SCC_CAR, CANFD_RADAR_SCC_CAR, EV_CAR, HYBRID_CAR, LEGACY_SAFETY_MODE_CAR, Buttons, CarControllerParams
+from selfdrive.car.hyundai.values import NON_SCC_CAR, NON_SCC_VARIANT, HyundaiFlags, CAR, DBC, CANFD_CAR, CAMERA_SCC_CAR, CANFD_RADAR_SCC_CAR, EV_CAR, HYBRID_CAR, LEGACY_SAFETY_MODE_CAR, Buttons, CarControllerParams
 from selfdrive.car.hyundai.radar_interface import RADAR_START_ADDR
 from selfdrive.car import STD_CARGO_KG, create_button_event, scale_tire_stiffness, get_safety_config
 from selfdrive.car.interfaces import CarInterfaceBase
@@ -22,6 +22,10 @@ BUTTONS_DICT = {Buttons.RES_ACCEL: ButtonType.accelCruise, Buttons.SET_DECEL: Bu
 class CarInterface(CarInterfaceBase):
   @staticmethod
   def _get_params(ret, candidate, fingerprint, car_fw, experimental_long):
+    # a model chosen with SCC that shows no SCC11 (1056) on either bus is its trim without SCC (values.NON_SCC_VARIANT)
+    if candidate in NON_SCC_VARIANT and len(fingerprint[0]) and 1056 not in fingerprint[0] and 1056 not in fingerprint[2]:
+      candidate = NON_SCC_VARIANT[candidate]
+      ret.carFingerprint = candidate
     ret.carName = "hyundai"
     ret.radarUnavailable = RADAR_START_ADDR not in fingerprint[1] or DBC[ret.carFingerprint]["radar"] is None
 
@@ -96,12 +100,12 @@ class CarInterface(CarInterfaceBase):
       ret.steerRatio = 15.4            # 14 is Stock | Settled Params Learner values are steerRatio: 15.401566348670535
       tire_stiffness_factor = 0.385    # stiffnessFactor settled on 1.0081302973865127
       ret.minSteerSpeed = 32 * CV.MPH_TO_MS
-    elif candidate == CAR.ELANTRA_2021:
+    elif candidate in (CAR.ELANTRA_2021, CAR.ELANTRA_2022_NON_SCC):
       ret.mass = (2800. * CV.LB_TO_KG) + STD_CARGO_KG
       ret.wheelbase = 2.72
       ret.steerRatio = 12.9
       tire_stiffness_factor = 0.65
-    elif candidate == CAR.ELANTRA_HEV_2021:
+    elif candidate in (CAR.ELANTRA_HEV_2021, CAR.ELANTRA_HEV_2022_NON_SCC):
       ret.mass = (3017. * CV.LB_TO_KG) + STD_CARGO_KG
       ret.wheelbase = 2.72
       ret.steerRatio = 12.9
@@ -116,8 +120,8 @@ class CarInterface(CarInterfaceBase):
       ret.wheelbase = 2.6
       ret.steerRatio = 13.42
       tire_stiffness_factor = 0.385
-    elif candidate in (CAR.KONA, CAR.KONA_EV, CAR.KONA_HEV, CAR.KONA_EV_2022):
-      ret.mass = {CAR.KONA_EV: 1685., CAR.KONA_HEV: 1425., CAR.KONA_EV_2022: 1743.}.get(candidate, 1275.) + STD_CARGO_KG
+    elif candidate in (CAR.KONA, CAR.KONA_NON_SCC, CAR.KONA_EV, CAR.KONA_EV_NON_SCC, CAR.KONA_HEV, CAR.KONA_EV_2022):
+      ret.mass = {CAR.KONA_EV: 1685., CAR.KONA_HEV: 1425., CAR.KONA_EV_2022: 1743.}.get({CAR.KONA_EV_NON_SCC: CAR.KONA_EV}.get(candidate, candidate), 1275.) + STD_CARGO_KG
       ret.wheelbase = 2.6
       ret.steerRatio = 13.42  # Spec
       tire_stiffness_factor = 0.385
@@ -173,7 +177,7 @@ class CarInterface(CarInterfaceBase):
       if candidate == CAR.KIA_NIRO_PHEV:
         #ret.minSteerSpeed = 32 * CV.MPH_TO_MS
         pass
-    elif candidate == CAR.KIA_SELTOS:
+    elif candidate in (CAR.KIA_SELTOS, CAR.KIA_SELTOS_2023_NON_SCC):
       ret.mass = 1337. + STD_CARGO_KG
       ret.wheelbase = 2.63
       ret.steerRatio = 14.56
@@ -193,7 +197,7 @@ class CarInterface(CarInterfaceBase):
       ret.mass = 1825. + STD_CARGO_KG
       ret.wheelbase = 2.78
       ret.steerRatio = 14.4 * 1.15   # 15% higher at the center seems reasonable
-    elif candidate == CAR.KIA_FORTE:
+    elif candidate in (CAR.KIA_FORTE, CAR.KIA_FORTE_2021_NON_SCC, CAR.KIA_FORTE_2019_NON_SCC):
       ret.mass = 3558. * CV.LB_TO_KG
       ret.wheelbase = 2.80
       ret.steerRatio = 13.75
@@ -233,7 +237,7 @@ class CarInterface(CarInterfaceBase):
       ret.mass = 1640.0 + STD_CARGO_KG
       ret.wheelbase = 2.84
       ret.steerRatio = 13.56
-    elif candidate == CAR.GENESIS_G70_2020:
+    elif candidate in (CAR.GENESIS_G70_2020, CAR.GENESIS_G70_2021_NON_SCC):
       ret.mass = 3673.0 * CV.LB_TO_KG + STD_CARGO_KG
       ret.wheelbase = 2.83
       ret.steerRatio = 12.9
@@ -295,6 +299,11 @@ class CarInterface(CarInterfaceBase):
       ret.wheelbase = 3.15
       ret.steerRatio = 14.5
       tire_stiffness_factor = 0.7
+    elif candidate == CAR.VENUE_2021_NON_SCC:  # sunnypilot (wheelbase, steer ratio); curb weight about 1.2 t
+      ret.mass = 1200. + STD_CARGO_KG
+      ret.wheelbase = 2.52
+      ret.steerRatio = 14.4
+      tire_stiffness_factor = 0.65
     elif candidate == CAR.KIA_RAY_EV:
       ret.mass = 1295. + STD_CARGO_KG
       ret.wheelbase = 2.52
@@ -370,8 +379,9 @@ class CarInterface(CarInterfaceBase):
     ret.pcmCruise = not ret.openpilotLongitudinalControl
 
     # cars without SCC with a comma pedal: the car's own menu switch ('페달 사용') and the pedal box on the bus (0x201, 6 bytes)
-    if candidate in NON_SCC_CAR:
-      from selfdrive.car.hyundai.pedal import PEDAL_PARAMS, PEDAL_SENSOR_ADDR, PEDAL_SENSOR_LEN
+    from selfdrive.car.hyundai.pedal import PEDAL_PARAMS
+    if candidate in PEDAL_PARAMS:  # Ray EV / Porter II EV only; the other cars without SCC have no pedal setup
+      from selfdrive.car.hyundai.pedal import PEDAL_SENSOR_ADDR, PEDAL_SENSOR_LEN
       if Params().get_bool(PEDAL_PARAMS[candidate][0]) and fingerprint[0].get(PEDAL_SENSOR_ADDR) == PEDAL_SENSOR_LEN:
         ret.flags |= HyundaiFlags.NON_SCC_PEDAL.value
         ret.enableGasInterceptor = True
@@ -381,11 +391,18 @@ class CarInterface(CarInterfaceBase):
         ret.radarUnavailable = True  # no radar: the camera finds the lead
         ret.minEnableSpeed = -1.
         ret.autoResumeSng = False    # no brake to hold the car: no stop and go
-        # StarPilot Ray EV pedal tune
-        ret.longitudinalTuning.kpBP = [0., 5., 15., 35.]
-        ret.longitudinalTuning.kpV = [0.095, 0.085, 0.065, 0.050]
-        ret.longitudinalTuning.kiBP = [0., 3., 6., 35.]
-        ret.longitudinalTuning.kiV = [0.07, 0.10, 0.15, 0.24]
+        # carrot Ray EV pedal long: this base's long control is a PID on the speed error like carrot's (StarPilot's
+        # 0.05~0.1 gains were for an accel error), so Kp 1, Kf 1 and the Ray menu's Ki. Two breakpoints so the
+        # global long tuning menu (single breakpoint only, longcontrol.py) does not replace it.
+        from selfdrive.car.hyundai.pedal import KI_PARAM, STRONG_PARAM, ray_ki
+        ki = ray_ki(Params().get(KI_PARAM, encoding="utf8")) if candidate == CAR.KIA_RAY_EV else 0.05
+        ret.longitudinalTuning.kpBP = [0., 35.]
+        ret.longitudinalTuning.kpV = [1.0, 1.0]
+        ret.longitudinalTuning.kiBP = [0., 35.]
+        ret.longitudinalTuning.kiV = [ki, ki]
+        ret.longitudinalTuning.kf = 1.0
+        if candidate == CAR.KIA_RAY_EV and Params().get_bool(STRONG_PARAM):
+          ret.flags |= HyundaiFlags.NON_SCC_PEDAL_STRONG.value
 
     ret.stoppingControl = True
     ret.startingState = False # True # startAccel을 적용하는 startingState를 막음.
@@ -424,6 +441,8 @@ class CarInterface(CarInterfaceBase):
         ret.safetyConfigs[0].safetyParam |= Panda.FLAG_HYUNDAI_NON_SCC
         if ret.flags & HyundaiFlags.NON_SCC_PEDAL:
           ret.safetyConfigs[0].safetyParam |= Panda.FLAG_HYUNDAI_NON_SCC_PEDAL
+          if ret.flags & HyundaiFlags.NON_SCC_PEDAL_STRONG:
+            ret.safetyConfigs[0].safetyParam |= Panda.FLAG_HYUNDAI_NON_SCC_PEDAL_STRONG
       elif candidate in LEGACY_SAFETY_MODE_CAR:
         # these cars require a special panda safety mode due to missing counters and checksums in the messages
         ret.safetyConfigs = [get_safety_config(car.CarParams.SafetyModel.hyundaiLegacy)]
@@ -443,7 +462,7 @@ class CarInterface(CarInterfaceBase):
     elif candidate in EV_CAR:
       ret.safetyConfigs[-1].safetyParam |= Panda.FLAG_HYUNDAI_EV_GAS
 
-    if candidate in (CAR.KONA, CAR.KONA_EV, CAR.KONA_HEV, CAR.KONA_EV_2022):
+    if candidate in (CAR.KONA, CAR.KONA_EV, CAR.KONA_HEV, CAR.KONA_EV_2022, CAR.KONA_NON_SCC, CAR.KONA_EV_NON_SCC):
       ret.flags |= HyundaiFlags.ALT_LIMITS.value
       ret.safetyConfigs[-1].safetyParam |= Panda.FLAG_HYUNDAI_ALT_LIMITS
 

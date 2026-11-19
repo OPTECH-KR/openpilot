@@ -132,9 +132,6 @@ public:
   static int count();
   static QString carName(int index);   // CAR string in values.py
   static QString menuTitle(int index); // '레이 EV 설정'
-
-signals:
-  void backPress();
 };
 
 // carrot (C3X) style "CarrotPilot" panel: Start / Cruise / Speed / Tuning / Disp / Path tabs

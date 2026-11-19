@@ -61,8 +61,8 @@ class CarController:
     self.pedal_gas_last = 0.
     self.pedal_max = 0.7
     if self.pedal:
-      from selfdrive.car.hyundai.pedal import PEDAL_DBC
-      self.pedal_packer = CANPacker(PEDAL_DBC[CP.carFingerprint])
+      from selfdrive.car.hyundai.pedal import command_dbc
+      self.pedal_packer = CANPacker(command_dbc(CP))  # the Ray EV's strong scaling has its own command DBC
     self.car_fingerprint = CP.carFingerprint
     #self.send_lfa_mfa_lkas = True if self.car_fingerprint in FEATURES["send_lfa_mfa"] and self.car_fingerprint not in [CAR.HYUNDAI_GENESIS] else False
     self.send_lfa_mfa_lkas = CP.flags & HyundaiFlags.SEND_LFA.value
@@ -137,8 +137,8 @@ class CarController:
       self.softHoldMode = int(Params().get("SoftHoldMode", encoding="utf8"))
       self.steerDeltaUp = int(Params().get("SteerDeltaUp", encoding="utf8"))
       self.steerDeltaDown = int(Params().get("SteerDeltaDown", encoding="utf8"))
-      if self.CP.flags & HyundaiFlags.NON_SCC:
-        from selfdrive.car.hyundai.pedal import PEDAL_PARAMS
+      from selfdrive.car.hyundai.pedal import PEDAL_PARAMS
+      if self.CP.flags & HyundaiFlags.NON_SCC and self.CP.carFingerprint in PEDAL_PARAMS:  # Ray EV / Porter II EV menu
         _, max_param, buttons_param = PEDAL_PARAMS[self.CP.carFingerprint]
         self.non_scc_speed_buttons = Params().get_bool(buttons_param)
         try:

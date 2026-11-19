@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cmath>
 #include <string>
+#include <memory>
 
 #include <QDebug>
 
@@ -33,6 +34,7 @@
 #include <QScroller>
 #include <QListView>
 #include <QListWidget>
+#include <QMap>
 
 #include <QProcess> // opkr
 #include <QDateTime> // opkr
@@ -452,10 +454,13 @@ static QStringList get_list_utf8(const char* path) {
 
 // the menu name of a CAR string (the CAR string itself, kept in the list file for later use)
 static QString car_menu_name(const QString &car) {
+  // the menu file has the name without the brand ("K5 DL3 2020-2023"); the car button shows "KIA K5 DL3 2020-2023"
   if (car.isEmpty()) return QString();
   for (const QString &line : get_list_utf8("/data/params/d/SupportedCars")) {
     const QStringList parts = line.split('|');
-    if (parts.size() >= 3 && parts[0] == car) return parts[2];
+    if (parts.size() >= 3 && parts[0] == car) {
+      return parts[2].startsWith(parts[1] + " ") ? parts[2] : parts[1] + " " + parts[2];
+    }
   }
   return car;
 }
@@ -680,7 +685,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   QWidget* toggles = new QWidget();
   QVBoxLayout* toggles_layout = new QVBoxLayout(toggles);
 
-  // ---- 시작: car, hotspot, update ----
+  // ---- 시작: car ----
   startToggles = new ListWidget(this);
   QString selected = QString::fromStdString(Params().get("SelectedCar"));
   QPushButton* selectCarBtn = new QPushButton(selected.length() ? car_menu_name(selected) : tr("차종 선택"));
@@ -697,25 +702,29 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   selectCar = new SelectCar(this);
   connect(selectCarBtn, &QPushButton::clicked, [=]() { main_layout->setCurrentWidget(selectCar); });
   connect(selectCar, &SelectCar::backPress, [=]() { main_layout->setCurrentWidget(homeScreen); });
-  // '레이 EV 설정' / '포터 II EV 설정': each only while that car is the chosen one (cars without SCC)
-  QList<ButtonControl*> cc_only_btns;
+  // '레이 EV 설정' / '포터 II EV 설정' / '볼트 EV 설정': shown open right under the car button while that car is the
+  // chosen one; choosing such a car also pops up a note to check them
   for (int i = 0; i < CcOnlyCarPage::count(); i++) {
     CcOnlyCarPage* page = new CcOnlyCarPage(i, this);
+    page->setVisible(selected == CcOnlyCarPage::carName(i));
     ccOnlyPages.append(page);
-    auto btn = new ButtonControl(CcOnlyCarPage::menuTitle(i), "열기", "스마트 크루즈(SCC)가 없는 차량 전용 설정입니다(크루즈 속도 자동 조절, 페달 사용). 차종을 이 차로 골랐을 때만 보입니다.");
-    QObject::connect(btn, &ButtonControl::clicked, [=]() { main_layout->setCurrentWidget(page); });
-    connect(page, &CcOnlyCarPage::backPress, [=]() { main_layout->setCurrentWidget(homeScreen); });
-    btn->setVisible(selected == CcOnlyCarPage::carName(i));
-    cc_only_btns.append(btn);
   }
   connect(selectCar, &SelectCar::selectedCar, [=]() {
     QString car = QString::fromStdString(Params().get("SelectedCar"));
     selectCarBtn->setText(car.length() ? car_menu_name(car) : tr("차종 선택"));
-    for (int i = 0; i < cc_only_btns.size(); i++) cc_only_btns[i]->setVisible(car == CcOnlyCarPage::carName(i));
+    QString title;
+    for (int i = 0; i < ccOnlyPages.size(); i++) {
+      const bool mine = car == CcOnlyCarPage::carName(i);
+      ccOnlyPages[i]->setVisible(mine);
+      if (mine) title = CcOnlyCarPage::menuTitle(i);
+    }
     main_layout->setCurrentWidget(homeScreen);
+    if (!title.isEmpty()) {
+      ConfirmationDialog::alert("이 차량은 따로 확인할 설정이 있어요.\n차종 버튼 아래의 '" + title + "'을 확인해 주세요.", this);
+    }
   });
   startToggles->addItem(selectCarBtn);
-  for (auto btn : cc_only_btns) startToggles->addItem(btn);
+  for (auto page : ccOnlyPages) startToggles->addItem(page);
   auto gps_btn = new ButtonControl("GPS 확인", "확인", "시동을 걸지 않아도 GPS를 켜서 잡힘 여부, 신호 세기, 위성 수, 위치 오차를 실시간으로 보여 줍니다. 창을 닫으면 GPS는 다시 꺼집니다. 기기 내장 GPS를 사용합니다.");
   QObject::connect(gps_btn, &ButtonControl::clicked, [=]() {
     Params().putBool("GpsCheck", true);  // boardd powers the uBlox while this is set (read about once a second)
@@ -732,7 +741,6 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     refresh.stop();
     Params().putBool("GpsCheck", false);
   });
-  startToggles->addItem(gps_btn);
   // EngageWithLong: what the cruise button turns on (controlsd / cruise_helper); no reboot needed
   auto engage_mode_btn = new ButtonControl("", "선택", "크루즈 버튼으로 openpilot을 켤 때 무엇을 켤지 고릅니다. 조향+가감속 사용: 조향과 가감속이 함께 켜지고, 설정 속도는 그때의 현재 속도입니다. 브레이크를 밟았다 떼면 원래 설정 속도로 다시 갑니다. 조향만 사용: 조향만 켜지고, 어떤 버튼이나 페달로도 가감속은 켜지지 않습니다. 어느 쪽이든 크루즈 버튼을 다시 누르면 모두 꺼지고, +/- 버튼은 가감속이 켜져 있을 때 설정 속도만 바꿉니다.");
   auto engage_mode_name = []() {
@@ -746,31 +754,6 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     Params().putBool("EngageWithLong", sel == names[0]);
     engage_mode_btn->setTitle(engage_mode_name());
   });
-  startToggles->addItem(engage_mode_btn);
-  startToggles->addItem(new ParamControl("AutoShutdown", "자동 꺼짐", "켜 두면(초록색) 차량이나 충전기 전원 없이 배터리로만 켜져 있고 주행 중이 아닐 때, 약 10분 뒤 기기가 스스로 꺼져 배터리를 보호합니다. 끄면 배터리가 다 닳을 때까지 켜져 있습니다. 주행 중이거나 전원이 연결돼 있으면 이 설정과 상관없이 꺼지지 않습니다.", SHELL_ICON, this));
-  startToggles->addItem(new ParamControl("OpkrHotspotOnBoot", "부팅 시 핫스팟 켜기", "켜 두면 기기가 켜질 때 핫스팟(테더링)이 자동으로 켜집니다.", SHELL_ICON, this));
-  auto updateBtn = new ButtonControl("업데이트 확인 후 적용", "업데이트");
-  QObject::connect(updateBtn, &ButtonControl::clicked, [=]() {
-    const char* gitcommit = "/data/openpilot/selfdrive/assets/addon/sh/gitcommit.sh";
-    const char* gitpull = "/data/openpilot/selfdrive/assets/addon/sh/gitpull.sh";
-    std::system(gitcommit);
-    std::system("date -u '+%Y-%m-%dT%H:%M:%S' > /data/params/d/LastUpdateTime");
-    QString commit_local = QString::fromStdString(Params().get("GitCommit")).left(7);
-    QString commit_remote = QString::fromStdString(Params().get("GitCommitRemote")).left(7);
-    if (commit_remote.isEmpty()) {
-      ConfirmationDialog::alert("업데이트 서버에 연결하지 못했어요.\n와이파이 연결을 확인해 주세요.", this);
-    } else if (commit_local == commit_remote) {
-      ConfirmationDialog::alert("이미 최신 버전이에요.\n(" + commit_local + ")", this);
-    } else {
-      QString changes = QString::fromStdString(util::read_file("/tmp/update_changelog.txt")).trimmed();
-      if (changes.isEmpty()) changes = "(바뀐 내용 목록을 불러오지 못했어요)";
-      if (ConfirmationDialog::richConfirm("새 업데이트가 있어요. (" + commit_local + " → " + commit_remote + ")\n\n바뀐 내용:\n" + changes +
-                                      "\n\n받은 뒤 자동으로 재부팅해요. 업데이트할까요?", "업데이트", this)) {
-        std::system(gitpull);
-      }
-    }
-  });
-  startToggles->addItem(updateBtn);
   auto tmuxlog_btn = new ButtonControl("오류 로그 (Tmux)", "보기");
   QObject::connect(tmuxlog_btn, &ButtonControl::clicked, [=]() {
     const std::string txt = util::read_file("/data/tmux_error.log");
@@ -779,6 +762,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
 
   // ---- 주행: brake / cruise buttons ----
   cruiseToggles = new ListWidget(this);
+  cruiseToggles->addItem(engage_mode_btn);  // 조향+가감속 사용 / 조향만 사용 (made with the 시작 items above)
   cruiseToggles->addItem(carrot_section("브레이크"));
   cruiseToggles->addItem(new CValueControl("SoftHoldMode", "소프트홀드", "정차 후 브레이크를 떼도 차를 멈춘 상태로 잡아 주는 기능입니다. 0:사용 안 함, 1:사용, 2:SCC와 함께 사용(일부 차량은 전자식 주차 브레이크가 걸릴 수 있음)", ROAD_ICON, 0, 2, 1));
   cruiseToggles->addItem(carrot_section("크루즈 버튼"));
@@ -786,7 +770,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   cruiseToggles->addItem(new CValueControl("CruiseSpeedUnit", "버튼 한 번에 바뀌는 속도", "크루즈 속도 버튼을 한 번 누를 때 바뀌는 속도(km/h)입니다.", ROAD_ICON, 1, 20, 1));
   cruiseToggles->addItem(carrot_section("과속카메라 · 방지턱"));
   cruiseToggles->addItem(new CValueControl("AutoNaviSpeedCtrl", "카메라 감속", "과속카메라 앞에서 자동으로 감속합니다. 0:사용 안 함, 1:APM(내비 연동), 2:APM + 순정 내비게이션, 3:NDA", ROAD_ICON, 0, 3, 1));
-  cruiseToggles->addItem(new CValueControl("SpeedCamDB", "내장 카메라 DB", "내비 앱 없이 C2 안에 넣어 둔 전국 고정식 단속카메라 목록(공공데이터, 과속·신호과속·구간단속 약 3만 1천 대)과 GPS로 앞쪽 카메라를 찾아 감속합니다. 내비 앱(APM)이 카메라 정보를 보내면 앱 정보를 우선하고, 앱이 회전 안내만 보낼 때(티맵 등)는 내장 DB로 카메라 감속을 합니다. 이동식 카메라와 새로 생긴 카메라는 없고, 반대 차로 카메라에서도 제한속도까지 줄일 수 있습니다. '카메라 감속'이 1 이상이어야 감속합니다. 0:끄기, 1:켜기. 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 1, 1));
+  cruiseToggles->addItem(new CValueControl("SpeedCamDB", "내장 카메라 DB", "과속카메라 앞에서 알아서 속도를 줄여 줍니다. 내비 앱이 없어도 됩니다.\n전국 고정식 단속카메라 약 3만 1천 대(공공데이터)의 위치가 기기에 들어 있고, GPS로 앞에 있는 카메라를 찾습니다. 구간단속은 구간이 끝날 때까지 제한속도를 지킵니다.\n\n● 함께 켜야 할 것: '카메라 감속'을 1 이상으로\n● 안 되는 경우: 이동식 카메라, 새로 생긴 카메라 / GPS가 안 잡힐 때 / 스마트 크루즈가 없는 차(조향만 하는 차)\n● 주의: 반대 차로의 카메라에서도 속도를 줄일 수 있습니다. 내비 앱(APM)이 카메라 정보를 보내면 앱 정보를 먼저 씁니다.\n\n0: 끄기, 1: 켜기. 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 1, 1));
   cruiseToggles->addItem(new CValueControl("HapticFeedbackWhenSpeedCamera", "카메라 알림", "과속카메라가 가까워질 때 알려 주는 방법입니다. 0:사용 안 함, 1:핸들 진동, 2:계기판 표시, 3:HUD 표시", ROAD_ICON, 0, 3, 1));
   cruiseToggles->addItem(new CValueControl("AutoNaviSpeedBumpSpeed", "방지턱 통과 속도", "과속방지턱을 넘을 때의 속도(km/h)입니다.", ROAD_ICON, 10, 100, 5));
 
@@ -846,6 +830,10 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
 
   // ---- 고급: experimental / developer ----
   advancedToggles = new ListWidget(this);
+  advancedToggles->addItem(carrot_section("기기"));
+  advancedToggles->addItem(gps_btn);  // GPS 확인 (made with the 시작 items above)
+  advancedToggles->addItem(new ParamControl("AutoShutdown", "자동 꺼짐", "켜 두면(초록색) 차량이나 충전기 전원 없이 배터리로만 켜져 있고 주행 중이 아닐 때, 약 10분 뒤 기기가 스스로 꺼져 배터리를 보호합니다. 끄면 배터리가 다 닳을 때까지 켜져 있습니다. 주행 중이거나 전원이 연결돼 있으면 이 설정과 상관없이 꺼지지 않습니다.", SHELL_ICON, this));
+  advancedToggles->addItem(new ParamControl("OpkrHotspotOnBoot", "부팅 시 핫스팟 켜기", "켜 두면 기기가 켜질 때 핫스팟(테더링)이 자동으로 켜집니다.", SHELL_ICON, this));
   advancedToggles->addItem(carrot_section("주행 기록"));
   auto drivelog_btn = new ButtonControl("주행 기록 보기", "보기", "주행할 때마다 자동으로 남는 기록입니다. 고른 주행에서 켜짐·꺼짐, 경고, 오류, 프로그램 멈춤을 시간순으로 보여 줍니다. (최근 30번 보관)");
   QObject::connect(drivelog_btn, &ButtonControl::clicked, [=]() {
@@ -931,7 +919,6 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   homeScreen->setLayout(carrotLayout);
   main_layout->addWidget(homeScreen);
   main_layout->addWidget(selectCar);
-  for (auto page : ccOnlyPages) main_layout->addWidget(page);
   main_layout->setCurrentWidget(homeScreen);
 
   togglesCarrot(0);
@@ -1146,54 +1133,100 @@ SelectCar::SelectCar(QWidget* parent): QWidget(parent) {
   main_layout->setMargin(20);
   main_layout->setSpacing(20);
 
-  // Back button
+  // Back button: from a brand's cars back to the brands, from the brands back to the settings
   QPushButton* back = new QPushButton(tr("Back"));
   back->setObjectName("back_btn");
   back->setFixedSize(500, 100);
-  connect(back, &QPushButton::clicked, [=]() { emit backPress(); });
   main_layout->addWidget(back, 0, Qt::AlignLeft);
 
   QListWidget* list = new QListWidget(this);
   list->setStyleSheet("QListView {padding: 40px; background-color: #393939; border-radius: 15px; height: 140px;} QListView::item{height: 100px}");
-  //list->setAttribute(Qt::WA_AcceptTouchEvents, true);
   QScroller::grabGesture(list->viewport(), QScroller::LeftMouseButtonGesture);
   list->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
 
-  // [선택 안 함], then 현대 / 기아 / 제네시스 headers with their cars in model and year order (car_menu.py).
-  // Each car row keeps its CAR string in UserRole; that is what SelectedCar stores.
-  QListWidgetItem* none_item = new QListWidgetItem(tr("[ 선택 안 함 ]"));
-  none_item->setData(Qt::UserRole, QString());
-  list->addItem(none_item);
-  list->setCurrentItem(none_item);
-
-  const QString selected = QString::fromStdString(Params().get("SelectedCar"));
+  // menu file lines "CAR|brand|name" in brand, model and year order (car_menu.py). The brand list comes first; a brand
+  // shows only its cars. Each car row keeps its CAR string in UserRole; that is what SelectedCar stores.
   QStringList lines = get_list_utf8("/data/params/d/SupportedCars");
   lines += get_list_utf8("/data/params/d/SupportedCars_gm");
-  QString brand_prev;
+  auto brands = std::make_shared<QStringList>();
+  auto cars = std::make_shared<QMap<QString, QList<QPair<QString, QString>>>>();  // brand -> (CAR, name)
   for (const QString &line : lines) {
     const QStringList parts = line.split('|');
     const QString car = parts[0];
-    const QString brand = parts.size() >= 3 ? parts[1] : QString();
+    if (car.isEmpty()) continue;
+    const QString brand = parts.size() >= 3 ? parts[1] : QString("OTHER");
     const QString name = parts.size() >= 3 ? parts[2] : car;
-    if (!brand.isEmpty() && brand != brand_prev) {
-      QListWidgetItem* header = new QListWidgetItem("■ " + brand);
-      header->setFlags(Qt::NoItemFlags);  // not selectable
-      header->setForeground(QColor("#33ab4c"));
-      QFont f = header->font();
-      f.setBold(true);
-      header->setFont(f);
-      list->addItem(header);
-      brand_prev = brand;
-    }
-    QListWidgetItem* item = new QListWidgetItem("      " + name);
-    item->setData(Qt::UserRole, car);
-    list->addItem(item);
-    if (car == selected) list->setCurrentItem(item);
+    if (!brands->contains(brand)) brands->append(brand);
+    (*cars)[brand].append(qMakePair(car, name));
   }
-  if (list->currentItem()) list->scrollToItem(list->currentItem(), QAbstractItemView::PositionAtCenter);
+  static const QMap<QString, QString> BRAND_KO = {{"HYUNDAI", "현대"}, {"KIA", "기아"}, {"GENESIS", "제네시스"}, {"CHEVROLET", "쉐보레"},
+                                                  {"GMC", ""}, {"CADILLAC", "캐딜락"}, {"BUICK", "뷰익"},
+                                                  {"TOYOTA", "토요타"}, {"LEXUS", "렉서스"}, {"HONDA", "혼다"}, {"ACURA", "어큐라"},
+                                                  {"VOLKSWAGEN", "폭스바겐"}, {"AUDI", "아우디"}, {"SEAT", "세아트"}, {"SKODA", "스코다"}, {"MAZDA", "마쓰다"},
+                                                  {"NISSAN", "닛산"}, {"SUBARU", "스바루"},
+                                                  {"CHRYSLER", "크라이슬러"}, {"JEEP", "지프"}};
+  auto cur_brand = std::make_shared<QString>();
+
+  auto show_brands = [=]() {
+    cur_brand->clear();
+    list->clear();
+    const QString selected = QString::fromStdString(Params().get("SelectedCar"));
+    QListWidgetItem* none_item = new QListWidgetItem(tr("[ 선택 안 함 ]"));
+    none_item->setData(Qt::UserRole, QString());
+    list->addItem(none_item);
+    list->setCurrentItem(none_item);
+    for (const QString &b : *brands) {
+      const QString ko = BRAND_KO.value(b);
+      QListWidgetItem* item = new QListWidgetItem("   " + b + (ko.isEmpty() ? "" : "  " + ko) +
+                                                  QString("   (%1)   ▶").arg((*cars)[b].size()));
+      item->setData(Qt::UserRole + 1, b);
+      list->addItem(item);
+      for (const auto &c : (*cars)[b]) {
+        if (c.first == selected) list->setCurrentItem(item);
+      }
+    }
+    list->scrollToTop();
+  };
+
+  auto show_cars = [=](const QString &b) {
+    *cur_brand = b;
+    list->clear();
+    const QString selected = QString::fromStdString(Params().get("SelectedCar"));
+    const QString ko = BRAND_KO.value(b);
+    QListWidgetItem* header = new QListWidgetItem("■ " + b + (ko.isEmpty() ? "" : "  " + ko));
+    header->setFlags(Qt::NoItemFlags);  // not selectable
+    header->setForeground(QColor("#33ab4c"));
+    QFont f = header->font();
+    f.setBold(true);
+    header->setFont(f);
+    list->addItem(header);
+    for (const auto &c : (*cars)[b]) {
+      QListWidgetItem* item = new QListWidgetItem("      " + c.second);
+      item->setData(Qt::UserRole, c.first);
+      list->addItem(item);
+      if (c.first == selected) list->setCurrentItem(item);
+    }
+    if (list->currentItem()) list->scrollToItem(list->currentItem(), QAbstractItemView::PositionAtCenter);
+    else list->scrollToTop();
+  };
+
+  show_brands();
+
+  connect(back, &QPushButton::clicked, [=]() {
+    if (!cur_brand->isEmpty()) {
+      show_brands();
+    } else {
+      emit backPress();
+    }
+  });
 
   QObject::connect(list, QOverload<QListWidgetItem*>::of(&QListWidget::itemClicked),
     [=](QListWidgetItem* item){
+    const QString brand = item->data(Qt::UserRole + 1).toString();
+    if (!brand.isEmpty()) {  // a brand: show its cars
+      show_cars(brand);
+      return;
+    }
     if (!(item->flags() & Qt::ItemIsSelectable)) return;  // brand header
     const QString car = item->data(Qt::UserRole).toString();
     if (car.isEmpty())
@@ -1201,6 +1234,7 @@ SelectCar::SelectCar(QWidget* parent): QWidget(parent) {
     else
         Params().put("SelectedCar", car.toStdString());
 
+    show_brands();  // next time the list starts from the brands again
     emit selectedCar();
     });
 
@@ -1225,17 +1259,17 @@ static const char *NON_SCC_PEDAL =
   "페달 장치가 인식되지 않으면 켜 두어도 조향만 합니다. 재부팅해야 적용됩니다.";
 static const CcOnlyCarEntry CC_ONLY_CARS[] = {
   {"KIA RAY EV 2024", "레이 EV", "Ray", 70, 10, 70, true, NON_SCC_INTRO, NON_SCC_PEDAL,
-   "페달 보정값은 스타파일럿이 실제 레이 EV로 맞춘 값을 씁니다."},
+   "페달 보정값은 스타파일럿이 실제 레이 EV로 맞춘 값을 씁니다(당근파일럿도 같은 값). 아래 '페달 세게'와 '속도 오차 보정'은 당근파일럿 방식입니다."},
   {"HYUNDAI PORTER II EV 2024", "포터 II EV", "Porter", 40, 10, 70, true, NON_SCC_INTRO, NON_SCC_PEDAL,
    "포터는 아직 실제 차로 맞춘 페달 보정값이 없어 레이 EV 값을 임시로 씁니다. 안전한 곳에서 낮은 상한으로 먼저 확인하고, 필요하면 보정값을 맞춰야 합니다."},
-  {"CHEVROLET BOLT EV NO ACC", "볼트 EV", "Bolt", 33, 20, 60, false,
+  {"CHEVROLET BOLT EV NO ACC", "볼트 EV", "Bolt", 100, 20, 100, false,
    "어댑티브 크루즈(ACC)가 없는 볼트 EV(2017~2021)입니다. 카메라 하네스로 연결합니다. 페달 장치가 없으면 openpilot은 조향만 하고, "
    "차의 일반 크루즈를 켜면 함께 켜집니다. 레이더가 없으니 앞차와의 거리는 항상 운전자가 지켜 주세요. "
    "아직 실제 차로 시험하지 않았으니, 처음에는 'openpilot 사용'을 끄고(읽기 전용) 짧게 달려 본 뒤 조향을 켜 주세요.",
-   "comma 페달 장치를 단 경우에만 켜세요(ds5ajd 볼트 EV 방식). 켜면 openpilot이 가속페달로 가감속을 맡습니다. "
+   "comma 페달 장치를 단 경우에만 켜세요(스타파일럿 볼트 EV 방식). 켜면 openpilot이 가속페달로 가감속을 맡습니다. "
    "기어는 L(원페달) 모드여야 하고, 차의 크루즈 메인 버튼은 꺼 둔 채 SET 또는 RES 버튼으로 켭니다. "
    "브레이크 장치가 없어 감속은 회생제동만큼만 됩니다. 페달 장치가 인식되지 않으면 켜 두어도 조향만 합니다. 재부팅해야 적용됩니다.",
-   "기본 33%는 ds5ajd 볼트 EV 값(0.331)입니다."},
+   "기본 100%는 스타파일럿 그대로입니다. 저속에서는 스타파일럿이 따로 정한 상한(정지 근처 20%부터)이 먼저 적용됩니다."},
 };
 
 int CcOnlyCarPage::count() { return sizeof(CC_ONLY_CARS) / sizeof(CC_ONLY_CARS[0]); }
@@ -1246,15 +1280,10 @@ CcOnlyCarPage::CcOnlyCarPage(int index, QWidget* parent): QWidget(parent) {
   const CcOnlyCarEntry &e = CC_ONLY_CARS[index];
   const QString prefix = e.prefix;
 
+  // shown inside the 시작 tab (its scroll view), so no back button or scroll view of its own
   QVBoxLayout* main_layout = new QVBoxLayout(this);
-  main_layout->setMargin(20);
-  main_layout->setSpacing(20);
-
-  QPushButton* back = new QPushButton(tr("Back"));
-  back->setObjectName("back_btn");
-  back->setFixedSize(500, 100);
-  connect(back, &QPushButton::clicked, [=]() { emit backPress(); });
-  main_layout->addWidget(back, 0, Qt::AlignLeft);
+  main_layout->setMargin(0);
+  main_layout->setSpacing(0);
 
   ListWidget* list = new ListWidget(this);
   list->addItem(carrot_section(QString(e.title) + " 설정"));
@@ -1267,12 +1296,28 @@ CcOnlyCarPage::CcOnlyCarPage(int index, QWidget* parent): QWidget(parent) {
       "페달을 쓰지 않을 때, openpilot이 크루즈 버튼을 대신 눌러 설정 속도를 바꿉니다(커브·과속카메라 감속 등). 크루즈가 브레이크를 세게 걸지 못하므로 앞차와의 거리는 항상 운전자가 지켜야 합니다. 기본은 꺼짐(조향만).", SHELL_ICON, this));
   }
 
+  if (prefix == "Bolt") {
+    list->addItem(new ParamControl("BoltYear2017", "2017년식",
+      "2017년식 볼트 EV면 켜세요. 2017년식은 핸들 모터(EPS)가 약해서, 스타파일럿의 2017년식 조향 튜닝과 더 큰 조향 힘 한도를 씁니다. "
+      "2018~2021년식은 끈 채로 두세요. 재부팅해야 적용됩니다.", SHELL_ICON, this));
+  }
+
   list->addItem(carrot_section("페달 (comma 페달 장치)"));
   list->addItem(new ParamControl(prefix + "Pedal", "페달 사용", e.pedal_desc, SHELL_ICON, this));
   list->addItem(new CValueControl(prefix + "PedalMax", "페달 최대 밟는 양",
     QString("openpilot이 가속페달을 최대 몇 %까지 밟을지 정합니다. 처음에는 낮게 시작해 보세요. %1~%2, 기본 %3. ")
       .arg(e.pedal_lo).arg(e.pedal_hi).arg(e.pedal_max_default) + e.note,
-    ROAD_ICON, e.pedal_lo, e.pedal_hi, e.pedal_lo == 20 ? 1 : 5));
+    ROAD_ICON, e.pedal_lo, e.pedal_hi, 5));
+  if (prefix == "Ray") {
+    list->addItem(new ParamControl("RayPedalStrong", "페달 세게 (당근)",
+      "같은 명령에 페달을 약 2배 더 밟습니다. 당근파일럿에서 2024년식 레이 EV 차주가 '가속이 약하다'고 해서 바꾼 값입니다. "
+      "당근파일럿의 주행 기록 분석에서는 이 설정으로 감속해야 할 때 오히려 가속한 경우가 있었으니, 가속이 정말 약할 때만 켜고 처음에는 조심해서 확인하세요. "
+      "기본은 꺼짐(스타파일럿 값). 재부팅해야 적용됩니다.", SHELL_ICON, this));
+    list->addItem(new CValueControl("RayPedalKi", "속도 오차 보정 (Ki)",
+      "설정 속도와 실제 속도가 계속 어긋날 때(오르막에서 처지거나 내리막에서 빨라질 때) 조금씩 페달을 더하거나 빼서 맞춥니다(당근파일럿 방식). "
+      "값 ×0.001이 Ki입니다. 0이면 끔, 기본 50(당근파일럿 레이 추천값). 너무 크면 속도가 출렁입니다. 재부팅해야 적용됩니다.",
+      ROAD_ICON, 0, 200, 10));
+  }
 
-  main_layout->addWidget(new ScrollView(list, this));
+  main_layout->addWidget(list);
 }

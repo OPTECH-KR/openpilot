@@ -48,8 +48,17 @@ const int16_t GM_PARAM_HW_CAM = 1;
 const int16_t GM_PARAM_CC_ONLY = 4;
 // ... and with a comma pedal the pedal does the longitudinal: SET/RESUME engage like the ASCM cars
 const int16_t GM_PARAM_PEDAL = 8;
+// Bolt EV 2017 (chosen on the Bolt EV settings page): its weaker EPS gets StarPilot's GM_BOLT_2017_STEERING_LIMITS
+const int16_t GM_PARAM_BOLT_2017 = 16;
 bool gm_cc_only = false;
 bool gm_pedal = false;
+// steering limits in use (GM_MAX_STEER ... above, or the Bolt 2017 ones)
+int gm_max_steer = 300;
+int gm_max_rate_up = 10;
+int gm_max_rate_down = 15;
+int gm_driver_torque_allowance = 65;
+int gm_driver_torque_factor = 4;
+int gm_max_rt_delta = 128;
 enum {GM_ASCM, GM_CAM} gm_hw = GM_ASCM;
 int gm_cruise_button_prev = 0;
 
@@ -199,18 +208,18 @@ static int gm_tx_hook(CANPacket_t *to_send, bool longitudinal_allowed) {
     if (current_controls_allowed) {
 
       // *** global torque limit check ***
-      violation |= max_limit_check(desired_torque, GM_MAX_STEER, -GM_MAX_STEER);
+      violation |= max_limit_check(desired_torque, gm_max_steer, -gm_max_steer);
 
       // *** torque rate limit check ***
       violation |= driver_limit_check(desired_torque, desired_torque_last, &torque_driver,
-        GM_MAX_STEER, GM_MAX_RATE_UP, GM_MAX_RATE_DOWN,
-        GM_DRIVER_TORQUE_ALLOWANCE, GM_DRIVER_TORQUE_FACTOR);
+        gm_max_steer, gm_max_rate_up, gm_max_rate_down,
+        gm_driver_torque_allowance, gm_driver_torque_factor);
 
       // used next time
       desired_torque_last = desired_torque;
 
       // *** torque real time rate limit check ***
-      violation |= rt_rate_limit_check(desired_torque, rt_torque_last, GM_MAX_RT_DELTA);
+      violation |= rt_rate_limit_check(desired_torque, rt_torque_last, gm_max_rt_delta);
 
       // every RT_INTERVAL set the new limits
       uint32_t ts_elapsed = get_ts_elapsed(ts, ts_last);
@@ -315,6 +324,14 @@ static const addr_checks* gm_init(int16_t param) {
   gm_hw = GET_FLAG(param, GM_PARAM_HW_CAM) ? GM_CAM : GM_ASCM;
   gm_cc_only = (gm_hw == GM_CAM) && GET_FLAG(param, GM_PARAM_CC_ONLY);
   gm_pedal = gm_cc_only && GET_FLAG(param, GM_PARAM_PEDAL);
+  // StarPilot GM_BOLT_2017_STEERING_LIMITS: only for the Bolt EV without ACC (camera harness, CC only)
+  const bool bolt_2017 = gm_cc_only && GET_FLAG(param, GM_PARAM_BOLT_2017);
+  gm_max_steer = bolt_2017 ? 450 : GM_MAX_STEER;
+  gm_max_rate_up = bolt_2017 ? 15 : GM_MAX_RATE_UP;
+  gm_max_rate_down = bolt_2017 ? 34 : GM_MAX_RATE_DOWN;
+  gm_driver_torque_allowance = bolt_2017 ? 78 : GM_DRIVER_TORQUE_ALLOWANCE;
+  gm_driver_torque_factor = bolt_2017 ? 6 : GM_DRIVER_TORQUE_FACTOR;
+  gm_max_rt_delta = bolt_2017 ? 345 : GM_MAX_RT_DELTA;
   gm_cruise_button_prev = 0;
   controls_allowed = false;
   relay_malfunction_reset();
