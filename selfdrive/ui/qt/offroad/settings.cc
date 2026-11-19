@@ -758,8 +758,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     update_car_btns();
     if (!lfa2_title(QString::fromStdString(Params().get("SelectedCar"))).isEmpty()) {
       main_layout->setCurrentWidget(homeScreen);
-      ConfirmationDialog::alert("이 차량은 따로 확인할 설정이 있어요.
-HDA 방식 아래의 'LFA2 차량 설정'을 확인해 주세요.", this);
+      ConfirmationDialog::alert("이 차량은 따로 확인할 설정이 있어요.\nHDA 방식 아래의 'LFA2 차량 설정'을 확인해 주세요.", this);
     }
   });
   startToggles->addItem(car_row);
