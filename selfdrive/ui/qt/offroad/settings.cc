@@ -451,6 +451,27 @@ static QStringList get_list_utf8(const char* path) {
 }
 
 // the menu name of a CAR string (the CAR string itself, kept in the list file for later use)
+// LFA2 차량 (angle steering CAN FD cars), shown on their own page next to the normal car list.
+// CAR names must match selfdrive/car/hyundai/values.py (OTHER_CAR_MENU); tests/test_other_cars_c2.py checks them.
+// This branch (optech-fd) offers the angle-steering CAN FD cars; the cars without SCC are on optech.
+struct OtherCarEntry { const char *car; const char *title; const char *desc; };
+static const OtherCarEntry OTHER_ANGLE_CARS[] = {
+  {"HYUNDAI IONIQ 5 PE 2025", "아이오닉 5 PE (2024~)", "LFA2 차량. 레드판다가 필요합니다."},
+  {"HYUNDAI IONIQ 6 PE 2025", "아이오닉 6 PE (2025~)", "LFA2 차량으로 보고 각도 방식으로 조향합니다. 2023~24년식은 일반 차종 목록의 'HYUNDAI IONIQ 6 2023'을 고르세요. 레드판다가 필요합니다."},
+  {"KIA EV6 PE 2025", "EV6 PE (2025~)", "LFA2 차량. 레드판다가 필요합니다."},
+  {"HYUNDAI IONIQ 9 2025", "아이오닉 9", "LFA2 차량. 레드판다가 필요합니다."},
+  {"HYUNDAI SANTA FE MX5 2024", "싼타페 MX5 (가솔린)", "LFA2 차량. 레드판다가 필요합니다."},
+  {"HYUNDAI SANTA FE MX5 HEV 2024", "싼타페 MX5 하이브리드", "LFA2 차량. 레드판다가 필요합니다."},
+  {"KIA EV9 2024", "EV9", "LFA2 차량. 레드판다가 필요합니다."},
+};
+
+static QString lfa2_title(const QString &car) {
+  for (const auto &e : OTHER_ANGLE_CARS) {
+    if (car == e.car) return e.title;
+  }
+  return QString();
+}
+
 static QString car_menu_name(const QString &car) {
   if (car.isEmpty()) return QString();
   for (const QString &line : get_list_utf8("/data/params/d/SupportedCars")) {
@@ -682,10 +703,8 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
 
   // ---- 시작: car, hotspot, update ----
   startToggles = new ListWidget(this);
-  QString selected = QString::fromStdString(Params().get("SelectedCar"));
-  QPushButton* selectCarBtn = new QPushButton(selected.length() ? car_menu_name(selected) : tr("차종 선택"));
-  selectCarBtn->setObjectName("selectCarBtn");
-  selectCarBtn->setStyleSheet(R"(
+  // two buttons: the normal car list (left) and the LFA2 cars (right); the one in use shows the car
+  const QString car_btn_style = R"(
     QPushButton {
       margin-top: 20px; margin-bottom: 20px; padding: 10px; height: 120px; border-radius: 15px;
       color: #FFFFFF; background-color: #2C2CE2;
@@ -693,16 +712,56 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     QPushButton:pressed {
       background-color: #2424FF;
     }
-  )");
+  )";
+  QPushButton* selectCarBtn = new QPushButton();
+  selectCarBtn->setObjectName("selectCarBtn");
+  selectCarBtn->setStyleSheet(car_btn_style);
+  QPushButton* lfa2CarBtn = new QPushButton();
+  lfa2CarBtn->setObjectName("lfa2CarBtn");
+  lfa2CarBtn->setStyleSheet(car_btn_style);
+  auto update_car_btns = [=]() {
+    const QString car = QString::fromStdString(Params().get("SelectedCar"));
+    const QString lfa2 = lfa2_title(car);
+    selectCarBtn->setText(car.length() && lfa2.isEmpty() ? car_menu_name(car) : tr("차종 선택"));
+    lfa2CarBtn->setText(lfa2.isEmpty() ? QString("LFA2 차량") : lfa2);
+  };
+  update_car_btns();
+  QHBoxLayout* car_row = new QHBoxLayout();
+  car_row->setSpacing(20);
+  car_row->addWidget(selectCarBtn, 1);
+  car_row->addWidget(lfa2CarBtn, 1);
+
   selectCar = new SelectCar(this);
   connect(selectCarBtn, &QPushButton::clicked, [=]() { main_layout->setCurrentWidget(selectCar); });
   connect(selectCar, &SelectCar::backPress, [=]() { main_layout->setCurrentWidget(homeScreen); });
   connect(selectCar, &SelectCar::selectedCar, [=]() {
-    QString car = QString::fromStdString(Params().get("SelectedCar"));
-    selectCarBtn->setText(car.length() ? car_menu_name(car) : tr("차종 선택"));
+    update_car_btns();
     main_layout->setCurrentWidget(homeScreen);
   });
-  startToggles->addItem(selectCarBtn);
+  otherCars = new OtherCars(this);
+  connect(lfa2CarBtn, &QPushButton::clicked, [=]() { main_layout->setCurrentWidget(otherCars); });
+  connect(otherCars, &OtherCars::backPress, [=]() { main_layout->setCurrentWidget(homeScreen); });
+  connect(otherCars, &OtherCars::selectedCar, [=]() { update_car_btns(); });
+  startToggles->addItem(car_row);
+
+  // CanfdHdaMode: selfdrive/car/hyundai/interface.py reads it at start (reboot to apply)
+  auto hda_mode_btn = new ButtonControl("", "선택",
+    "CAN FD 차량이 HDA1인지 HDA2(고속도로 주행 보조 2)인지 정합니다. 기본은 자동 인식으로, 시동을 걸 때 카메라 쪽 신호를 보고 정합니다. "
+    "자동 인식이 틀려서 핸들이 움직이지 않을 때만 직접 고르세요. 모든 CAN FD 차량(LFA2 차량 포함)에 적용되고, 재부팅해야 적용됩니다.");
+  const QStringList hda_names = {"HDA 방식: 자동 인식", "HDA 방식: HDA1", "HDA 방식: HDA2"};
+  auto hda_mode = []() {
+    const int m = QString::fromStdString(Params().get("CanfdHdaMode")).toInt();
+    return (m >= 0 && m <= 2) ? m : 0;
+  };
+  hda_mode_btn->setTitle(hda_names[hda_mode()]);
+  QObject::connect(hda_mode_btn, &ButtonControl::clicked, [=]() {
+    const QString sel = MultiOptionDialog::getSelection("HDA 방식을 고르세요", hda_names, hda_names[hda_mode()], this);
+    const int idx = hda_names.indexOf(sel);
+    if (idx < 0 || idx == hda_mode()) return;
+    Params().put("CanfdHdaMode", std::to_string(idx));
+    hda_mode_btn->setTitle(hda_names[idx]);
+  });
+  startToggles->addItem(hda_mode_btn);
   auto gps_btn = new ButtonControl("GPS 확인", "확인", "시동을 걸지 않아도 GPS를 켜서 잡힘 여부, 신호 세기, 위성 수, 위치 오차를 실시간으로 보여 줍니다. 창을 닫으면 GPS는 다시 꺼집니다. 기기 내장 GPS를 사용합니다.");
   QObject::connect(gps_btn, &ButtonControl::clicked, [=]() {
     Params().putBool("GpsCheck", true);  // boardd powers the uBlox while this is set (read about once a second)
@@ -758,16 +817,6 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     }
   });
   startToggles->addItem(updateBtn);
-  // 기타 차종: the last item of the start tab; opens its own page
-  otherCars = new OtherCars(this);
-  auto other_cars_btn = new ButtonControl("기타 차종 (시험 중)", "열기", "아직 실제 차로 시험하지 않은 기능이 필요한 차종입니다. 핸들을 각도로 움직이는 신형 차(아이오닉 5 PE·EV6 PE 등)를 여기서 고르고, CAN FD 차량의 HDA 방식을 정합니다. 스마트 크루즈(SCC)가 없는 레이 EV·포터 II EV는 optech 브랜치에 있습니다.");
-  QObject::connect(other_cars_btn, &ButtonControl::clicked, [=]() { main_layout->setCurrentWidget(otherCars); });
-  connect(otherCars, &OtherCars::backPress, [=]() { main_layout->setCurrentWidget(homeScreen); });
-  connect(otherCars, &OtherCars::selectedCar, [=]() {
-    QString car = QString::fromStdString(Params().get("SelectedCar"));
-    selectCarBtn->setText(car.length() ? car_menu_name(car) : tr("차종 선택"));
-  });
-  startToggles->addItem(other_cars_btn);
   auto tmuxlog_btn = new ButtonControl("오류 로그 (Tmux)", "보기");
   QObject::connect(tmuxlog_btn, &ButtonControl::clicked, [=]() {
     const std::string txt = util::read_file("/data/tmux_error.log");
@@ -1204,20 +1253,7 @@ SelectCar::SelectCar(QWidget* parent): QWidget(parent) {
   main_layout->addWidget(list);
 }
 
-// ---- 기타 차종 page ----
-// CAR names must match selfdrive/car/hyundai/values.py (OTHER_CAR_MENU); tests/test_other_cars_c2.py checks them.
-// This branch (optech-fd) offers the angle-steering CAN FD cars; the cars without SCC are on optech.
-struct OtherCarEntry { const char *car; const char *title; const char *desc; };
-static const OtherCarEntry OTHER_ANGLE_CARS[] = {
-  {"HYUNDAI IONIQ 5 PE 2025", "아이오닉 5 PE (2024~)", "LFA2 차량. 레드판다가 필요합니다."},
-  {"HYUNDAI IONIQ 6 PE 2025", "아이오닉 6 PE (2025~)", "LFA2 차량으로 보고 각도 방식으로 조향합니다. 2023~24년식은 일반 차종 목록의 'HYUNDAI IONIQ 6 2023'을 고르세요. 레드판다가 필요합니다."},
-  {"KIA EV6 PE 2025", "EV6 PE (2025~)", "LFA2 차량. 레드판다가 필요합니다."},
-  {"HYUNDAI IONIQ 9 2025", "아이오닉 9", "LFA2 차량. 레드판다가 필요합니다."},
-  {"HYUNDAI SANTA FE MX5 2024", "싼타페 MX5 (가솔린)", "LFA2 차량. 레드판다가 필요합니다."},
-  {"HYUNDAI SANTA FE MX5 HEV 2024", "싼타페 MX5 하이브리드", "LFA2 차량. 레드판다가 필요합니다."},
-  {"KIA EV9 2024", "EV9", "LFA2 차량. 레드판다가 필요합니다."},
-};
-
+// ---- LFA2 차량 page ----
 OtherCars::OtherCars(QWidget* parent): QWidget(parent) {
   QVBoxLayout* main_layout = new QVBoxLayout(this);
   main_layout->setMargin(20);
@@ -1247,32 +1283,12 @@ OtherCars::OtherCars(QWidget* parent): QWidget(parent) {
     list->addItem(btn);
   };
 
-  list->addItem(carrot_section("핸들을 각도로 움직이는 차 (LFA2)"));
+  list->addItem(carrot_section("LFA2 차량 (핸들을 각도로 움직이는 차)"));
   for (const auto &e : OTHER_ANGLE_CARS) add_car(e);
   list->addItem(new CValueControl("AngleSteerMaxGain", "각도 조향 최대 힘",
     "각도 방식 차에서 openpilot이 쓸 수 있는 핸들 힘의 상한(%)입니다. 운전자가 핸들을 잡으면 이 값과 상관없이 힘이 자동으로 줄어듭니다. 커브에서 힘이 모자라면 올리고, 핸들이 너무 세게 느껴지면 내리세요. 30~100, 기본 100", ROAD_ICON, 30, 100, 5));
 
-  // CanfdHdaMode: selfdrive/car/hyundai/interface.py reads it at start (reboot to apply)
-  list->addItem(carrot_section("CAN FD 차량 공통 (레드판다)"));
-  auto hda_mode_btn = new ButtonControl("", "선택",
-    "CAN FD 차량이 HDA1인지 HDA2(고속도로 주행 보조 2)인지 정합니다. 기본은 자동 인식으로, 시동을 걸 때 카메라 쪽 신호를 보고 정합니다. "
-    "자동 인식이 틀려서 핸들이 움직이지 않을 때만 직접 고르세요. 기타 차종뿐 아니라 일반 목록의 CAN FD 차량에도 적용되고, 재부팅해야 적용됩니다.");
-  const QStringList hda_names = {"HDA 방식: 자동 인식", "HDA 방식: HDA1", "HDA 방식: HDA2"};
-  auto hda_mode = []() {
-    const int m = QString::fromStdString(Params().get("CanfdHdaMode")).toInt();
-    return (m >= 0 && m <= 2) ? m : 0;
-  };
-  hda_mode_btn->setTitle(hda_names[hda_mode()]);
-  QObject::connect(hda_mode_btn, &ButtonControl::clicked, [=]() {
-    const QString sel = MultiOptionDialog::getSelection("HDA 방식을 고르세요", hda_names, hda_names[hda_mode()], this);
-    const int idx = hda_names.indexOf(sel);
-    if (idx < 0 || idx == hda_mode()) return;
-    Params().put("CanfdHdaMode", std::to_string(idx));
-    hda_mode_btn->setTitle(hda_names[idx]);
-  });
-  list->addItem(hda_mode_btn);
-
-  auto clear_btn = new ButtonControl("기타 차종 선택 해제", "해제", "여기서 고른 차종을 지우고, 차를 자동으로 인식하게 되돌립니다.");
+  auto clear_btn = new ButtonControl("LFA2 차량 선택 해제", "해제", "여기서 고른 차종을 지우고, 차를 자동으로 인식하게 되돌립니다.");
   QObject::connect(clear_btn, &ButtonControl::clicked, [=]() {
     const QString cur = QString::fromStdString(Params().get("SelectedCar"));
     for (const auto &p : car_btns) {
