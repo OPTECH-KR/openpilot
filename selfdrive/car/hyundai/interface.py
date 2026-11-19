@@ -96,12 +96,12 @@ class CarInterface(CarInterfaceBase):
       ret.steerRatio = 15.4            # 14 is Stock | Settled Params Learner values are steerRatio: 15.401566348670535
       tire_stiffness_factor = 0.385    # stiffnessFactor settled on 1.0081302973865127
       ret.minSteerSpeed = 32 * CV.MPH_TO_MS
-    elif candidate == CAR.ELANTRA_2021:
+    elif candidate in (CAR.ELANTRA_2021, CAR.ELANTRA_2022_NON_SCC):
       ret.mass = (2800. * CV.LB_TO_KG) + STD_CARGO_KG
       ret.wheelbase = 2.72
       ret.steerRatio = 12.9
       tire_stiffness_factor = 0.65
-    elif candidate == CAR.ELANTRA_HEV_2021:
+    elif candidate in (CAR.ELANTRA_HEV_2021, CAR.ELANTRA_HEV_2022_NON_SCC):
       ret.mass = (3017. * CV.LB_TO_KG) + STD_CARGO_KG
       ret.wheelbase = 2.72
       ret.steerRatio = 12.9
@@ -116,8 +116,8 @@ class CarInterface(CarInterfaceBase):
       ret.wheelbase = 2.6
       ret.steerRatio = 13.42
       tire_stiffness_factor = 0.385
-    elif candidate in (CAR.KONA, CAR.KONA_EV, CAR.KONA_HEV, CAR.KONA_EV_2022):
-      ret.mass = {CAR.KONA_EV: 1685., CAR.KONA_HEV: 1425., CAR.KONA_EV_2022: 1743.}.get(candidate, 1275.) + STD_CARGO_KG
+    elif candidate in (CAR.KONA, CAR.KONA_NON_SCC, CAR.KONA_EV, CAR.KONA_EV_NON_SCC, CAR.KONA_HEV, CAR.KONA_EV_2022):
+      ret.mass = {CAR.KONA_EV: 1685., CAR.KONA_HEV: 1425., CAR.KONA_EV_2022: 1743.}.get({CAR.KONA_EV_NON_SCC: CAR.KONA_EV}.get(candidate, candidate), 1275.) + STD_CARGO_KG
       ret.wheelbase = 2.6
       ret.steerRatio = 13.42  # Spec
       tire_stiffness_factor = 0.385
@@ -173,7 +173,7 @@ class CarInterface(CarInterfaceBase):
       if candidate == CAR.KIA_NIRO_PHEV:
         #ret.minSteerSpeed = 32 * CV.MPH_TO_MS
         pass
-    elif candidate == CAR.KIA_SELTOS:
+    elif candidate in (CAR.KIA_SELTOS, CAR.KIA_SELTOS_2023_NON_SCC):
       ret.mass = 1337. + STD_CARGO_KG
       ret.wheelbase = 2.63
       ret.steerRatio = 14.56
@@ -193,7 +193,7 @@ class CarInterface(CarInterfaceBase):
       ret.mass = 1825. + STD_CARGO_KG
       ret.wheelbase = 2.78
       ret.steerRatio = 14.4 * 1.15   # 15% higher at the center seems reasonable
-    elif candidate == CAR.KIA_FORTE:
+    elif candidate in (CAR.KIA_FORTE, CAR.KIA_FORTE_2021_NON_SCC, CAR.KIA_FORTE_2019_NON_SCC):
       ret.mass = 3558. * CV.LB_TO_KG
       ret.wheelbase = 2.80
       ret.steerRatio = 13.75
@@ -233,7 +233,7 @@ class CarInterface(CarInterfaceBase):
       ret.mass = 1640.0 + STD_CARGO_KG
       ret.wheelbase = 2.84
       ret.steerRatio = 13.56
-    elif candidate == CAR.GENESIS_G70_2020:
+    elif candidate in (CAR.GENESIS_G70_2020, CAR.GENESIS_G70_2021_NON_SCC):
       ret.mass = 3673.0 * CV.LB_TO_KG + STD_CARGO_KG
       ret.wheelbase = 2.83
       ret.steerRatio = 12.9
@@ -295,6 +295,11 @@ class CarInterface(CarInterfaceBase):
       ret.wheelbase = 3.15
       ret.steerRatio = 14.5
       tire_stiffness_factor = 0.7
+    elif candidate == CAR.VENUE_2021_NON_SCC:  # sunnypilot (wheelbase, steer ratio); curb weight about 1.2 t
+      ret.mass = 1200. + STD_CARGO_KG
+      ret.wheelbase = 2.52
+      ret.steerRatio = 14.4
+      tire_stiffness_factor = 0.65
     elif candidate == CAR.KIA_RAY_EV:
       ret.mass = 1295. + STD_CARGO_KG
       ret.wheelbase = 2.52
@@ -370,8 +375,9 @@ class CarInterface(CarInterfaceBase):
     ret.pcmCruise = not ret.openpilotLongitudinalControl
 
     # cars without SCC with a comma pedal: the car's own menu switch ('페달 사용') and the pedal box on the bus (0x201, 6 bytes)
-    if candidate in NON_SCC_CAR:
-      from selfdrive.car.hyundai.pedal import PEDAL_PARAMS, PEDAL_SENSOR_ADDR, PEDAL_SENSOR_LEN
+    from selfdrive.car.hyundai.pedal import PEDAL_PARAMS
+    if candidate in PEDAL_PARAMS:  # Ray EV / Porter II EV only; the other cars without SCC have no pedal setup
+      from selfdrive.car.hyundai.pedal import PEDAL_SENSOR_ADDR, PEDAL_SENSOR_LEN
       if Params().get_bool(PEDAL_PARAMS[candidate][0]) and fingerprint[0].get(PEDAL_SENSOR_ADDR) == PEDAL_SENSOR_LEN:
         ret.flags |= HyundaiFlags.NON_SCC_PEDAL.value
         ret.enableGasInterceptor = True
@@ -452,7 +458,7 @@ class CarInterface(CarInterfaceBase):
     elif candidate in EV_CAR:
       ret.safetyConfigs[-1].safetyParam |= Panda.FLAG_HYUNDAI_EV_GAS
 
-    if candidate in (CAR.KONA, CAR.KONA_EV, CAR.KONA_HEV, CAR.KONA_EV_2022):
+    if candidate in (CAR.KONA, CAR.KONA_EV, CAR.KONA_HEV, CAR.KONA_EV_2022, CAR.KONA_NON_SCC, CAR.KONA_EV_NON_SCC):
       ret.flags |= HyundaiFlags.ALT_LIMITS.value
       ret.safetyConfigs[-1].safetyParam |= Panda.FLAG_HYUNDAI_ALT_LIMITS
 

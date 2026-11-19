@@ -137,8 +137,8 @@ class CarController:
       self.softHoldMode = int(Params().get("SoftHoldMode", encoding="utf8"))
       self.steerDeltaUp = int(Params().get("SteerDeltaUp", encoding="utf8"))
       self.steerDeltaDown = int(Params().get("SteerDeltaDown", encoding="utf8"))
-      if self.CP.flags & HyundaiFlags.NON_SCC:
-        from selfdrive.car.hyundai.pedal import PEDAL_PARAMS
+      from selfdrive.car.hyundai.pedal import PEDAL_PARAMS
+      if self.CP.flags & HyundaiFlags.NON_SCC and self.CP.carFingerprint in PEDAL_PARAMS:  # Ray EV / Porter II EV menu
         _, max_param, buttons_param = PEDAL_PARAMS[self.CP.carFingerprint]
         self.non_scc_speed_buttons = Params().get_bool(buttons_param)
         try:
