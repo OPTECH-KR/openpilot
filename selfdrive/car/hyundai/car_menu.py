@@ -289,11 +289,22 @@ def display_name(car):
   return DISPLAY.get(car, car)
 
 
+def short_name(car):
+  """the name in the car list, where the brand was already chosen: display_name without the leading brand
+  ("KIA K5 DL3 2020-2023" -> "K5 DL3 2020-2023"); the UI puts the brand back on the car button. A model named like its
+  brand keeps it (GENESIS DH)."""
+  name = display_name(car)
+  for b in BRAND_EN.values():
+    if name.startswith(b + " ") and car != "HYUNDAI GENESIS 2015-2016":
+      return name[len(b) + 1:]
+  return name
+
+
 def menu_lines(cars):
   """menu file lines for these CAR strings, sorted by brand, model family and year. The menu shows the English name
   (display_name: Korean market names with vehicle code and years, NO SCC); the Korean texts above only set the order."""
   lines = []
   for car in sorted(cars, key=_key):
     brand = MENU.get(car, (_brand_guess(car),))[0]
-    lines.append(f"{car}|{BRAND_EN.get(brand, brand)}|{display_name(car)}")
+    lines.append(f"{car}|{BRAND_EN.get(brand, brand)}|{short_name(car)}")
   return lines
