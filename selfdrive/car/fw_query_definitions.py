@@ -57,6 +57,8 @@ class Request:
   whitelist_ecus: List[int] = field(default_factory=list)
   rx_offset: int = 0x8
   bus: int = 1
+  logging: bool = False  # comma: query only for logging (Honda v0.9.2 values use it); this base's fw_versions ignores it
+  obd_multiplexing: bool = True  # comma: same, ignored here
 
 
 @dataclass
@@ -64,3 +66,5 @@ class FwQueryConfig:
   requests: List[Request]
   # Overrides and removes from essential ecus for specific models and ecus (exact matching)
   non_essential_ecus: Dict[capnp.lib.capnp._EnumModule, List[str]] = field(default_factory=dict)
+  # comma: extra ECUs to query (Honda v0.9.2 values use it); ignored here
+  extra_ecus: List = field(default_factory=list)

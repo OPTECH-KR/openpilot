@@ -7,7 +7,7 @@ car per line as "CAR string|brand|display text" (the UI also accepts an old plai
 The same file is used on optech (CAN cars) and optech-fd (CAN FD cars); each branch lists its own cars.
 """
 
-BRANDS = ("현대", "기아", "제네시스", "쉐보레", "GMC", "캐딜락", "뷰익", "토요타", "렉서스")
+BRANDS = ("현대", "기아", "제네시스", "쉐보레", "GMC", "캐딜락", "뷰익", "토요타", "렉서스", "혼다", "어큐라")
 
 # CAR string: (brand, model family, display text, first model year). Family + year give the order inside a brand.
 MENU = {
@@ -208,6 +208,26 @@ MENU = {
   "LEXUS RX HYBRID 2017": ("렉서스", "RX", "RX 하이브리드 AL20 (2016~2019)", 2016),
   "LEXUS RX 2020": ("렉서스", "RX", "RX AL20 페이스리프트 (2020~2022)", 2020),
   "LEXUS RX HYBRID 2020": ("렉서스", "RX", "RX 하이브리드 AL20 페이스리프트 (2020~2021)", 2020),
+  # Honda / Acura (optech, comma v0.9.2)
+  "HONDA ACCORD 2018": ("혼다", "어코드", "어코드 · 인스파이어 CV (2018~2022)", 2018),
+  "HONDA ACCORD HYBRID 2018": ("혼다", "어코드", "어코드 하이브리드 CV (2018~2022)", 2018),
+  "HONDA CIVIC 2016": ("혼다", "시빅", "시빅 FC (2016~2018)", 2016),
+  "HONDA CIVIC (BOSCH) 2019": ("혼다", "시빅", "시빅 FC · 해치백 FK (2017~2021)", 2017),
+  "HONDA CR-V 2016": ("혼다", "CR-V", "CR-V RM (2015~2016)", 2015),
+  "HONDA CR-V 2017": ("혼다", "CR-V", "CR-V RW (2017~2022)", 2017),
+  "HONDA CR-V HYBRID 2019": ("혼다", "CR-V", "CR-V 하이브리드 RT (2017~2019)", 2017),
+  "HONDA FIT 2018": ("혼다", "피트", "피트 GK (2018~2020)", 2018),
+  "HONDA FREED 2020": ("혼다", "프리드", "프리드 GB5 (2020, 일본)", 2020),
+  "HONDA HRV 2019": ("혼다", "HR-V", "HR-V RU (2019~2022)", 2019),
+  "HONDA ODYSSEY 2018": ("혼다", "오딧세이", "오딧세이 RL6 (2018~2020)", 2018),
+  "HONDA ODYSSEY CHN 2019": ("혼다", "오딧세이", "오딧세이 RC (2019, 중국)", 2019),
+  "HONDA PILOT 2017": ("혼다", "파일럿", "파일럿 · 패스포트 (2016~2022)", 2016),
+  "HONDA RIDGELINE 2017": ("혼다", "릿지라인", "릿지라인 YK (2017~2023)", 2017),
+  "HONDA INSIGHT 2019": ("혼다", "인사이트", "인사이트 ZE4 (2019~2022)", 2019),
+  "HONDA E 2020": ("혼다", "e", "혼다 e ZC7 (2020)", 2020),
+  "ACURA ILX 2016": ("어큐라", "ILX", "ILX DE (2016~2019)", 2016),
+  "ACURA RDX 2018": ("어큐라", "RDX", "RDX TB (2016~2018)", 2016),
+  "ACURA RDX 2020": ("어큐라", "RDX", "RDX TC (2019~2022)", 2019),
 }
 
 
@@ -218,12 +238,13 @@ def _key(car):
 
 
 def _brand_guess(car):
-  return "토요타" if car.startswith("TOYOTA") else "렉서스" if car.startswith("LEXUS") else \
+  return "혼다" if car.startswith("HONDA") else "어큐라" if car.startswith("ACURA") else \
+    "토요타" if car.startswith("TOYOTA") else "렉서스" if car.startswith("LEXUS") else \
     "GMC" if car.startswith("GMC") else "캐딜락" if car.startswith("CADILLAC") else "뷰익" if car.startswith("BUICK") else \
     "쉐보레" if car.startswith("CHEVROLET") else "제네시스" if car.startswith("GENESIS") else "기아" if car.startswith("KIA") else "현대" if car.startswith("HYUNDAI") else "기타"
 
 
-BRAND_EN = {"현대": "HYUNDAI", "기아": "KIA", "제네시스": "GENESIS", "쉐보레": "CHEVROLET", "GMC": "GMC", "캐딜락": "CADILLAC", "뷰익": "BUICK", "토요타": "TOYOTA", "렉서스": "LEXUS"}
+BRAND_EN = {"현대": "HYUNDAI", "기아": "KIA", "제네시스": "GENESIS", "쉐보레": "CHEVROLET", "GMC": "GMC", "캐딜락": "CADILLAC", "뷰익": "BUICK", "토요타": "TOYOTA", "렉서스": "LEXUS", "혼다": "HONDA", "어큐라": "ACURA"}
 
 # What the menu shows: BRAND MODEL [TRIM] CODE YEARS, with the Korean market model name (AVANTE, K3, K5) where
 # the CAR string uses the overseas one and NO SCC for the trims without smart cruise control. Only the text changes;
@@ -424,6 +445,25 @@ DISPLAY = {
   "LEXUS RX HYBRID 2017": "LEXUS RX HYBRID AL20 2016-2019",
   "LEXUS RX 2020": "LEXUS RX AL20 FACELIFT 2020-2022",
   "LEXUS RX HYBRID 2020": "LEXUS RX HYBRID AL20 FACELIFT 2020-2021",
+  "HONDA ACCORD 2018": "HONDA ACCORD / INSPIRE CV 2018-2022",
+  "HONDA ACCORD HYBRID 2018": "HONDA ACCORD HYBRID CV 2018-2022",
+  "HONDA CIVIC 2016": "HONDA CIVIC FC 2016-2018",
+  "HONDA CIVIC (BOSCH) 2019": "HONDA CIVIC FC / HATCHBACK FK 2017-2021",
+  "HONDA CR-V 2016": "HONDA CR-V RM 2015-2016",
+  "HONDA CR-V 2017": "HONDA CR-V RW 2017-2022",
+  "HONDA CR-V HYBRID 2019": "HONDA CR-V HYBRID RT 2017-2019",
+  "HONDA FIT 2018": "HONDA FIT GK 2018-2020",
+  "HONDA FREED 2020": "HONDA FREED GB5 2020 (JAPAN)",
+  "HONDA HRV 2019": "HONDA HR-V RU 2019-2022",
+  "HONDA ODYSSEY 2018": "HONDA ODYSSEY RL6 2018-2020",
+  "HONDA ODYSSEY CHN 2019": "HONDA ODYSSEY RC 2019 (CHINA)",
+  "HONDA PILOT 2017": "HONDA PILOT / PASSPORT 2016-2022",
+  "HONDA RIDGELINE 2017": "HONDA RIDGELINE YK 2017-2023",
+  "HONDA INSIGHT 2019": "HONDA INSIGHT ZE4 2019-2022",
+  "HONDA E 2020": "HONDA E ZC7 2020",
+  "ACURA ILX 2016": "ACURA ILX DE 2016-2019",
+  "ACURA RDX 2018": "ACURA RDX TB 2016-2018",
+  "ACURA RDX 2020": "ACURA RDX TC 2019-2022",
 }
 
 
