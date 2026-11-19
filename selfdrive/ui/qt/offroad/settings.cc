@@ -704,7 +704,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   QWidget* toggles = new QWidget();
   QVBoxLayout* toggles_layout = new QVBoxLayout(toggles);
 
-  // ---- 시작: car, hotspot, update ----
+  // ---- 시작: car, GPS check ----
   startToggles = new ListWidget(this);
   // two buttons: the normal car list (left) and the LFA2 cars (right); the one in use shows the car
   const QString car_btn_style = R"(
@@ -795,31 +795,6 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     Params().putBool("EngageWithLong", sel == names[0]);
     engage_mode_btn->setTitle(engage_mode_name());
   });
-  startToggles->addItem(engage_mode_btn);
-  startToggles->addItem(new ParamControl("AutoShutdown", "자동 꺼짐", "켜 두면(초록색) 차량이나 충전기 전원 없이 배터리로만 켜져 있고 주행 중이 아닐 때, 약 10분 뒤 기기가 스스로 꺼져 배터리를 보호합니다. 끄면 배터리가 다 닳을 때까지 켜져 있습니다. 주행 중이거나 전원이 연결돼 있으면 이 설정과 상관없이 꺼지지 않습니다.", SHELL_ICON, this));
-  startToggles->addItem(new ParamControl("OpkrHotspotOnBoot", "부팅 시 핫스팟 켜기", "켜 두면 기기가 켜질 때 핫스팟(테더링)이 자동으로 켜집니다.", SHELL_ICON, this));
-  auto updateBtn = new ButtonControl("업데이트 확인 후 적용", "업데이트");
-  QObject::connect(updateBtn, &ButtonControl::clicked, [=]() {
-    const char* gitcommit = "/data/openpilot/selfdrive/assets/addon/sh/gitcommit.sh";
-    const char* gitpull = "/data/openpilot/selfdrive/assets/addon/sh/gitpull.sh";
-    std::system(gitcommit);
-    std::system("date -u '+%Y-%m-%dT%H:%M:%S' > /data/params/d/LastUpdateTime");
-    QString commit_local = QString::fromStdString(Params().get("GitCommit")).left(7);
-    QString commit_remote = QString::fromStdString(Params().get("GitCommitRemote")).left(7);
-    if (commit_remote.isEmpty()) {
-      ConfirmationDialog::alert("업데이트 서버에 연결하지 못했어요.\n와이파이 연결을 확인해 주세요.", this);
-    } else if (commit_local == commit_remote) {
-      ConfirmationDialog::alert("이미 최신 버전이에요.\n(" + commit_local + ")", this);
-    } else {
-      QString changes = QString::fromStdString(util::read_file("/tmp/update_changelog.txt")).trimmed();
-      if (changes.isEmpty()) changes = "(바뀐 내용 목록을 불러오지 못했어요)";
-      if (ConfirmationDialog::richConfirm("새 업데이트가 있어요. (" + commit_local + " → " + commit_remote + ")\n\n바뀐 내용:\n" + changes +
-                                      "\n\n받은 뒤 자동으로 재부팅해요. 업데이트할까요?", "업데이트", this)) {
-        std::system(gitpull);
-      }
-    }
-  });
-  startToggles->addItem(updateBtn);
   auto tmuxlog_btn = new ButtonControl("오류 로그 (Tmux)", "보기");
   QObject::connect(tmuxlog_btn, &ButtonControl::clicked, [=]() {
     const std::string txt = util::read_file("/data/tmux_error.log");
@@ -828,6 +803,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
 
   // ---- 주행: brake / cruise buttons ----
   cruiseToggles = new ListWidget(this);
+  cruiseToggles->addItem(engage_mode_btn);  // 조향+가감속 사용 / 조향만 사용 (made with the 시작 items above)
   cruiseToggles->addItem(carrot_section("브레이크"));
   cruiseToggles->addItem(new CValueControl("SoftHoldMode", "소프트홀드", "정차 후 브레이크를 떼도 차를 멈춘 상태로 잡아 주는 기능입니다. 0:사용 안 함, 1:사용, 2:SCC와 함께 사용(일부 차량은 전자식 주차 브레이크가 걸릴 수 있음)", ROAD_ICON, 0, 2, 1));
   cruiseToggles->addItem(carrot_section("크루즈 버튼"));
@@ -895,6 +871,9 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
 
   // ---- 고급: experimental / developer ----
   advancedToggles = new ListWidget(this);
+  advancedToggles->addItem(carrot_section("기기"));
+  advancedToggles->addItem(new ParamControl("AutoShutdown", "자동 꺼짐", "켜 두면(초록색) 차량이나 충전기 전원 없이 배터리로만 켜져 있고 주행 중이 아닐 때, 약 10분 뒤 기기가 스스로 꺼져 배터리를 보호합니다. 끄면 배터리가 다 닳을 때까지 켜져 있습니다. 주행 중이거나 전원이 연결돼 있으면 이 설정과 상관없이 꺼지지 않습니다.", SHELL_ICON, this));
+  advancedToggles->addItem(new ParamControl("OpkrHotspotOnBoot", "부팅 시 핫스팟 켜기", "켜 두면 기기가 켜질 때 핫스팟(테더링)이 자동으로 켜집니다.", SHELL_ICON, this));
   advancedToggles->addItem(carrot_section("주행 기록"));
   auto drivelog_btn = new ButtonControl("주행 기록 보기", "보기", "주행할 때마다 자동으로 남는 기록입니다. 고른 주행에서 켜짐·꺼짐, 경고, 오류, 프로그램 멈춤을 시간순으로 보여 줍니다. (최근 30번 보관)");
   QObject::connect(drivelog_btn, &ButtonControl::clicked, [=]() {
