@@ -1833,6 +1833,18 @@ NON_SCC_CAR = {CAR.KIA_RAY_EV, CAR.PORTER_II_EV,
                CAR.ELANTRA_2022_NON_SCC, CAR.ELANTRA_HEV_2022_NON_SCC, CAR.KONA_NON_SCC, CAR.KONA_EV_NON_SCC, CAR.VENUE_2021_NON_SCC,
                CAR.KIA_SELTOS_2023_NON_SCC, CAR.KIA_FORTE_2019_NON_SCC, CAR.KIA_FORTE_2021_NON_SCC, CAR.GENESIS_G70_2021_NON_SCC}
 OTHER_CAR = set()
+# One menu entry for a model with and without SCC: choosing the model with SCC switches to its trim without SCC when the
+# car shows no SCC11 (1056) on either bus at start (interface.py). Those trims stay for the FW fingerprint and for a car
+# chosen before, but are not listed. The Venue and the G70 without SCC have no base here (G70: different checksum).
+NON_SCC_VARIANT = {
+  CAR.ELANTRA_2021: CAR.ELANTRA_2022_NON_SCC,
+  CAR.ELANTRA_HEV_2021: CAR.ELANTRA_HEV_2022_NON_SCC,
+  CAR.KONA: CAR.KONA_NON_SCC,
+  CAR.KONA_EV: CAR.KONA_EV_NON_SCC,
+  CAR.KIA_SELTOS: CAR.KIA_SELTOS_2023_NON_SCC,
+  CAR.KIA_FORTE: CAR.KIA_FORTE_2021_NON_SCC,  # 2019 and 2021 without SCC are the same here
+}
+MENU_HIDDEN = set(NON_SCC_VARIANT.values()) | {CAR.KIA_FORTE_2019_NON_SCC}
 
 HYBRID_CAR = {CAR.IONIQ_PHEV, CAR.ELANTRA_HEV_2021, CAR.KIA_NIRO_PHEV, CAR.KIA_NIRO_HEV_2021, CAR.SONATA_HYBRID, CAR.KONA_HEV, CAR.IONIQ, CAR.IONIQ_HEV_2022, CAR.SANTA_FE_HEV_2022, CAR.SANTA_FE_PHEV_2022, CAR.IONIQ_PHEV_2019, CAR.TUCSON_HYBRID_4TH_GEN, CAR.KIA_SPORTAGE_HYBRID_5TH_GEN, CAR.GRANDEUR_IG_HEV, CAR.GRANDEUR_IG_FL_HEV, CAR.K7_HEV, CAR.K7_HEV_PE,
               CAR.KIA_K5_HEV_2020, CAR.KIA_NIRO_PHEV_2022, CAR.KIA_OPTIMA_H_G4_FL, CAR.KIA_K5_HEV_JF, CAR.KIA_K5_HEV_2022,
@@ -1946,7 +1958,7 @@ def main():
   # the car menu list (manager writes it to /data/params/d/SupportedCars): this branch runs on the C2's own panda,
   # so only CAN cars; CAN FD cars need a red panda and are on optech-fd. 기타 차종 have their own page
   cars = [value for member, value in vars(CAR).items()
-          if not member.startswith("_") and value not in CANFD_CAR and value not in OTHER_CAR
+          if not member.startswith("_") and value not in CANFD_CAR and value not in OTHER_CAR and value not in MENU_HIDDEN
           and value in DBC]  # a name without a DBC entry (TUCSON_4TH_GEN) cannot start
   # Chevrolet (selfdrive/car/gm): the Bolt EUV 2022-23 with the camera harness, stock ACC
   from selfdrive.car.gm.values import CAR as GM_CAR
