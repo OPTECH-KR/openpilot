@@ -7,7 +7,7 @@ car per line as "CAR string|brand|display text" (the UI also accepts an old plai
 The same file is used on optech (CAN cars) and optech-fd (CAN FD cars); each branch lists its own cars.
 """
 
-BRANDS = ("현대", "기아", "제네시스", "쉐보레", "GMC", "캐딜락", "뷰익", "토요타", "렉서스", "혼다", "어큐라", "폭스바겐", "아우디", "세아트", "스코다")
+BRANDS = ("현대", "기아", "제네시스", "쉐보레", "GMC", "캐딜락", "뷰익", "토요타", "렉서스", "혼다", "어큐라", "폭스바겐", "아우디", "세아트", "스코다", "마쓰다")
 
 # CAR string: (brand, model family, display text, first model year). Family + year give the order inside a brand.
 MENU = {
@@ -254,6 +254,9 @@ MENU = {
   "SKODA OCTAVIA 3RD GEN": ("스코다", "옥타비아", "옥타비아 3세대 NE (2015~2019)", 2015),
   "SKODA SCALA 1ST GEN": ("스코다", "스칼라", "스칼라 NW (2020)", 2020),
   "SKODA SUPERB 3RD GEN": ("스코다", "슈퍼브", "슈퍼브 3세대 3V (2015~2022)", 2015),
+  # Mazda (optech, comma v0.9.2): only the cars that steer there
+  "MAZDA CX-5 2022": ("마쓰다", "CX-5", "CX-5 KF 페이스리프트 (2022~2023)", 2022),
+  "MAZDA CX-9 2021": ("마쓰다", "CX-9", "CX-9 TC 페이스리프트 (2021~2023)", 2021),
 }
 
 
@@ -264,7 +267,8 @@ def _key(car):
 
 
 def _brand_guess(car):
-  return "폭스바겐" if car.startswith("VOLKSWAGEN") else "아우디" if car.startswith("AUDI") else \
+  return "마쓰다" if car.startswith("MAZDA") else \
+    "폭스바겐" if car.startswith("VOLKSWAGEN") else "아우디" if car.startswith("AUDI") else \
     "세아트" if car.startswith("SEAT") else "스코다" if car.startswith("SKODA") else \
     "혼다" if car.startswith("HONDA") else "어큐라" if car.startswith("ACURA") else \
     "토요타" if car.startswith("TOYOTA") else "렉서스" if car.startswith("LEXUS") else \
@@ -272,7 +276,7 @@ def _brand_guess(car):
     "쉐보레" if car.startswith("CHEVROLET") else "제네시스" if car.startswith("GENESIS") else "기아" if car.startswith("KIA") else "현대" if car.startswith("HYUNDAI") else "기타"
 
 
-BRAND_EN = {"현대": "HYUNDAI", "기아": "KIA", "제네시스": "GENESIS", "쉐보레": "CHEVROLET", "GMC": "GMC", "캐딜락": "CADILLAC", "뷰익": "BUICK", "토요타": "TOYOTA", "렉서스": "LEXUS", "혼다": "HONDA", "어큐라": "ACURA", "폭스바겐": "VOLKSWAGEN", "아우디": "AUDI", "세아트": "SEAT", "스코다": "SKODA"}
+BRAND_EN = {"현대": "HYUNDAI", "기아": "KIA", "제네시스": "GENESIS", "쉐보레": "CHEVROLET", "GMC": "GMC", "캐딜락": "CADILLAC", "뷰익": "BUICK", "토요타": "TOYOTA", "렉서스": "LEXUS", "혼다": "HONDA", "어큐라": "ACURA", "폭스바겐": "VOLKSWAGEN", "아우디": "AUDI", "세아트": "SEAT", "스코다": "SKODA", "마쓰다": "MAZDA"}
 
 # What the menu shows: BRAND MODEL [TRIM] CODE YEARS, with the Korean market model name (AVANTE, K3, K5) where
 # the CAR string uses the overseas one and NO SCC for the trims without smart cruise control. Only the text changes;
@@ -517,6 +521,8 @@ DISPLAY = {
   "SKODA OCTAVIA 3RD GEN": "SKODA OCTAVIA MK3 NE 2015-2019",
   "SKODA SCALA 1ST GEN": "SKODA SCALA NW 2020",
   "SKODA SUPERB 3RD GEN": "SKODA SUPERB MK3 3V 2015-2022",
+  "MAZDA CX-5 2022": "MAZDA CX-5 KF FACELIFT 2022-2023",
+  "MAZDA CX-9 2021": "MAZDA CX-9 TC FACELIFT 2021-2023",
 }
 
 
