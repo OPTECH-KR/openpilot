@@ -902,8 +902,6 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   QList<QWidget*> cam_group = {cam_note};
   cam_group += cam_tune;
   cam_group += QList<QWidget*>{cam_haptic, navi_mode, cam_db};
-  const bool cam_shown = std::atoi(Params().get("AutoNaviSpeedCtrl").c_str()) > 0;
-  for (auto w : cam_group) w->setVisible(cam_shown);
   QObject::connect(cam_decel, &ToggleControl::toggleFlipped, [=](bool cam_on) {
     Params cam_params;
     const int cam_mode = std::atoi(cam_params.get("OptechNaviLinkMode").c_str());
@@ -912,6 +910,10 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   });
   cruiseToggles->addItem(cam_decel);
   for (auto w : cam_group) cruiseToggles->addItem(w);
+  // only after they are in the list: showing a widget that has no parent yet opens it as its own top-level window,
+  // and the C2 (EGLFS, one window) crashes on that at start when 카메라 감속 is on
+  const bool cam_shown = std::atoi(Params().get("AutoNaviSpeedCtrl").c_str()) > 0;
+  for (auto w : cam_group) w->setVisible(cam_shown);
 
   // ---- 속도: cruise speed, camera / bump, accel ----
   speedToggles = new ListWidget(this);
