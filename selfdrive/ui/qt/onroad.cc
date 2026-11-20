@@ -455,6 +455,7 @@ AnnotatedCameraWidget::AnnotatedCameraWidget(VisionStreamType type, QWidget* par
 
   experimental_btn = new ExperimentalButton(this);
   main_layout->addWidget(experimental_btn, 0, Qt::AlignTop | Qt::AlignRight);
+  experimental_btn->setVisible(false);  // optech: no experimental mode button on the driving screen
 
   // Create a spacer item to push the following layout to the bottom
   QSpacerItem* vSpacer = new QSpacerItem(1, 1, QSizePolicy::Minimum, QSizePolicy::Expanding);
@@ -732,13 +733,7 @@ void AnnotatedCameraWidget::drawHud(QPainter &p) {
   p.setFont(InterFont(66));
   drawText(p, rect().center().x(), 290, speedUnit, 200);
 
-  // dm icon
-  if (!hideBottomIcons) {
-    int offset = UI_BORDER_SIZE + btn_size / 2;
-    int x = rightHandDM ? width() - offset : offset;
-    int y = height() - offset;
-    drawIcon(p, QPoint(x, y), dm_img, blackColor(70), dmActive ? 1.0 : 0.2);
-  }
+  // optech: no driver monitoring icon on the driving screen (driver monitoring itself still runs)
 
   p.restore();
 }
@@ -858,11 +853,7 @@ void AnnotatedCameraWidget::drawOptechHud(QPainter &p) {
     optech_text(p, lx, ly, QString::number(limit), 40, speed > limit + 2 ? white : QColor(0, 0, 0, 255));
   }
 
-  // driver monitoring icon: top left (the speed box owns the lower-left corner)
-  if (!hideBottomIcons) {
-    const int offset = UI_BORDER_SIZE + btn_size / 2;
-    drawIcon(p, QPoint(offset, offset), dm_img, blackColor(70), dmActive ? 1.0 : 0.2);
-  }
+  // optech: no driver monitoring icon on the driving screen (driver monitoring itself still runs)
   p.restore();
 }
 
