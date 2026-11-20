@@ -6,6 +6,7 @@ from common.basedir import BASEDIR
 from selfdrive.car.fingerprints import eliminate_incompatible_cars, all_legacy_fingerprint_cars
 from selfdrive.car.vin import get_vin, VIN_UNKNOWN
 from selfdrive.car.fw_versions import get_fw_versions, match_fw_to_car
+from selfdrive.car.optech_relay import set_idle_passthrough
 from selfdrive.swaglog import cloudlog
 import cereal.messaging as messaging
 from selfdrive.car import gen_empty_fingerprint
@@ -210,6 +211,10 @@ def get_car(logcan, sendcan):
   if selected_car:
     print ("SelectedCar = ", selected_car)
     candidate = selected_car.decode("utf-8")
+
+  if candidate != "mock":
+    # optech: the panda keeps the relay off while openpilot is not in control for non Hyundai / Kia cars (boardd)
+    set_idle_passthrough(candidate)
 
   CarInterface, CarController, CarState = interfaces[candidate]
   CP = CarInterface.get_params(candidate, fingerprints, car_fw, experimental_long)

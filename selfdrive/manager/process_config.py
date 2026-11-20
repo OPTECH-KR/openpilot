@@ -47,6 +47,8 @@ procs = [
   PythonProcess("controlsd", "selfdrive.controls.controlsd"),
   PythonProcess("deleter", "selfdrive.loggerd.deleter", persistent=True),
   PythonProcess("drivelog", "selfdrive.carrot.tools.drivelog"),  # small text log in /data/drivelog while onroad
+  # persistent: works only offroad - shows what CAN the panda hears when the car is on but no ignition is seen
+  PythonProcess("can_diag", "selfdrive.carrot.tools.can_diag", persistent=True),
   #PythonProcess("logmessaged", "selfdrive.logmessaged", persistent=True),
   PythonProcess("pandad", "selfdrive.boardd.pandad", persistent=True),
   PythonProcess("paramsd", "selfdrive.locationd.paramsd"),

@@ -12,8 +12,12 @@
 
 | 브랜치 | 차량 | 판다 |
 |---|---|---|
-| **optech** (이 브랜치) | 일반 CAN 차량 (대부분의 현대 · 기아 · 제네시스, 쉐보레 볼트) | C2 기본 판다 |
-| **optech-fd** | CAN FD 차량 (아이오닉 5 · 6, EV6 등 최근 차량) | **레드 판다 필요** |
+| **optech-hkg** (이 브랜치) | 현대 · 기아 · 제네시스 일반 CAN 차량 | C2 기본 판다 |
+| **optech-hkg-fd** | 현대 · 기아 · 제네시스 CAN FD 차량 (아이오닉 5 · 6, EV6 등 최근 차량) | **레드 판다 필요** |
+| **optech-spst** | 현대 · 기아 외 차종 (쉐보레 · 토요타 · 혼다 등) | 준비 중 |
+
+> **브랜치 이름이 바뀌었어요 (2026-11-20):** `optech` → `optech-hkg`, `optech-fd` → `optech-hkg-fd`.
+> 예전 이름으로 설치한 기기는 업데이트가 오지 않으니, 아래 **"예전 optech에서 옮기기"** 명령을 한 번 실행해 주세요.
 
 내 차가 어느 쪽인지 모르겠으면, 설치 후 **OPTECH → 시작 → 차종 선택** 목록에 내 차가 있는지 보세요. 없으면 다른 브랜치입니다.
 
@@ -25,11 +29,11 @@
 
 ## 1. 설치
 
-SSH로 기기에 접속해서 아래 명령을 통째로 붙여 넣으세요. (optech-fd를 쓰려면 `-b optech`를 `-b optech-fd`로 바꾸세요.)
+SSH로 기기에 접속해서 아래 명령을 통째로 붙여 넣으세요. (CAN FD 차량은 `-b optech-hkg`를 `-b optech-hkg-fd`로 바꾸세요.)
 
 ```
 rm -fr /data/openpilot
-cd /data/ && git clone https://github.com/OPTECH-KR/openpilot.git -b optech --depth=1 openpilot &&
+cd /data/ && git clone https://github.com/OPTECH-KR/openpilot.git -b optech-hkg --depth=1 openpilot &&
 touch /data/data/com.termux/files/continue.sh &&
 echo "#!/usr/bin/bash" >> /data/data/com.termux/files/continue.sh &&
 echo "cd /data/openpilot" >> /data/data/com.termux/files/continue.sh &&
@@ -38,6 +42,19 @@ reboot
 ```
 
 * 첫 부팅은 빌드 때문에 몇 분 걸립니다. 그다음부터는 빨리 켜집니다.
+
+### 예전 `optech`에서 옮기기 (한 번만)
+
+예전 이름(`optech`)으로 설치한 기기는 SSH로 접속해서 아래 명령을 붙여 넣으세요. 설정은 그대로 남고, 재부팅 후 새 이름(`optech-hkg`)으로 업데이트를 받습니다.
+
+```
+cd /data/openpilot && export GIT_SSL_NO_VERIFY=true &&
+git config remote.origin.fetch "+refs/heads/optech-hkg:refs/remotes/origin/optech-hkg" &&
+git fetch --depth=1 origin optech-hkg &&
+git checkout -f -B optech-hkg origin/optech-hkg &&
+git branch -u origin/optech-hkg &&
+reboot
+```
 * 설치 화면에서 Continue 버튼이 안 뜰 수 있어서 SSH로 설치합니다.
 
 ## 2. 업데이트
@@ -155,7 +172,7 @@ cd /data/openpilot && GIT_SSL_NO_VERIFY=true git pull && reboot
 ## 6. 더 알아보기
 
 * 메뉴 전체 설명, 추천값, 폰 내비 연동(APM): [설정 가이드](SETTINGS_KO.md)
-* 바뀐 내용: [배포 기록](https://github.com/OPTECH-KR/openpilot/commits/optech) (자세한 작업 기록은 [optech-dev](https://github.com/OPTECH-KR/openpilot/commits/optech-dev))
+* 바뀐 내용: [배포 기록](https://github.com/OPTECH-KR/openpilot/commits/optech-hkg) (자세한 작업 기록은 [optech-hkg-dev](https://github.com/OPTECH-KR/openpilot/commits/optech-hkg-dev))
 
 ## 만든 사람과 출처
 
