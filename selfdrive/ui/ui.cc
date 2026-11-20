@@ -307,6 +307,8 @@ UIState::UIState(QObject *parent) : QObject(parent) {
     "gpsLocationExternal",
     // optech - speed camera ahead
     "optechSpeedCam",
+    // optech - car battery voltage in the sidebar
+    "peripheralState",
   });
 
   Params params;

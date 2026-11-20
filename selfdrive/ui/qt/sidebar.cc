@@ -85,14 +85,15 @@ void Sidebar::updateState(const UIState &s) {
   int strength = (int)deviceState.getNetworkStrength();
   setProperty("netStrength", strength > 0 ? strength + 1 : 0);
 
-  ItemStatus connectStatus;
-  auto last_ping = deviceState.getLastAthenaPingTime();
-  if (last_ping == 0) {
-    connectStatus = ItemStatus{{tr("CONNECT"), tr("OFFLINE")}, warning_color};
-  } else {
-    connectStatus = nanos_since_boot() - last_ping < 80e9
-                        ? ItemStatus{{tr("CONNECT"), tr("ONLINE")}, good_color}
-                        : ItemStatus{{tr("CONNECT"), tr("ERROR")}, danger_color};
+  // optech: the car battery voltage instead of the comma server connection (not used here).
+  // Resting 12 V battery: 12.4 V+ good, 12.0-12.4 V low (yellow), below 12.0 V very low (red); engine running 13.5 V+
+  ItemStatus connectStatus = {{"전압", "--"}, good_color};
+  if (sm.alive("peripheralState")) {
+    const float volt = sm["peripheralState"].getPeripheralState().getVoltage() / 1000.f;
+    if (volt > 1.f) {
+      const QColor c = volt >= 12.4f ? good_color : (volt >= 12.0f ? warning_color : danger_color);
+      connectStatus = {{"전압", QString::number(volt, 'f', 1) + "V"}, c};
+    }
   }
   setProperty("connectStatus", QVariant::fromValue(connectStatus));
 
