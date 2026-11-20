@@ -290,9 +290,25 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
     "openpilot이 가속페달을 최대 몇 %까지 밟을지 정합니다. 처음에는 낮게 시작해 보세요. 20~100%, 기본 100%(스타파일럿 그대로). "
     "저속에서는 스타파일럿이 따로 정한 상한(정지 근처 20%부터)이 먼저 적용됩니다.",
     20, 100, 5, [](int v) { return QString("%1%").arg(v); }));
-  start->addItem(optech_section("켜기 방식"));
-  toggle(start, "dp_alka", "항상 조향 (ALKA)",
-         "크루즈 메인 버튼(ACC MAIN)만 켜져 있으면 크루즈를 켜지 않아도 조향을 계속 도와줍니다. 크루즈만 되는 차량에 특히 좋습니다.\n재부팅해야 적용됩니다.");
+  // '사용 방식' like optech-hkg (title = current choice, button 선택). Here it is dragonpilot's ALKA (dp_alka):
+  // the car's own cruise does the speed once SET is pressed, so "steering only from the cruise button" is not possible
+  start->addItem(optech_section("사용 방식"));
+  ButtonControl *engage_mode_btn = new ButtonControl("", "선택",
+    "openpilot 조향을 언제 켤지 고릅니다.\n"
+    "크루즈와 함께: 크루즈 SET을 눌러 차의 크루즈가 켜지면 조향도 함께 켜집니다. 속도는 차의 크루즈가 맡습니다.\n"
+    "메인만 켜도 조향: 크루즈 메인 버튼만 켜 두면 SET을 누르지 않아도 조향을 도와줍니다(ALKA). 속도는 운전자가 페달로 조절하고, "
+    "SET을 누르면 차의 크루즈도 함께 켜집니다. 주행 중 브레이크를 밟은 채 메인 버튼을 두 번 누르면 잠시 껐다 켤 수 있습니다.\n"
+    "재부팅해야 적용됩니다.");
+  const QStringList engage_names = {"크루즈와 함께", "메인만 켜도 조향"};
+  auto engage_name = [=]() { return engage_names[params.getBool("dp_alka") ? 1 : 0]; };
+  engage_mode_btn->setTitle(engage_name());
+  QObject::connect(engage_mode_btn, &ButtonControl::clicked, [=]() {
+    const QString sel = MultiOptionDialog::getSelection("사용 방식을 고르세요", engage_names, engage_name(), this);
+    if (sel.isEmpty() || sel == engage_name()) return;
+    params.putBool("dp_alka", sel == engage_names[1]);
+    engage_mode_btn->setTitle(engage_name());
+  });
+  start->addItem(engage_mode_btn);
 
   // ======== 주행 ========
   drive->addItem(optech_section("과속카메라"));
