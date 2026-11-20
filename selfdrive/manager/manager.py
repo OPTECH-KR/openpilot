@@ -288,6 +288,19 @@ def get_support_car_list():
     name = str(car)
     if name not in list:
       list.append(name)
+
+  # optech: also the cars without fingerprints (only chosen by hand, e.g. GM ... NO ACC, Trax 2024, Suburban 2016)
+  try:
+    from openpilot.selfdrive.car.interfaces import get_interface_attr
+    for brand_models in get_interface_attr("CAR").values():
+      if brand_models is None:
+        continue
+      for model in brand_models:
+        name = str(model.value if hasattr(model, "value") else model)
+        if name not in list:
+          list.append(name)
+  except Exception:
+    cloudlog.exception("optech: could not list every car model")
   cars["cars"] = sorted(list)
   return json.dumps(cars)
 
