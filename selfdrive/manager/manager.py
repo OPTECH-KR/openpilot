@@ -79,6 +79,7 @@ def manager_init() -> None:
     ("BoltPedal", "0"),
     ("BoltPedalMax", "100"),
     ("BoltYear2017", "0"),
+    ("ShowDmInfo", "0"),
     ("dp_long_use_df_tune", "0"),
     ("dp_long_de2e", "0"),
     ("dp_mapd_vision_turn_control", "0"),

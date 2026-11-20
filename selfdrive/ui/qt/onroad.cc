@@ -588,6 +588,7 @@ void AnnotatedCameraWidget::updateState(const UIState &s) {
   if (sm.frame % UI_FREQ == 0) {  // params once a second
     Params op_params;
     optech_hud = op_params.getBool("OptechHud");
+    optech_show_dm = op_params.get("ShowDmInfo") == "1";
     optech_show_dev = op_params.getBool("OptechShowDeviceState");
     optech_personality = std::atoi(op_params.get("LongitudinalPersonality").c_str());
     optech_accel_profile = std::atoi(op_params.get("dp_long_accel_profile").c_str());
@@ -733,7 +734,13 @@ void AnnotatedCameraWidget::drawHud(QPainter &p) {
   p.setFont(InterFont(66));
   drawText(p, rect().center().x(), 290, speedUnit, 200);
 
-  // optech: no driver monitoring icon on the driving screen (driver monitoring itself still runs)
+  // driver monitoring icon only with OPTECH > 화면 > 운전자 모니터링 '아이콘 보임'
+  if (optech_show_dm && !hideBottomIcons) {
+    int offset = UI_BORDER_SIZE + btn_size / 2;
+    int x = rightHandDM ? width() - offset : offset;
+    int y = height() - offset;
+    drawIcon(p, QPoint(x, y), dm_img, blackColor(70), dmActive ? 1.0 : 0.2);
+  }
 
   p.restore();
 }
@@ -853,7 +860,11 @@ void AnnotatedCameraWidget::drawOptechHud(QPainter &p) {
     optech_text(p, lx, ly, QString::number(limit), 40, speed > limit + 2 ? white : QColor(0, 0, 0, 255));
   }
 
-  // optech: no driver monitoring icon on the driving screen (driver monitoring itself still runs)
+  // driver monitoring icon only with OPTECH > 화면 > 운전자 모니터링 '아이콘 보임' (top left: the box owns the lower left)
+  if (optech_show_dm && !hideBottomIcons) {
+    const int offset = UI_BORDER_SIZE + btn_size / 2;
+    drawIcon(p, QPoint(offset, offset), dm_img, blackColor(70), dmActive ? 1.0 : 0.2);
+  }
   p.restore();
 }
 

@@ -19,6 +19,7 @@ public:
   OptechValueControl(const QString &param, const QString &title, const QString &desc,
                      int min, int max, int step, std::function<QString(int)> format);
   void refresh();
+  std::function<void(int)> on_change;  // optional: called with the new value after a －/＋ press
 
 private:
   std::string key;

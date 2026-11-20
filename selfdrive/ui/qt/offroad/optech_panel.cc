@@ -62,6 +62,7 @@ void OptechValueControl::change(int delta) {
   if (v > max_v) v = max_v;
   Params().put(key, std::to_string(v));
   refresh();
+  if (on_change) on_change(v);
 }
 
 void OptechValueControl::refresh() {
@@ -362,6 +363,18 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
          "왼쪽 아래에 optech-hkg와 같은 속도 상자(현재 속도, 설정 속도, 기어, 차간거리, GPS 속도)를 보여 줍니다. 끄면 원래 화면(위쪽 가운데 속도)으로 돌아갑니다.");
   toggle(disp, "OptechShowDeviceState", "기기 상태",
          "속도 상자 위에 CPU 온도, CPU 사용률, 화면 FPS를 보여 줍니다. 너무 높으면 빨갛게 깜빡입니다.");
+  // '운전자 모니터링' like optech-hkg (ShowDmInfo): -1 = the function off (dragonpilot dp_device_no_ir_ctrl: no driver
+  // camera checks, no IR light, the monitoring processes do not run), 0 = icon hidden, 1 = icon shown
+  disp->addItem(optech_section("운전자 모니터링"));
+  if (params.getBool("dp_device_no_ir_ctrl") && params.get("ShowDmInfo") != "-1") params.put("ShowDmInfo", "-1");
+  OptechValueControl *dm_mode = value(disp, "ShowDmInfo", "운전자 모니터링",
+        "운전자를 보는 카메라로 졸음과 전방 주시를 확인하는 기능입니다.\n"
+        "기능 끄기: '앞을 보세요' 같은 경고가 나오지 않고, 운전자 카메라의 적외선 조명도 꺼집니다. 기기 부담도 줄어듭니다. "
+        "졸음운전을 잡아 주지 않으니 항상 주의하세요.\n"
+        "아이콘 안 보임 / 아이콘 보임: 기능은 켜 두고, 주행 화면의 얼굴 아이콘만 숨기거나 보여 줍니다.\n"
+        "기능을 끄거나 다시 켜면 재부팅해야 적용됩니다.",
+        -1, 1, 1, [](int v) { return v < 0 ? QString("기능 끄기") : (v == 0 ? QString("아이콘 안 보임") : QString("아이콘 보임")); });
+  dm_mode->on_change = [=](int v) { params.putBool("dp_device_no_ir_ctrl", v < 0); };
   disp->addItem(optech_section("화면 버튼"));
   toggle(disp, "dp_long_personality_btn", "주행 성향 버튼",
          "주행 화면에 주행 성향(차간거리 성향) 버튼을 보여 줍니다.");

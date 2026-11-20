@@ -5,7 +5,8 @@ from openpilot.common.params import Params
 from openpilot.system.hardware import PC, TICI, EON
 from openpilot.selfdrive.manager.process import PythonProcess, NativeProcess, DaemonProcess
 
-NO_IR_CTRL = os.path.isfile('/data/media/0/no_ir_ctrl')
+# optech: driver monitoring off (OPTECH > 화면 > 운전자 모니터링 '기능 끄기' = dp_device_no_ir_ctrl) stops its processes too
+NO_IR_CTRL = os.path.isfile('/data/media/0/no_ir_ctrl') or Params().get_bool('dp_device_no_ir_ctrl')
 
 WEBCAM = os.getenv("USE_WEBCAM") is not None
 
