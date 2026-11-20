@@ -1,6 +1,6 @@
 from collections import defaultdict
 from dataclasses import dataclass
-from enum import Enum#, StrEnum
+from enum import Enum, IntFlag#, StrEnum
 from strenum import StrEnum
 from typing import Dict, List, Union
 
@@ -76,6 +76,19 @@ class CAR(StrEnum):
   SILVERADO = "CHEVROLET SILVERADO 1500 2020"
   EQUINOX = "CHEVROLET EQUINOX 2019"
   TRAILBLAZER = "CHEVROLET TRAILBLAZER 2021"
+  # optech: cars without ACC (regular cruise only), camera harness; openpilot steers while the car's cruise is on.
+  # No CAN fingerprints: chosen in OPTECH > 시작 > 차종 선택. Specs and tunes from StarPilot / FrogPilot (via optech-hkg).
+  VOLT_CC = "CHEVROLET VOLT NO ACC"
+  BOLT_CC = "CHEVROLET BOLT EV NO ACC"
+  TRAILBLAZER_CC = "CHEVROLET TRAILBLAZER NO ACC"
+  EQUINOX_CC = "CHEVROLET EQUINOX NO ACC"
+  MALIBU_CC = "CHEVROLET MALIBU NO ACC"
+  SILVERADO_CC = "CHEVROLET SILVERADO 1500 NO ACC"
+  SUBURBAN_CC = "CHEVROLET SUBURBAN NO ACC"
+  YUKON_CC = "GMC YUKON NO ACC"
+  CT6_CC = "CADILLAC CT6 NO ACC"
+  XT4_CC = "CADILLAC XT4 NO ACC"
+  XT5_CC = "CADILLAC XT5 NO ACC"
 
 
 class Footnote(Enum):
@@ -118,6 +131,17 @@ CAR_INFO: Dict[str, Union[GMCarInfo, List[GMCarInfo]]] = {
   ],
   CAR.EQUINOX: GMCarInfo("Chevrolet Equinox 2019-22"),
   CAR.TRAILBLAZER: GMCarInfo("Chevrolet Trailblazer 2021-22"),
+  CAR.VOLT_CC: GMCarInfo("Chevrolet Volt 2017-18 (no ACC)", "Regular cruise control"),
+  CAR.BOLT_CC: GMCarInfo("Chevrolet Bolt EV 2017-21 (no ACC)", "Regular cruise control"),
+  CAR.TRAILBLAZER_CC: GMCarInfo("Chevrolet Trailblazer 2021-22 (no ACC)", "Regular cruise control"),
+  CAR.EQUINOX_CC: GMCarInfo("Chevrolet Equinox 2019-22 (no ACC)", "Regular cruise control"),
+  CAR.MALIBU_CC: GMCarInfo("Chevrolet Malibu 2016-23 (no ACC)", "Regular cruise control"),
+  CAR.SILVERADO_CC: GMCarInfo("Chevrolet Silverado 1500 2020-21 (no ACC)", "Regular cruise control"),
+  CAR.SUBURBAN_CC: GMCarInfo("Chevrolet Suburban 2016-20 (no ACC)", "Regular cruise control"),
+  CAR.YUKON_CC: GMCarInfo("GMC Yukon 2019-20 (no ACC)", "Regular cruise control"),
+  CAR.CT6_CC: GMCarInfo("Cadillac CT6 2017-18 (no ACC)", "Regular cruise control"),
+  CAR.XT4_CC: GMCarInfo("Cadillac XT4 2023 (no ACC)", "Regular cruise control"),
+  CAR.XT5_CC: GMCarInfo("Cadillac XT5 2018 (no ACC)", "Regular cruise control"),
 }
 
 
@@ -148,9 +172,17 @@ GM_RX_OFFSET = 0x400
 
 DBC: Dict[str, Dict[str, str]] = defaultdict(lambda: dbc_dict('gm_global_a_powertrain_generated', 'gm_global_a_object', chassis_dbc='gm_global_a_chassis'))
 
-EV_CAR = {CAR.VOLT, CAR.BOLT_EUV}
+EV_CAR = {CAR.VOLT, CAR.BOLT_EUV, CAR.VOLT_CC, CAR.BOLT_CC}
+
+# optech: no ACC (regular cruise only)
+CC_ONLY_CAR = {CAR.VOLT_CC, CAR.BOLT_CC, CAR.TRAILBLAZER_CC, CAR.EQUINOX_CC, CAR.MALIBU_CC, CAR.SILVERADO_CC,
+               CAR.SUBURBAN_CC, CAR.YUKON_CC, CAR.CT6_CC, CAR.XT4_CC, CAR.XT5_CC}
 
 # We're integrated at the camera with VOACC on these cars (instead of ASCM w/ OBD-II harness)
-CAMERA_ACC_CAR = {CAR.BOLT_EUV, CAR.SILVERADO, CAR.EQUINOX, CAR.TRAILBLAZER}
+CAMERA_ACC_CAR = {CAR.BOLT_EUV, CAR.SILVERADO, CAR.EQUINOX, CAR.TRAILBLAZER} | CC_ONLY_CAR
+
+
+class GMFlags(IntFlag):
+  NO_ACCELERATOR_POS_MSG = 1  # optech: no ECMAcceleratorPos (0xBE); brake position from EBCMBrakePedalPosition
 
 STEER_THRESHOLD = 1.0

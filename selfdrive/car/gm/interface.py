@@ -6,7 +6,7 @@ from panda import Panda
 from openpilot.common.conversions import Conversions as CV
 from openpilot.selfdrive.car import create_button_events, get_safety_config
 from openpilot.selfdrive.car.gm.radar_interface import RADAR_HEADER_MSG
-from openpilot.selfdrive.car.gm.values import CAR, CruiseButtons, CarControllerParams, EV_CAR, CAMERA_ACC_CAR, CanBus
+from openpilot.selfdrive.car.gm.values import CAR, CruiseButtons, CarControllerParams, EV_CAR, CAMERA_ACC_CAR, CanBus, CC_ONLY_CAR, GMFlags
 from openpilot.selfdrive.car.interfaces import CarInterfaceBase, TorqueFromLateralAccelCallbackType, FRICTION_THRESHOLD
 from openpilot.selfdrive.controls.lib.drive_helpers import get_friction
 
@@ -17,6 +17,7 @@ EventName = car.CarEvent.EventName
 GearShifter = car.CarState.GearShifter
 TransmissionType = car.CarParams.TransmissionType
 NetworkLocation = car.CarParams.NetworkLocation
+ACCELERATOR_POS_MSG = 0xBE  # ECMAcceleratorPos
 BUTTONS_DICT = {CruiseButtons.RES_ACCEL: ButtonType.accelCruise, CruiseButtons.DECEL_SET: ButtonType.decelCruise,
                 CruiseButtons.MAIN: ButtonType.altButton3, CruiseButtons.CANCEL: ButtonType.cancel}
 
@@ -41,7 +42,7 @@ class CarInterface(CarInterfaceBase):
     return 0.10006696 * sigmoid * (v_ego + 3.12485927)
 
   def get_steer_feedforward_function(self):
-    if self.CP.carFingerprint == CAR.VOLT:
+    if self.CP.carFingerprint in (CAR.VOLT, CAR.VOLT_CC):
       return self.get_steer_feedforward_volt
     else:
       return CarInterfaceBase.get_steer_feedforward_default
@@ -88,7 +89,7 @@ class CarInterface(CarInterfaceBase):
     ret.longitudinalTuning.kiBP = [0.]
 
     if candidate in CAMERA_ACC_CAR:
-      ret.experimentalLongitudinalAvailable = True
+      ret.experimentalLongitudinalAvailable = candidate not in CC_ONLY_CAR
       ret.networkLocation = NetworkLocation.fwdCamera
       ret.radarUnavailable = True  # no radar
       ret.pcmCruise = True
@@ -103,10 +104,17 @@ class CarInterface(CarInterfaceBase):
       ret.vEgoStopping = 0.25
       ret.vEgoStarting = 0.25
 
-      if experimental_long:
+      if experimental_long and ret.experimentalLongitudinalAvailable:
         ret.pcmCruise = False
         ret.openpilotLongitudinalControl = True
         ret.safetyConfigs[0].safetyParam |= Panda.FLAG_GM_HW_CAM_LONG
+
+      # optech: no ACC - openpilot steers while the car's regular cruise is on (ECMCruiseControl); speed stays with the car
+      if candidate in CC_ONLY_CAR:
+        ret.safetyConfigs[0].safetyParam |= Panda.FLAG_GM_NO_ACC
+        ret.minEnableSpeed = -1.  # the car's cruise decides when it can be set
+        if ACCELERATOR_POS_MSG not in fingerprint[CanBus.POWERTRAIN]:
+          ret.flags |= GMFlags.NO_ACCELERATOR_POS_MSG.value
 
     else:  # ASCM, OBD-II harness
       ret.openpilotLongitudinalControl = True
@@ -254,6 +262,102 @@ class CarInterface(CarInterfaceBase):
       ret.steerRatio = 16.8
       ret.centerToFront = ret.wheelbase * 0.4
       ret.tireStiffnessFactor = 1.0
+      ret.steerActuatorDelay = 0.2
+      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+
+    # ---- optech: cars without ACC (StarPilot / FrogPilot specs, via optech-hkg) ----
+    elif candidate == CAR.VOLT_CC:
+      ret.mass = 1607.
+      ret.wheelbase = 2.69
+      ret.steerRatio = 17.7
+      ret.tireStiffnessFactor = 0.469
+      ret.centerToFront = ret.wheelbase * 0.45
+      ret.lateralTuning.pid.kpBP = [0., 40.]
+      ret.lateralTuning.pid.kpV = [0., 0.17]
+      ret.lateralTuning.pid.kiBP = [0.]
+      ret.lateralTuning.pid.kiV = [0.]
+      ret.lateralTuning.pid.kf = 1.  # get_steer_feedforward_volt()
+      ret.steerActuatorDelay = 0.2
+
+    elif candidate == CAR.BOLT_CC:
+      ret.mass = 1616.
+      ret.wheelbase = 2.60096
+      ret.steerRatio = 16.8
+      ret.centerToFront = ret.wheelbase * 0.4
+      ret.tireStiffnessFactor = 1.0
+      ret.steerActuatorDelay = 0.2
+      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+
+    elif candidate == CAR.TRAILBLAZER_CC:
+      ret.mass = 1345.
+      ret.wheelbase = 2.64
+      ret.steerRatio = 16.8
+      ret.centerToFront = ret.wheelbase * 0.4
+      ret.tireStiffnessFactor = 1.0
+      ret.steerActuatorDelay = 0.2
+      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+
+    elif candidate == CAR.EQUINOX_CC:
+      ret.mass = 3500. * CV.LB_TO_KG
+      ret.wheelbase = 2.72
+      ret.steerRatio = 14.4
+      ret.centerToFront = ret.wheelbase * 0.4
+      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+
+    elif candidate == CAR.MALIBU_CC:
+      ret.mass = 1450.
+      ret.wheelbase = 2.8
+      ret.steerRatio = 18.25
+      ret.centerToFront = ret.wheelbase * 0.4
+      ret.tireStiffnessFactor = 0.997
+      ret.steerActuatorDelay = 0.2
+      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+
+    elif candidate == CAR.SILVERADO_CC:
+      ret.mass = 2450.
+      ret.wheelbase = 3.75
+      ret.steerRatio = 16.3
+      ret.centerToFront = ret.wheelbase * 0.5
+      ret.tireStiffnessFactor = 1.0
+      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+
+    elif candidate == CAR.SUBURBAN_CC:
+      ret.mass = 2731.
+      ret.wheelbase = 3.302
+      ret.steerRatio = 17.3
+      ret.centerToFront = ret.wheelbase * 0.49
+      ret.steerActuatorDelay = 0.2
+      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+
+    elif candidate == CAR.YUKON_CC:
+      ret.mass = 2541.
+      ret.wheelbase = 2.95
+      ret.steerRatio = 16.3
+      ret.centerToFront = ret.wheelbase * 0.4
+      ret.steerActuatorDelay = 0.2
+      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+
+    elif candidate == CAR.CT6_CC:
+      ret.mass = 2358.
+      ret.wheelbase = 3.11
+      ret.steerRatio = 17.7
+      ret.centerToFront = ret.wheelbase * 0.4
+      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+
+    elif candidate == CAR.XT4_CC:
+      ret.mass = 1660.
+      ret.wheelbase = 2.78
+      ret.steerRatio = 14.4
+      ret.centerToFront = ret.wheelbase * 0.4
+      ret.steerActuatorDelay = 0.2
+      ret.minSteerSpeed = 30 * CV.MPH_TO_MS  # StarPilot
+      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+
+    elif candidate == CAR.XT5_CC:
+      ret.mass = 1810.
+      ret.wheelbase = 2.86
+      ret.steerRatio = 16.34
+      ret.centerToFront = ret.wheelbase * 0.5
       ret.steerActuatorDelay = 0.2
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 

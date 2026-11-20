@@ -50,8 +50,21 @@ RxCheck gm_rx_checks[] = {
   {.msg = {{0xC9, 0, 8, .frequency = 10U}, { 0 }, { 0 }}},
 };
 
+// optech: cars without ACC (regular cruise only, camera harness; StarPilot gm_no_acc_rx_checks):
+// no ECMAcceleratorPos (0xBE) needed; the car's cruise state comes from ECMCruiseControl (0x3D1)
+RxCheck gm_no_acc_rx_checks[] = {
+  {.msg = {{0x184, 0, 8, .frequency = 10U}, { 0 }, { 0 }}},
+  {.msg = {{0x34A, 0, 5, .frequency = 10U}, { 0 }, { 0 }}},
+  {.msg = {{0x1E1, 0, 7, .frequency = 10U}, { 0 }, { 0 }}},
+  {.msg = {{0x1C4, 0, 8, .frequency = 10U}, { 0 }, { 0 }}},
+  {.msg = {{0xC9, 0, 8, .frequency = 10U}, { 0 }, { 0 }}},
+  {.msg = {{0x3D1, 0, 8, .frequency = 10U}, { 0 }, { 0 }}},
+};
+
 const uint16_t GM_PARAM_HW_CAM = 1;
 const uint16_t GM_PARAM_HW_CAM_LONG = 2;
+// optech: no ACC (regular cruise only), with GM_PARAM_HW_CAM: openpilot steers while the car's cruise is on
+const uint16_t GM_PARAM_NO_ACC = 4;
 
 enum {
   GM_BTN_UNPRESS = 1,
@@ -63,6 +76,7 @@ enum {
 enum {GM_ASCM, GM_CAM} gm_hw = GM_ASCM;
 bool gm_cam_long = false;
 bool gm_pcm_cruise = false;
+bool gm_no_acc = false;
 
 static void gm_rx_hook(const CANPacket_t *to_push) {
   if (GET_BUS(to_push) == 0U) {
@@ -115,10 +129,16 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
       gas_pressed = GET_BYTE(to_push, 5) != 0U;
 
       // enter controls on rising edge of ACC, exit controls when ACC off
-      if (gm_pcm_cruise) {
+      if (gm_pcm_cruise && !gm_no_acc) {
         bool cruise_engaged = (GET_BYTE(to_push, 1) >> 5) != 0U;
         pcm_cruise_check(cruise_engaged);
       }
+    }
+
+    // no ACC: enter controls on rising edge of the car's regular cruise (ECMCruiseControl CruiseActive), exit when it is off
+    if ((addr == 0x3D1) && gm_no_acc) {
+      bool cruise_engaged = (GET_BYTE(to_push, 4) >> 7) != 0U;
+      pcm_cruise_check(cruise_engaged);
     }
 
     if (addr == 0xBD) {
@@ -216,6 +236,7 @@ static int gm_fwd_hook(int bus_num, int addr) {
 
 static safety_config gm_init(uint16_t param) {
   gm_hw = GET_FLAG(param, GM_PARAM_HW_CAM) ? GM_CAM : GM_ASCM;
+  gm_no_acc = (gm_hw == GM_CAM) && GET_FLAG(param, GM_PARAM_NO_ACC);
 
   if (gm_hw == GM_ASCM) {
     gm_long_limits = &GM_ASCM_LONG_LIMITS;
@@ -225,13 +246,16 @@ static safety_config gm_init(uint16_t param) {
   }
 
 #ifdef ALLOW_DEBUG
-  gm_cam_long = GET_FLAG(param, GM_PARAM_HW_CAM_LONG);
+  gm_cam_long = GET_FLAG(param, GM_PARAM_HW_CAM_LONG) && !gm_no_acc;  // no ACC: no stock ACC messages to replace
 #endif
   gm_pcm_cruise = (gm_hw == GM_CAM) && !gm_cam_long;
 
   safety_config ret = BUILD_SAFETY_CFG(gm_rx_checks, GM_ASCM_TX_MSGS);
   if (gm_hw == GM_CAM) {
     ret = gm_cam_long ? BUILD_SAFETY_CFG(gm_rx_checks, GM_CAM_LONG_TX_MSGS) : BUILD_SAFETY_CFG(gm_rx_checks, GM_CAM_TX_MSGS);
+    if (gm_no_acc) {
+      ret = BUILD_SAFETY_CFG(gm_no_acc_rx_checks, GM_CAM_TX_MSGS);
+    }
   }
   return ret;
 }
