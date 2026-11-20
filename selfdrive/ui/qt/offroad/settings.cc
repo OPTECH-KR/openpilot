@@ -73,87 +73,93 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
   std::vector<std::tuple<QString, QString, QString, QString>> toggle_defs{
     {
       "OpenpilotEnabledToggle",
-      tr("Enable openpilot"),
-      tr("Use the openpilot system for adaptive cruise control and lane keep driver assistance. Your attention is required at all times to use this feature. Changing this setting takes effect when the car is powered off."),
+      "openpilot 사용",
+      "openpilot의 크루즈(앞차 따라가기)와 차선 유지 보조를 사용합니다. 쓰는 동안에도 운전자는 항상 앞을 보고 핸들을 잡고 있어야 합니다. "
+      "바꾼 설정은 시동을 끈 뒤에 적용됩니다.",
       "../assets/offroad/icon_openpilot.png",
     },
     {
       "dp_0813",
-      tr("Use 0.8.13.1 Driving Model"),
-      tr("When enabled, openpilot will use the good old driving model from 0.8.13.1.\nFor safety reason, vision only openpilot longitudinal will be disabled.\nReboot required."),
+      "옛 주행 모델 사용 (0.8.13.1)",
+      "C2에서 가볍게 도는 예전 주행 모델(0.8.13.1)을 씁니다. C2에서는 켜 두는 것을 추천합니다(처음 값: 켜짐).\n"
+      "켜 두면 실험 모드와 openpilot 가감속(알파)은 쓸 수 없습니다.\n"
+      "끄면 새 주행 모델을 쓰지만, C2에는 버거워서 느려질 수 있습니다.\n재부팅해야 적용됩니다.",
       "../assets/offroad/icon_ai.png",
     },
     {
       "dp_logging",
-      tr("Enable Logging"),
-      tr("When enabled, openpilot will log your car stats as well as all the camera footages.\nLogging with the 0.8.16 model may have performance issues, so do not use both features at the same time unless you know what you are doing.\nReboot required."),
+      "주행 기록 저장",
+      "주행 중 차량 정보와 카메라 영상을 기기에 저장합니다. 문제가 생겼을 때 원인을 찾는 데 꼭 필요합니다.\n"
+      "새 주행 모델(위의 옛 모델 끔)과 함께 쓰면 기기가 느려질 수 있습니다.\n재부팅해야 적용됩니다.",
       "../assets/offroad/icon_database.png",
     },
     {
       "ExperimentalLongitudinalEnabled",
-      tr("openpilot Longitudinal Control (Alpha)"),
+      "openpilot 가감속 제어 (알파)",
       QString("<b>%1</b><br><br>%2")
-      .arg(tr("WARNING: openpilot longitudinal control is in alpha for this car and will disable Automatic Emergency Braking (AEB)."))
-      .arg(tr("On this car, openpilot defaults to the car's built-in ACC instead of openpilot's longitudinal control. "
-              "Enable this to switch to openpilot longitudinal control. Enabling Experimental mode is recommended when enabling openpilot longitudinal control alpha.")),
+      .arg("주의: 이 차에서는 아직 시험 단계이고, 켜면 차의 자동 긴급 제동(AEB)이 꺼집니다.")
+      .arg("처음에는 차의 순정 크루즈(ACC)가 속도를 맡습니다. 이것을 켜면 openpilot이 가속과 감속을 직접 맡습니다. "
+           "켤 때는 실험 모드도 함께 켜는 것을 추천합니다."),
       "../assets/offroad/icon_speed_limit.png",
     },
     {
       "ExperimentalMode",
-      tr("Experimental Mode"),
+      "실험 모드",
       "",
       "../assets/img_experimental_white.svg",
     },
     {
       "DisengageOnAccelerator",
-      tr("Disengage on Accelerator Pedal"),
-      tr("When enabled, pressing the accelerator pedal will disengage openpilot."),
+      "가속 페달을 밟으면 끄기",
+      "켜면 가속 페달을 밟는 순간 openpilot이 꺼집니다.\n"
+      "끄면 페달을 밟는 동안만 운전자가 가속하고, 페달을 떼면 openpilot이 이어서 운전을 돕습니다.",
       "../assets/offroad/icon_disengage_on_accelerator.svg",
     },
     {
       "IsLdwEnabled",
-      tr("Enable Lane Departure Warnings"),
-      tr("Receive alerts to steer back into the lane when your vehicle drifts over a detected lane line without a turn signal activated while driving over 31 mph (50 km/h)."),
+      "차선 이탈 경고",
+      "시속 50km 이상에서 방향지시등 없이 차선을 넘어가면 알림으로 알려 줍니다.",
       "../assets/offroad/icon_warning.png",
     },
     {
       "IsRhdDetected",
-      tr("Enable Right-Hand Drive"),
-      tr("Allow openpilot to obey left-hand traffic conventions and perform driver monitoring on right driver seat."),
+      "우핸들 차량",
+      "운전석이 오른쪽에 있는 차(일본·영국 등)용입니다. 한국 차는 끈 채로 두세요.",
       "../assets/offroad/icon_openpilot_mirrored.png",
     },
     {
       "RecordFront",
-      tr("Record and Upload Driver Camera"),
-      tr("Upload data from the driver facing camera and help improve the driver monitoring algorithm."),
+      "운전자 카메라 녹화",
+      "운전자를 보는 카메라 영상도 주행 기록에 함께 저장합니다. (이 버전은 부팅할 때 자동으로 켜지고, 서버로 올리지는 않습니다.)",
       "../assets/offroad/icon_monitoring.png",
     },
     {
       "IsMetric",
-      tr("Use Metric System"),
-      tr("Display speed in km/h instead of mph."),
+      "km/h 사용",
+      "속도를 mph(마일) 대신 km/h로 표시합니다. 한국에서는 켜 두세요.",
       "../assets/offroad/icon_metric.png",
     },
 #ifdef ENABLE_MAPS
     {
       "NavSettingTime24h",
-      tr("Show ETA in 24h Format"),
-      tr("Use 24h format instead of am/pm"),
+      "도착 시간 24시간 표시",
+      "도착 예정 시간을 오전/오후 대신 24시간으로 보여 줍니다.",
       "../assets/offroad/icon_metric.png",
     },
     {
       "NavSettingLeftSide",
-      tr("Show Map on Left Side of UI"),
-      tr("Show map on left side when in split screen view."),
+      "지도를 왼쪽에 표시",
+      "화면을 나눠 볼 때 지도를 왼쪽에 보여 줍니다.",
       "../assets/offroad/icon_road.png",
     },
 #endif
   };
 
-  std::vector<QString> longi_button_texts{tr("Aggressive"), tr("Standard"), tr("Relaxed")};
-  long_personality_setting = new ButtonParamControl("LongitudinalPersonality", tr("Driving Personality"),
-                                          tr("Standard is recommended. In aggressive mode, openpilot will follow lead cars closer and be more aggressive with the gas and brake. "
-                                             "In relaxed mode openpilot will stay further away from lead cars."),
+  std::vector<QString> longi_button_texts{"가깝게", "보통", "멀리"};
+  long_personality_setting = new ButtonParamControl("LongitudinalPersonality", "주행 성향 (차간거리)",
+                                          "보통을 추천합니다.\n가깝게: 앞차를 더 가까이 따라가고, 가속·감속이 빠릅니다.\n"
+                                          "멀리: 앞차와 거리를 더 두고 부드럽게 움직입니다.\n"
+                                          "openpilot이 가감속을 맡는 차량에서만 동작합니다.",
                                           "../assets/offroad/icon_speed_limit.png",
                                           longi_button_texts);
   for (auto &[param, title, desc, icon] : toggle_defs) {
@@ -201,25 +207,12 @@ void TogglesPanel::updateToggles() {
     params.putBool("ExperimentalMode", false);
   }
   auto op_long_toggle = toggles["ExperimentalLongitudinalEnabled"];
-  const QString e2e_description = QString("%1<br>"
-                                          "<h4>%2</h4><br>"
-                                          "%3<br>"
-                                          "<h4>%4</h4><br>"
-                                          "%5<br>"
-                                          "<h4>%6</h4><br>"
-                                          "%7")
-                                  .arg(tr("openpilot defaults to driving in <b>chill mode</b>. Experimental mode enables <b>alpha-level features</b> that aren't ready for chill mode. Experimental features are listed below:"))
-                                  .arg(tr("End-to-End Longitudinal Control"))
-                                  .arg(tr("Let the driving model control the gas and brakes. openpilot will drive as it thinks a human would, including stopping for red lights and stop signs. "
-                                          "Since the driving model decides the speed to drive, the set speed will only act as an upper bound. This is an alpha quality feature; "
-                                          "mistakes should be expected."))
-                                  .arg(tr("Navigate on openpilot"))
-                                  .arg(tr("When navigation has a destination, openpilot will input the map information into the model. This provides useful context for the model and allows openpilot to keep left or right "
-                                          "appropriately at forks/exits. Lane change behavior is unchanged and still activated by the driver. This is an alpha quality feature; mistakes should be expected, particularly around "
-                                          "exits and forks. These mistakes can include unintended laneline crossings, late exit taking, driving towards dividing barriers in the gore areas, etc."))
-                                  .arg(tr("New Driving Visualization"))
-                                  .arg(tr("The driving visualization will transition to the road-facing wide-angle camera at low speeds to better show some turns. The Experimental mode logo will also be shown in the top right corner. "
-                                          "When a navigation destination is set and the driving model is using it as input, the driving path on the map will turn green."));
+  const QString e2e_description = QString("%1<br><h4>%2</h4><br>%3<br><br>%4")
+                                  .arg("openpilot은 처음에 <b>편안한 모드</b>로 달립니다. 실험 모드를 켜면 아직 시험 중인 기능을 씁니다:")
+                                  .arg("카메라 판단 가감속 (E2E)")
+                                  .arg("주행 모델이 직접 가속과 감속을 정합니다. 사람처럼 판단해서 빨간불이나 정지 표지판 앞에서 멈추기도 합니다. "
+                                       "설정 속도는 '최고 속도'로만 쓰입니다. 시험 기능이라 실수할 수 있으니 항상 주의하세요.")
+                                  .arg("내비 연동 주행과 넓은 화각 카메라 화면은 C2에서 쓸 수 없습니다.");
 
   const bool is_release = params.getBool("IsReleaseBranch");
   const bool is_old_model = params.getBool("dp_0813");
@@ -250,15 +243,15 @@ void TogglesPanel::updateToggles() {
       long_personality_setting->setEnabled(false);
       params.remove("ExperimentalMode");
 
-      const QString unavailable = tr("Experimental mode is currently unavailable on this car since the car's stock ACC is used for longitudinal control.");
+      const QString unavailable = "이 차는 순정 크루즈(ACC)가 속도를 맡고 있어서, 지금은 실험 모드를 쓸 수 없습니다.";
 
       QString long_desc = unavailable + " " + \
-                          tr("openpilot longitudinal control may come in a future update.");
+                          "openpilot 가감속은 앞으로 업데이트에서 지원될 수 있습니다.";
       if (CP.getExperimentalLongitudinalAvailable()) {
         if (is_release) {
-          long_desc = unavailable + " " + tr("An alpha version of openpilot longitudinal control can be tested, along with Experimental mode, on non-release branches.");
+          long_desc = unavailable + " " + "개발(-dev) 브랜치에서는 openpilot 가감속(알파)과 실험 모드를 함께 시험해 볼 수 있습니다.";
         } else {
-          long_desc = tr("Enable the openpilot longitudinal control (alpha) toggle to allow Experimental mode.");
+          long_desc = "위의 'openpilot 가감속 제어 (알파)'를 켜면 실험 모드를 쓸 수 있습니다.";
         }
       }
       experimental_mode_toggle->setDescription("<b>" + long_desc + "</b><br><br>" + e2e_description);
