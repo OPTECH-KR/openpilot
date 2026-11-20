@@ -76,6 +76,8 @@ static const QStringList BRAND_ORDER = {"CHEVROLET", "GMC", "CADILLAC", "BUICK",
                                         "CHRYSLER", "JEEP", "RAM", "TESLA"};
 static const char *BOLT_CC_CAR = "CHEVROLET BOLT EV NO ACC";  // selfdrive/car/gm/values.py CAR.BOLT_CC
 static const QStringList BRAND_HIDDEN = {"HYUNDAI", "KIA", "GENESIS", "COMMA", "mock"};
+// ... except these, kept for testing optech-spst on the owner's own car
+static const QStringList HIDDEN_BRAND_TEST_CARS = {"KIA K5 2021"};
 
 QString OptechCarSelect::brandOf(const QString &car) {
   return car.section(' ', 0, 0);
@@ -121,7 +123,7 @@ OptechCarSelect::OptechCarSelect(QWidget *parent) : QWidget(parent) {
   for (const auto &v : all) {
     const QString car = v.toString();
     const QString brand = brandOf(car);
-    if (car.isEmpty() || BRAND_HIDDEN.contains(brand)) continue;
+    if (car.isEmpty() || (BRAND_HIDDEN.contains(brand) && !HIDDEN_BRAND_TEST_CARS.contains(car))) continue;
     cars[brand].append(car);
   }
   for (const QString &b : BRAND_ORDER) {
@@ -262,7 +264,7 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
   });
   start->addItem(car_btn);
   start->addItem(optech_note("자동 인식이 잘 되면 '자동 인식'으로 두세요. 인식이 안 될 때만 직접 고르면 다음 시동부터 적용됩니다. "
-                             "현대·기아·제네시스는 optech-hkg 브랜치를 쓰세요. ACC 없는 GM 차량(… NO ACC)은 자동 인식이 안 되니 직접 고르세요."));
+                             "현대·기아·제네시스는 optech-hkg 브랜치를 쓰세요(시험용으로 기아 K5 2021만 있어요). ACC 없는 GM 차량(… NO ACC)은 자동 인식이 안 되니 직접 고르세요."));
 
   // '볼트 EV 설정': only while the Bolt EV without ACC is the chosen car (same texts as optech-hkg)
   QLabel *bolt_section = optech_section("볼트 EV 설정");
