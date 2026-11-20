@@ -445,7 +445,7 @@ class CarInterface(CarInterfaceBase):
       events.add(EventName.belowSteerSpeed)
     # optech: comma pedal on an EV - no pedal is regen braking only in L / one pedal mode
     if self.CP.enableGasInterceptor and self.CP.transmissionType == TransmissionType.direct and not self.CS.single_pedal_mode:
-      events.add(EventName.brakeUnavailable)
+      events.add(EventName.brakeUnavailableDEPRECATED)  # optech: own L-mode alert in events.py
 
     ret.events = events.to_msg()
 

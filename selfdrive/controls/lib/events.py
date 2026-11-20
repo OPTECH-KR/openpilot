@@ -646,6 +646,13 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
       Priority.LOWEST, VisualAlert.none, AudibleAlert.none, .1),
   },
 
+  # optech: comma pedal on an EV (Bolt EV without ACC) outside L / one pedal mode: no regen when letting the pedal up.
+  # Reuses the retired brakeUnavailable slot (no cereal change).
+  EventName.brakeUnavailableDEPRECATED: {
+    ET.SOFT_DISABLE: user_soft_disable_alert("페달 사용 중: 기어를 L(원페달)로 바꿔 주세요"),
+    ET.NO_ENTRY: NoEntryAlert("페달 사용 중에는 기어를 L(원페달)로 두세요"),
+  },
+
   EventName.wrongCarMode: {
     ET.USER_DISABLE: EngagementAlert(AudibleAlert.disengage),
     ET.NO_ENTRY: wrong_car_mode_alert,
