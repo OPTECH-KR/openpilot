@@ -313,12 +313,23 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
 
   // ======== 주행 ========
   drive->addItem(optech_section("과속카메라"));
+  // same order as optech-hkg: 카메라 감속 first, its explanation right under it while it is on, then the camera source
+  ParamControl *cam_decel = toggle(drive, "OptechSpeedCamDecel", "카메라 감속",
+         "과속카메라 앞에서 제한 속도까지 미리 줄입니다. 켜면 아래에 동작 설명이 나옵니다.");
+  QLabel *cam_note = optech_note(
+    "● 과속카메라 약 22초 전(아래 '감속 시작')부터 설정 속도를 조금씩 내려서, 카메라 앞에서는 제한 속도 근처로 지나갑니다. "
+    "구간단속은 구간이 끝날 때까지 제한 속도를 지킵니다.\n"
+    "● 카메라 정보는 아래 '내장 카메라 DB'에서 받습니다. 기기 GPS와 전국 카메라 위치(약 3만 1천 대)로 찾고, 내비 앱은 필요 없습니다. "
+    "이동식·새 카메라는 모르고, 반대 차로의 카메라에도 줄일 수 있습니다.\n"
+    "● openpilot이 가감속을 맡는 차량만 속도를 줄입니다. 차의 순정 크루즈를 쓰는 차량은 화면에 CAM 표시만 됩니다. GPS가 안 잡히면 동작하지 않습니다.");
+  cam_note->setStyleSheet("font-size: 36px; color: #E0E0E0; background-color: #333333; border-radius: 10px; padding: 20px; margin: 10px 0px;");
+  cam_note->setVisible(params.getBool("OptechSpeedCamDecel"));
+  drive->addItem(cam_note);
+  QObject::connect(cam_decel, &ToggleControl::toggleFlipped, [=](bool on) { cam_note->setVisible(on); });
   toggle(drive, "OptechSpeedCam", "내장 카메라 DB",
          "내비 앱 없이 기기 GPS로 앞쪽 고정식 단속카메라(과속·신호과속·구간단속)를 찾아 화면 속도 상자에 'CAM'으로 보여 줍니다. "
+         "'카메라 감속'을 끄면 CAM 표시만 나오고 속도는 줄이지 않습니다.\n"
          "자료: 공공데이터포털 전국무인교통단속카메라 (2026년 10월, 약 3만 1천 대).\n시동을 다시 걸면 적용됩니다.");
-  toggle(drive, "OptechSpeedCamDecel", "카메라 감속",
-         "내장 카메라 DB가 찾은 카메라 앞에서 제한 속도까지 미리 줄입니다. 구간단속 안에서는 제한 속도를 유지합니다.\n"
-         "openpilot이 가감속을 맡는 차량만 동작합니다. 차의 원래 크루즈를 쓰는 차량은 화면 표시만 됩니다.");
   value(drive, "OptechCamDecelStart", "감속 시작",
         "카메라에 도착하기 몇 초 전부터 줄이기 시작할지 정합니다. 클수록 일찍, 부드럽게 줄입니다.",
         5, 60, 1, [](int v) { return QString("%1초 전").arg(v); });
