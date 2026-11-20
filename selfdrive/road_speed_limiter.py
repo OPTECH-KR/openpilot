@@ -330,6 +330,11 @@ def main():
 
   prev_recvTime = sec_since_boot()
   autoNaviSpeedCtrl = int(Params().get("AutoNaviSpeedCtrl"))
+  # optech: 내비 연동 방식 0 = no navigation app: ignore what an app sends, cameras only from the built-in DB
+  try:
+    navi_off = int(Params().get("OptechNaviLinkMode") or 1) == 0
+  except (TypeError, ValueError):
+    navi_off = False
   sockWaitTime = 1.0 if autoNaviSpeedCtrl == 3 else 0.2
   send_time = sec_since_boot()
 
@@ -351,7 +356,11 @@ def main():
 
       while True:
 
-        ret = server.udp_recv(sock, sockWaitTime)
+        if navi_off:
+          time.sleep(sockWaitTime)
+          ret = False
+        else:
+          ret = server.udp_recv(sock, sockWaitTime)
 
         try:
           carState = messaging.recv_sock(sock_carState, wait=False)
