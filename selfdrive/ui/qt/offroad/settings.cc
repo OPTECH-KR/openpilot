@@ -849,7 +849,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   ToggleControl *cam_decel = new ToggleControl("카메라 감속", "과속카메라 앞에서 제한 속도까지 미리 줄입니다. 켜면 아래에 동작 설명이 나옵니다.", ROAD_ICON,
                                                std::atoi(Params().get("AutoNaviSpeedCtrl").c_str()) > 0, this);
   // shown right under '카메라 감속' while it is on: how it works with the navigation link and with the built-in DB
-  QLabel *cam_note = new QLabel("● 과속카메라 약 22초 전부터 설정 속도를 조금씩 내려서, 카메라 앞에서는 제한 속도 근처로 지나갑니다. "
+  QLabel *cam_note = new QLabel("● 과속카메라 앞 '감속 시작'에 정한 시간(처음 값 22초) 전부터 설정 속도를 조금씩 내려서, '감속 끝'(6초 전)까지 '목표 속도'(제한 속도의 105%)에 맞춥니다. "
                                 "구간단속은 구간이 끝날 때까지 제한 속도를 지킵니다.\n"
                                 "● 내비 연동(1~3): 내비 앱(APM)이나 차의 NDA가 보내는 카메라 정보를 먼저 쓰고, 정보가 없을 때는 내장 카메라 DB로 채웁니다.\n"
                                 "● 내장 카메라 DB만(0): 내비 앱 없이 기기 GPS와 전국 카메라 위치(약 3만 1천 대)로 찾습니다. "
@@ -857,24 +857,38 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
                                 "● '사용 방식'이 조향+가감속일 때만 속도를 줄입니다. GPS가 안 잡히면 동작하지 않습니다.");
   cam_note->setWordWrap(true);
   cam_note->setStyleSheet("font-size: 36px; color: #E0E0E0; background-color: #333333; border-radius: 10px; padding: 20px; margin: 10px 0px;");
-  cam_note->setVisible(std::atoi(Params().get("AutoNaviSpeedCtrl").c_str()) > 0);
-  QObject::connect(cam_decel, &ToggleControl::toggleFlipped, [=](bool cam_on) {
-    Params cam_params;
-    const int cam_mode = std::atoi(cam_params.get("OptechNaviLinkMode").c_str());
-    cam_params.put("AutoNaviSpeedCtrl", cam_on ? std::to_string((cam_mode >= 2 && cam_mode <= 3) ? cam_mode : 1) : "0");
-    cam_note->setVisible(cam_on);
-  });
-  cruiseToggles->addItem(cam_decel);
-  cruiseToggles->addItem(cam_note);
-  // 1. 카메라 알림  2. 내비 연동 방식  3. 내장 카메라 DB
-  cruiseToggles->addItem(new CValueControl("HapticFeedbackWhenSpeedCamera", "카메라 알림", "과속카메라가 가까워질 때 알려 주는 방법입니다. 0:사용 안 함, 1:핸들 진동, 2:계기판 표시, 3:HUD 표시", ROAD_ICON, 0, 3, 1));
+  // AutoNaviSpeedCtrlStart / End / SafetyFactor (cruise_helper reads them while driving: no reboot needed)
+  QList<QWidget*> cam_tune = {
+    new CValueControl("AutoNaviSpeedCtrlStart", "감속 시작 (초 전)", "카메라에 도착하기 몇 초 전부터 설정 속도를 줄이기 시작할지 정합니다. 클수록 일찍, 부드럽게 줄입니다. "
+                      "시속 100km에서 22초면 약 600m 앞입니다. 처음 값 22.", ROAD_ICON, 5, 60, 1),
+    new CValueControl("AutoNaviSpeedCtrlEnd", "감속 끝 (초 전)", "카메라에 도착하기 몇 초 전까지 목표 속도에 맞출지 정합니다. 클수록 카메라보다 일찍 목표 속도가 됩니다. "
+                      "처음 값 6.", ROAD_ICON, 0, 20, 1),
+    new CValueControl("AutoNaviSpeedSafetyFactor", "목표 속도 (제한 속도의 %)", "카메라 앞과 구간단속 안에서 제한 속도의 몇 %로 달릴지 정합니다. "
+                      "100이면 제한 속도 그대로, 105면 5% 더 빠르게 (제한 50km/h → 약 52km/h, 100km/h → 105km/h). "
+                      "단속 기준을 넘지 않게 주의하세요. 처음 값 105.", ROAD_ICON, 90, 120, 1),
+  };
+  // 1. 카메라 알림  2. 내비 연동 방식  3. 내장 카메라 DB: with the note and the tuning values they are shown only
+  // while '카메라 감속' is on; when it is off only '카메라 감속' is left in this section
+  CValueControl *cam_haptic = new CValueControl("HapticFeedbackWhenSpeedCamera", "카메라 알림", "과속카메라가 가까워질 때 알려 주는 방법입니다. 0:사용 안 함, 1:핸들 진동, 2:계기판 표시, 3:HUD 표시", ROAD_ICON, 0, 3, 1);
   CValueControl *navi_mode = new CValueControl("OptechNaviLinkMode", "내비 연동 방식", "카메라 정보를 어디서 받을지 정합니다.\n0:내비 안 씀 (내장 카메라 DB만, 내비 앱이 보내는 정보는 무시)\n1:APM(내비 앱)\n2:APM + 순정 내비게이션\n3:NDA\n'카메라 감속'이 켜져 있을 때 적용되고, 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 3, 1);
   QObject::connect(navi_mode, &CValueControl::valueChanged, [=](int cam_v) {
     Params cam_params;
     if (std::atoi(cam_params.get("AutoNaviSpeedCtrl").c_str()) > 0 && cam_v >= 0 && cam_v <= 3) cam_params.put("AutoNaviSpeedCtrl", std::to_string(cam_v == 0 ? 1 : cam_v));
   });
-  cruiseToggles->addItem(navi_mode);
-  cruiseToggles->addItem(new ParamControl("SpeedCamDB", "내장 카메라 DB", "내비 앱 없이 기기 GPS로 앞쪽 고정식 단속카메라(과속·신호과속·구간단속)를 찾습니다.\n전국 약 3만 1천 대(공공데이터)의 위치가 기기에 들어 있습니다. 구간단속은 구간이 끝날 때까지 제한속도를 지킵니다.\n\n● 함께 켜야 할 것: '카메라 감속' (끄면 화면에 CAM 표시만 나오고 속도는 줄이지 않습니다)\n● 안 되는 경우: 이동식 카메라, 새로 생긴 카메라 / GPS가 안 잡힐 때 / 스마트 크루즈가 없는 차(조향만 하는 차)\n● 주의: 반대 차로의 카메라에서도 속도를 줄일 수 있습니다. 내비 앱(APM)이 카메라 정보를 보내면 앱 정보를 먼저 씁니다.\n\n바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, this));
+  ParamControl *cam_db = new ParamControl("SpeedCamDB", "내장 카메라 DB", "내비 앱 없이 기기 GPS로 앞쪽 고정식 단속카메라(과속·신호과속·구간단속)를 찾습니다.\n전국 약 3만 1천 대(공공데이터)의 위치가 기기에 들어 있습니다. 구간단속은 구간이 끝날 때까지 제한속도를 지킵니다.\n\n● 함께 켜야 할 것: '카메라 감속' (끄면 화면에 CAM 표시만 나오고 속도는 줄이지 않습니다)\n● 안 되는 경우: 이동식 카메라, 새로 생긴 카메라 / GPS가 안 잡힐 때 / 스마트 크루즈가 없는 차(조향만 하는 차)\n● 주의: 반대 차로의 카메라에서도 속도를 줄일 수 있습니다. 내비 앱(APM)이 카메라 정보를 보내면 앱 정보를 먼저 씁니다.\n\n바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, this);
+  QList<QWidget*> cam_group = {cam_note};
+  cam_group += cam_tune;
+  cam_group += QList<QWidget*>{cam_haptic, navi_mode, cam_db};
+  const bool cam_shown = std::atoi(Params().get("AutoNaviSpeedCtrl").c_str()) > 0;
+  for (auto w : cam_group) w->setVisible(cam_shown);
+  QObject::connect(cam_decel, &ToggleControl::toggleFlipped, [=](bool cam_on) {
+    Params cam_params;
+    const int cam_mode = std::atoi(cam_params.get("OptechNaviLinkMode").c_str());
+    cam_params.put("AutoNaviSpeedCtrl", cam_on ? std::to_string((cam_mode >= 2 && cam_mode <= 3) ? cam_mode : 1) : "0");
+    for (auto w : cam_group) w->setVisible(cam_on);
+  });
+  cruiseToggles->addItem(cam_decel);
+  for (auto w : cam_group) cruiseToggles->addItem(w);
 
   // ---- 속도: cruise speed, camera / bump, accel ----
   speedToggles = new ListWidget(this);
