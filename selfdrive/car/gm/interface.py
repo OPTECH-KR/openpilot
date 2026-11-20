@@ -6,7 +6,7 @@ from panda import Panda
 from openpilot.common.conversions import Conversions as CV
 from openpilot.selfdrive.car import create_button_events, get_safety_config
 from openpilot.selfdrive.car.gm.radar_interface import RADAR_HEADER_MSG
-from openpilot.selfdrive.car.gm.values import CAR, CruiseButtons, CarControllerParams, EV_CAR, CAMERA_ACC_CAR, CanBus, CC_ONLY_CAR, GMFlags
+from openpilot.selfdrive.car.gm.values import CAR, CruiseButtons, CarControllerParams, EV_CAR, CAMERA_ACC_CAR, CanBus, CC_ONLY_CAR, GMFlags, ALT_ACC_CAR
 from openpilot.selfdrive.car.interfaces import CarInterfaceBase, TorqueFromLateralAccelCallbackType, FRICTION_THRESHOLD
 from openpilot.selfdrive.controls.lib.drive_helpers import get_friction
 
@@ -89,7 +89,7 @@ class CarInterface(CarInterfaceBase):
     ret.longitudinalTuning.kiBP = [0.]
 
     if candidate in CAMERA_ACC_CAR:
-      ret.experimentalLongitudinalAvailable = candidate not in CC_ONLY_CAR
+      ret.experimentalLongitudinalAvailable = candidate not in (CC_ONLY_CAR | ALT_ACC_CAR)
       ret.networkLocation = NetworkLocation.fwdCamera
       ret.radarUnavailable = True  # no radar
       ret.pcmCruise = True
@@ -262,6 +262,24 @@ class CarInterface(CarInterfaceBase):
       ret.steerRatio = 16.8
       ret.centerToFront = ret.wheelbase * 0.4
       ret.tireStiffnessFactor = 1.0
+      ret.steerActuatorDelay = 0.2
+      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+
+    # ---- optech: more camera-harness ACC cars (StarPilot specs, via optech-hkg) ----
+    elif candidate == CAR.TRAX:
+      ret.mass = 1365.
+      ret.wheelbase = 2.7
+      ret.steerRatio = 16.4
+      ret.centerToFront = ret.wheelbase * 0.4
+      ret.steerActuatorDelay = 0.46  # StarPilot
+      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+
+    elif candidate == CAR.SUBURBAN:
+      ret.minEnableSpeed = -1.  # engage speed is decided by the car's ACC (StarPilot ALT_ACCS)
+      ret.mass = 2731.
+      ret.wheelbase = 3.302
+      ret.steerRatio = 17.3
+      ret.centerToFront = ret.wheelbase * 0.49
       ret.steerActuatorDelay = 0.2
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 

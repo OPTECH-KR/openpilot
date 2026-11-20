@@ -76,6 +76,9 @@ class CAR(StrEnum):
   SILVERADO = "CHEVROLET SILVERADO 1500 2020"
   EQUINOX = "CHEVROLET EQUINOX 2019"
   TRAILBLAZER = "CHEVROLET TRAILBLAZER 2021"
+  # optech: camera harness, stock ACC (StarPilot CHEVROLET_TRAX / CHEVROLET_SUBURBAN_CAMERA); chosen in 차종 선택, no fingerprints
+  TRAX = "CHEVROLET TRAX 2024"
+  SUBURBAN = "CHEVROLET SUBURBAN 2016"
   # optech: cars without ACC (regular cruise only), camera harness; openpilot steers while the car's cruise is on.
   # No CAN fingerprints: chosen in OPTECH > 시작 > 차종 선택. Specs and tunes from StarPilot / FrogPilot (via optech-hkg).
   VOLT_CC = "CHEVROLET VOLT NO ACC"
@@ -131,6 +134,8 @@ CAR_INFO: Dict[str, Union[GMCarInfo, List[GMCarInfo]]] = {
   ],
   CAR.EQUINOX: GMCarInfo("Chevrolet Equinox 2019-22"),
   CAR.TRAILBLAZER: GMCarInfo("Chevrolet Trailblazer 2021-22"),
+  CAR.TRAX: GMCarInfo("Chevrolet Trax 2024-25"),
+  CAR.SUBURBAN: GMCarInfo("Chevrolet Suburban Premier 2016-20", "Adaptive Cruise Control (ACC) & LKAS"),
   CAR.VOLT_CC: GMCarInfo("Chevrolet Volt 2017-18 (no ACC)", "Regular cruise control"),
   CAR.BOLT_CC: GMCarInfo("Chevrolet Bolt EV 2017-21 (no ACC)", "Regular cruise control"),
   CAR.TRAILBLAZER_CC: GMCarInfo("Chevrolet Trailblazer 2021-22 (no ACC)", "Regular cruise control"),
@@ -179,7 +184,10 @@ CC_ONLY_CAR = {CAR.VOLT_CC, CAR.BOLT_CC, CAR.TRAILBLAZER_CC, CAR.EQUINOX_CC, CAR
                CAR.SUBURBAN_CC, CAR.YUKON_CC, CAR.CT6_CC, CAR.XT4_CC, CAR.XT5_CC}
 
 # We're integrated at the camera with VOACC on these cars (instead of ASCM w/ OBD-II harness)
-CAMERA_ACC_CAR = {CAR.BOLT_EUV, CAR.SILVERADO, CAR.EQUINOX, CAR.TRAILBLAZER} | CC_ONLY_CAR
+CAMERA_ACC_CAR = {CAR.BOLT_EUV, CAR.SILVERADO, CAR.EQUINOX, CAR.TRAILBLAZER, CAR.TRAX, CAR.SUBURBAN} | CC_ONLY_CAR
+
+# optech: different ACC status on the camera (StarPilot ALT_ACCS): stock ACC only, no openpilot longitudinal
+ALT_ACC_CAR = {CAR.SUBURBAN}
 
 
 class GMFlags(IntFlag):
