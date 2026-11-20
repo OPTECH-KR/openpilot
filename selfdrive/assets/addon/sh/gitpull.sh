@@ -12,7 +12,7 @@ BRANCH=$(git rev-parse --abbrev-ref HEAD)
 HASH=$(git rev-parse HEAD)
 /usr/bin/git fetch
 REMOTE_HASH=$(git rev-parse --verify origin/$BRANCH)
-# release branches (optech, optech-fd) are published as release commits and may be rewritten:
+# release branches (optech-hkg, optech-hkg-fd, optech-spst) are published as release commits and may be rewritten:
 # take the published code as it is instead of merging (git pull fails on rewritten history)
 if [ -n "$REMOTE_HASH" ]; then
   /usr/bin/git reset --hard origin/$BRANCH
