@@ -5,6 +5,7 @@ from openpilot.selfdrive.car.hyundai.hyundaicanfd import CanBus
 from openpilot.selfdrive.car.hyundai.values import HyundaiFlags, CAR, DBC, CANFD_CAR, CAMERA_SCC_CAR, CANFD_RADAR_SCC_CAR, \
                                          CANFD_UNSUPPORTED_LONGITUDINAL_CAR, EV_CAR, HYBRID_CAR, LEGACY_SAFETY_MODE_CAR, \
                                          UNSUPPORTED_LONGITUDINAL_CAR, Buttons
+from openpilot.selfdrive.car.hyundai.values import is_camera_scc, CAMERA_SCC_PARAM
 from openpilot.selfdrive.car.hyundai.radar_interface import RADAR_START_ADDR
 from openpilot.selfdrive.car import create_button_events, get_safety_config
 from openpilot.selfdrive.car.interfaces import CarInterfaceBase
@@ -283,7 +284,10 @@ class CarInterface(CarInterfaceBase):
     else:
       ret.longitudinalTuning.kpV = [0.5]
       ret.longitudinalTuning.kiV = [0.0]
-      ret.experimentalLongitudinalAvailable = candidate not in (UNSUPPORTED_LONGITUDINAL_CAR | CAMERA_SCC_CAR)
+      # optech: SCC on the camera side (remembered from an earlier drive)
+      if candidate not in CAMERA_SCC_CAR and Params().get_bool(CAMERA_SCC_PARAM):
+        ret.flags |= HyundaiFlags.CAMERA_SCC.value
+      ret.experimentalLongitudinalAvailable = candidate not in UNSUPPORTED_LONGITUDINAL_CAR and not is_camera_scc(ret)
     ret.openpilotLongitudinalControl = experimental_long and ret.experimentalLongitudinalAvailable
     ret.pcmCruise = not ret.openpilotLongitudinalControl
 
@@ -313,7 +317,7 @@ class CarInterface(CarInterfaceBase):
       if ret.flags & HyundaiFlags.CANFD_ALT_BUTTONS:
         ret.safetyConfigs[-1].safetyParam |= Panda.FLAG_HYUNDAI_CANFD_ALT_BUTTONS
 
-    if ret.flags & HyundaiFlags.CANFD_CAMERA_SCC or candidate in CAMERA_SCC_CAR:
+    if ret.flags & HyundaiFlags.CANFD_CAMERA_SCC or is_camera_scc(ret):
       ret.safetyConfigs[-1].safetyParam |= Panda.FLAG_HYUNDAI_CAMERA_SCC
     if ret.openpilotLongitudinalControl:
       ret.safetyConfigs[-1].safetyParam |= Panda.FLAG_HYUNDAI_LONG
@@ -357,6 +361,8 @@ class CarInterface(CarInterfaceBase):
     # Main button also can trigger an engagement on these cars
     allow_enable = any(btn in ENABLE_BUTTONS for btn in self.CS.cruise_buttons) or any(self.CS.main_buttons)
     events = self.create_common_events(ret, pcm_enable=self.CS.CP.pcmCruise, allow_enable=allow_enable)
+    if self.CS.scc_bus_changed:  # optech: SCC found on the other bus; saved, applies from the next start
+      events.add(EventName.dataNeededDEPRECATED)
 
     # low speed steer alert hysteresis logic (only for cars with steer cut off above 10 m/s)
     if ret.vEgo < (self.CP.minSteerSpeed + 2.) and self.CP.minSteerSpeed > 10.:

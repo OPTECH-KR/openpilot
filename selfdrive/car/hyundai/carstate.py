@@ -9,6 +9,8 @@ from opendbc.can.can_define import CANDefine
 from openpilot.selfdrive.car.hyundai.hyundaicanfd import CanBus
 from openpilot.selfdrive.car.hyundai.values import HyundaiFlags, CAR, DBC, CAN_GEARS, CAMERA_SCC_CAR, \
                                                    CANFD_CAR, EV_CAR, HYBRID_CAR, Buttons, CarControllerParams
+from openpilot.selfdrive.car.hyundai.values import is_camera_scc, CAMERA_SCC_PARAM
+from openpilot.common.params import put_bool_nonblocking
 from openpilot.selfdrive.car.interfaces import CarStateBase
 
 PREV_BUTTON_SAMPLES = 8
@@ -19,6 +21,9 @@ STANDSTILL_THRESHOLD = 12 * 0.03125 * CV.KPH_TO_MS
 class CarState(CarStateBase):
   def __init__(self, CP):
     super().__init__(CP)
+    self.camera_scc = is_camera_scc(CP)
+    self.scc_wrong_frames = 0
+    self.scc_bus_changed = False
     can_define = CANDefine(DBC[CP.carFingerprint]["pt"])
 
     self.cruise_buttons = deque([Buttons.NONE] * PREV_BUTTON_SAMPLES, maxlen=PREV_BUTTON_SAMPLES)
@@ -52,12 +57,29 @@ class CarState(CarStateBase):
 
     self.params = CarControllerParams(CP)
 
+  # optech: where does the SCC really come from? While fingerprinting (relay open) both buses show it, so this is
+  # checked on the road: SCC11 fresh on one side only for 3 s -> remember it for the next start (the panda's safety
+  # mode is set at start). scc_bus_changed asks for a restart (alert in interface).
+  def check_scc_bus(self, cp, cp_cam):
+    if self.CP.carFingerprint in CANFD_CAR or self.CP.openpilotLongitudinalControl or self.CP.carFingerprint in CAMERA_SCC_CAR:
+      return
+    now = cp.ts_nanos["WHL_SPD11"]["WHL_SPD_FL"]
+    expected, other = (cp_cam, cp) if self.camera_scc else (cp, cp_cam)
+    exp_age = now - expected.ts_nanos["SCC11"]["MainMode_ACC"]
+    oth_age = now - other.ts_nanos["SCC11"]["MainMode_ACC"]
+    wrong_side = now > 0 and exp_age > 1e9 and oth_age < 2e8
+    self.scc_wrong_frames = self.scc_wrong_frames + 1 if wrong_side else 0
+    if self.scc_wrong_frames == 300 and not self.scc_bus_changed:  # 3 s at 100 Hz
+      self.scc_bus_changed = True
+      put_bool_nonblocking(CAMERA_SCC_PARAM, not self.camera_scc)
+
   def update(self, cp, cp_cam):
     if self.CP.carFingerprint in CANFD_CAR:
       return self.update_canfd(cp, cp_cam)
 
     ret = car.CarState.new_message()
-    cp_cruise = cp_cam if self.CP.carFingerprint in CAMERA_SCC_CAR else cp
+    cp_cruise = cp_cam if self.camera_scc else cp
+    self.check_scc_bus(cp, cp_cam)
     self.is_metric = cp.vl["CLU11"]["CF_Clu_SPEED_UNIT"] == 0
     speed_conv = CV.KPH_TO_MS if self.is_metric else CV.MPH_TO_MS
 
@@ -267,13 +289,15 @@ class CarState(CarStateBase):
       ("SAS11", 100),
     ]
 
-    if not CP.openpilotLongitudinalControl and CP.carFingerprint not in CAMERA_SCC_CAR:
+    if not CP.openpilotLongitudinalControl and not is_camera_scc(CP):
       messages += [
         ("SCC11", 50),
         ("SCC12", 50),
       ]
       if CP.flags & HyundaiFlags.USE_FCA.value:
         messages.append(("FCA11", 50))
+    elif not CP.openpilotLongitudinalControl:
+      messages.append(("SCC11", 0))  # optech: only to notice the SCC moving back to this side (check_scc_bus)
 
     if CP.enableBsm:
       messages.append(("LCA11", 50))
@@ -306,7 +330,7 @@ class CarState(CarStateBase):
       ("LKAS11", 100)
     ]
 
-    if not CP.openpilotLongitudinalControl and CP.carFingerprint in CAMERA_SCC_CAR:
+    if not CP.openpilotLongitudinalControl and is_camera_scc(CP):
       messages += [
         ("SCC11", 50),
         ("SCC12", 50),
@@ -314,6 +338,8 @@ class CarState(CarStateBase):
 
       if CP.flags & HyundaiFlags.USE_FCA.value:
         messages.append(("FCA11", 50))
+    elif not CP.openpilotLongitudinalControl:
+      messages.append(("SCC11", 0))  # optech: only to notice an SCC on the camera side (check_scc_bus)
 
     return CANParser(DBC[CP.carFingerprint]["pt"], messages, 2)
 

@@ -243,6 +243,7 @@ std::unordered_map<std::string, uint32_t> keys = {
     {"BoltPedal", PERSISTENT},
     {"BoltPedalMax", PERSISTENT},
     {"BoltYear2017", PERSISTENT},
+    {"OptechHkgCameraScc", PERSISTENT},
     {"dp_long_use_df_tune", PERSISTENT},
     {"dp_long_de2e", PERSISTENT},
     {"dp_mapd_vision_turn_control", PERSISTENT},

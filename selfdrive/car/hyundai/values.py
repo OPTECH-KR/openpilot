@@ -65,6 +65,8 @@ class HyundaiFlags(IntFlag):
   SEND_LFA = 128
   USE_FCA = 256
   CANFD_HDA2_ALT_STEERING = 512
+  # optech: CAN car whose SCC comes from the camera side (bus 2), found on the road and remembered (OptechHkgCameraScc)
+  CAMERA_SCC = 1024
 
 
 class CAR(StrEnum):
@@ -497,6 +499,13 @@ CANFD_UNSUPPORTED_LONGITUDINAL_CAR = {CAR.IONIQ_6, CAR.KONA_EV_2ND_GEN}
 
 # The camera does SCC on these cars, rather than the radar
 CAMERA_SCC_CAR = {CAR.KONA_EV_2022, }
+
+# optech: param remembered by carstate when the SCC was seen only on the camera side (CAN cars, stock longitudinal)
+CAMERA_SCC_PARAM = "OptechHkgCameraScc"
+
+
+def is_camera_scc(CP):
+  return CP.carFingerprint in CAMERA_SCC_CAR or bool(CP.flags & HyundaiFlags.CAMERA_SCC)
 
 # these cars use a different gas signal
 HYBRID_CAR = {CAR.IONIQ_PHEV, CAR.ELANTRA_HEV_2021, CAR.KIA_NIRO_PHEV, CAR.KIA_NIRO_HEV_2021, CAR.SONATA_HYBRID, CAR.KONA_HEV, CAR.IONIQ,

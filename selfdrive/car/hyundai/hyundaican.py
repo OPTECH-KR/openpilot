@@ -95,7 +95,7 @@ def create_lkas11(packer, frame, car_fingerprint, apply_steer, steer_req,
   return packer.make_can_msg("LKAS11", 0, values)
 
 
-def create_clu11(packer, frame, clu11, button, car_fingerprint):
+def create_clu11(packer, frame, clu11, button, car_fingerprint, camera_scc=False):
   values = {s: clu11[s] for s in [
     "CF_Clu_CruiseSwState",
     "CF_Clu_CruiseSwMain",
@@ -113,7 +113,7 @@ def create_clu11(packer, frame, clu11, button, car_fingerprint):
   values["CF_Clu_CruiseSwState"] = button
   values["CF_Clu_AliveCnt1"] = frame % 0x10
   # send buttons to camera on camera-scc based cars
-  bus = 2 if car_fingerprint in CAMERA_SCC_CAR else 0
+  bus = 2 if (car_fingerprint in CAMERA_SCC_CAR or camera_scc) else 0
   return packer.make_can_msg("CLU11", bus, values)
 
 
