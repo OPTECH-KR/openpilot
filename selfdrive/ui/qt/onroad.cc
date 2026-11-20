@@ -487,6 +487,7 @@ AnnotatedCameraWidget::AnnotatedCameraWidget(VisionStreamType type, QWidget* par
   dm_img = loadPixmap("../assets/img_driver_face.png", {img_size + 5, img_size + 5});
   #endif
   dp_no_gps_ctrl = Params().getBool("dp_no_gps_ctrl");
+  speed_bg_img = loadPixmap("../assets/images/speed_bg.png", {350, 150}, Qt::IgnoreAspectRatio);
 }
 
 void AnnotatedCameraWidget::updateState(const UIState &s) {
@@ -581,9 +582,52 @@ void AnnotatedCameraWidget::updateState(const UIState &s) {
   }
   // laneline mode
   setProperty("use_lanelines", sm["lateralPlan"].getLateralPlan().getUseLaneLines());
+
+  // OPTECH speed box data
+  if (sm.frame % UI_FREQ == 0) {  // params once a second
+    Params op_params;
+    optech_hud = op_params.getBool("OptechHud");
+    optech_show_dev = op_params.getBool("OptechShowDeviceState");
+    optech_personality = std::atoi(op_params.get("LongitudinalPersonality").c_str());
+    optech_accel_profile = std::atoi(op_params.get("dp_long_accel_profile").c_str());
+  }
+  optech_long = s.scene.longitudinal_control;
+  switch (car_state.getGearShifter()) {
+    case cereal::CarState::GearShifter::PARK: optech_gear = "P"; break;
+    case cereal::CarState::GearShifter::DRIVE: optech_gear = "D"; break;
+    case cereal::CarState::GearShifter::NEUTRAL: optech_gear = "N"; break;
+    case cereal::CarState::GearShifter::REVERSE: optech_gear = "R"; break;
+    case cereal::CarState::GearShifter::SPORT: optech_gear = "S"; break;
+    case cereal::CarState::GearShifter::LOW: optech_gear = "L"; break;
+    case cereal::CarState::GearShifter::BRAKE: optech_gear = "B"; break;
+    case cereal::CarState::GearShifter::ECO: optech_gear = "E"; break;
+    case cereal::CarState::GearShifter::UNKNOWN: optech_gear = "U"; break;
+    default: optech_gear = "M"; break;
+  }
+  optech_gps_alive = sm.alive("gpsLocationExternal");
+  if (optech_gps_alive) {
+    const auto gps = sm["gpsLocationExternal"].getGpsLocationExternal();
+    optech_gps_fix = gps.getFlags() & 1;
+    optech_gps_speed = std::max(gps.getSpeed(), 0.0f) * (s.scene.is_metric ? MS_TO_KPH : MS_TO_MPH);
+  }
+  if (optech_show_dev && sm.updated("deviceState")) {
+    const auto ds = sm["deviceState"].getDeviceState();
+    const auto temps = ds.getCpuTempC();
+    float t = 0;
+    for (auto c : temps) t += c;
+    optech_cpu_temp = temps.size() > 0 ? t / temps.size() : 0;
+    const auto uses = ds.getCpuUsagePercent();
+    int u = 0;
+    for (auto c : uses) u += c;
+    optech_cpu_use = uses.size() > 0 ? u / (int)uses.size() : 0;
+  }
 }
 
 void AnnotatedCameraWidget::drawHud(QPainter &p) {
+  if (optech_hud) {
+    drawOptechHud(p);
+    return;
+  }
   p.save();
 
   // Header gradient
@@ -686,6 +730,114 @@ void AnnotatedCameraWidget::drawHud(QPainter &p) {
     drawIcon(p, QPoint(x, y), dm_img, blackColor(70), dmActive ? 1.0 : 0.2);
   }
 
+  p.restore();
+}
+
+// ---- OPTECH speed box: same layout as optech-hkg's lower-left box (paint.cc carrot_hud_*) ----
+
+static void optech_box(QPainter &p, float x, float y, float w, float h, const QColor &fill, float radius, float line) {
+  p.setPen(line > 0 ? QPen(QColor(255, 255, 255, 255), line) : QPen(Qt::NoPen));
+  p.setBrush(fill);
+  p.drawRoundedRect(QRectF(x, y, w, h), radius, radius);
+}
+
+// text centered on cx with its bottom at `bottom` (like NanoVG CENTER|BOTTOM), with a dark shadow
+static void optech_text(QPainter &p, float cx, float bottom, const QString &text, int px, const QColor &color) {
+  p.setFont(InterFont(px, QFont::Bold));
+  const QRectF r(cx - 400, bottom - px * 1.4, 800, px * 1.4);
+  p.setPen(QColor(0, 0, 0, 200));
+  p.drawText(r.translated(3, 3), Qt::AlignHCenter | Qt::AlignBottom, text);
+  p.setPen(color);
+  p.drawText(r, Qt::AlignHCenter | Qt::AlignBottom, text);
+}
+
+void AnnotatedCameraWidget::drawOptechHud(QPainter &p) {
+  p.save();
+  optech_blink = (optech_blink + 1) % 16;
+  const bool blink_on = optech_blink <= 8;
+  const QColor white(255, 255, 255, 255);
+  const QColor green(0, 255, 0, 255);
+
+  // anchor: speed center line, lower-left corner (optech-hkg: x = 140, y = fb_h - 230)
+  const int bx = 140;
+  const int by = height() - 230;
+
+  // background box (+ CPU / FPS tiles above the speed when 기기 상태 is on)
+  const QColor bg(0, 0, 0, 90);
+  if (optech_show_dev) optech_box(p, bx - 120, by - 270, 475, 495, bg, 15, 2);
+  else                 optech_box(p, bx - 120, by - 130, 475, 355, bg, 15, 2);
+  if (optech_show_dev) {
+    const QColor tile_ok(0, 255, 0, 190), tile_hot(255, 0, 0, 255);
+    const int dx = bx - 35, dy = by - 200;
+    const int xs[3] = {dx, dx + 150, dx + 300};
+    const QString labels[3] = {"CPU온도", "CPU사용", "FPS"};
+    const QString vals[3] = {QString::number((int)std::round(optech_cpu_temp)), QString::number(optech_cpu_use) + "%",
+                             QString::number((int)std::round(optech_fps))};
+    const bool hot[3] = {optech_cpu_temp > 80, optech_cpu_use > 90, optech_fps > 0 && optech_fps < 15};
+    for (int i = 0; i < 3; i++) {
+      optech_box(p, xs[i] - 65, dy - 38, 130, 90, (hot[i] && blink_on) ? tile_hot : tile_ok, 7, 2);
+      optech_text(p, xs[i], dy - 5, labels[i], 25, white);
+      optech_text(p, xs[i], dy + 40, vals[i], 40, white);
+    }
+  }
+
+  // current speed on the speed plate
+  optech_text(p, bx, by + 50, QString::number((int)std::nearbyint(speed)), 120, white);
+  p.drawPixmap(bx - 100, by - 60, speed_bg_img);
+
+  // set speed (green), "--" while cruise is not set
+  optech_text(p, bx + 170, by + 15, is_cruise_set ? QString::number((int)std::nearbyint(setSpeed)) : "--", 60, green);
+
+  // acceleration profile tile (연비 / 일반 / 고속) + GPS speed above it; only with openpilot longitudinal
+  QString mode_text;
+  QColor mode_color;
+  if (optech_long) {
+    switch (optech_accel_profile) {
+      case 1: mode_text = "연비"; mode_color = QColor(0, 255, 0, 200); break;
+      case 2: mode_text = "일반"; mode_color = QColor(128, 128, 128, 210); break;
+      case 3: mode_text = "고속"; mode_color = QColor(255, 0, 0, 200); break;
+    }
+  }
+  const int mx = bx - 50, my = by + 175;
+  if (!mode_text.isEmpty()) {
+    optech_box(p, mx - 55, my - 38, 110, 48, mode_color, 6, 2);
+    optech_text(p, mx, my - 2, mode_text, 32, white);
+  }
+  if (optech_gps_alive) {
+    if (optech_gps_fix) optech_text(p, mx, my - 45, "GPS " + QString::number((int)(optech_gps_speed + 0.5f)), 30, green);
+    else                optech_text(p, mx, my - 45, "GPS --", 30, QColor(170, 170, 170, 255));
+  }
+
+  // following distance: number + bars (relaxed = 3 bars ... aggressive = 1); only with openpilot longitudinal
+  if (optech_long) {
+    const int gap = std::clamp(optech_personality, 0, 2) + 1;
+    optech_text(p, bx + 220, by + 77, QString::number(gap), 40, white);
+    const float ddy = 80.0f / 4.0f;
+    for (int i = 0; i < gap; i++) {
+      optech_box(p, bx + 270, by + 185 - ddy * (i + 1) + 2, 70, ddy - 2, QColor(0, 255, 0, 210), 1, 2);
+    }
+  }
+
+  // gear
+  const int gx = bx + 305, gy = by + 60;
+  optech_box(p, gx - 35, gy - 70, 70, 80, QColor(0, 255, 0, 210), 7, 3);
+  optech_text(p, gx, gy + 5, optech_gear, 70, white);
+
+  // speed limit (map data), red when over
+  if (speedLimit > 1) {
+    const int lx = bx + 75, ly = by + 175;
+    const int limit = (int)std::nearbyint(speedLimit);
+    const QColor lcolor = speed > limit + 2 ? QColor(255, 0, 0, 210) : QColor(255, 255, 255, 210);
+    optech_text(p, lx, ly - 45, "LIMIT", 30, white);
+    optech_box(p, lx - 55, ly - 38, 110, 48, lcolor, 6, 2);
+    optech_text(p, lx, ly, QString::number(limit), 40, speed > limit + 2 ? white : QColor(0, 0, 0, 255));
+  }
+
+  // driver monitoring icon: top left (the speed box owns the lower-left corner)
+  if (!hideBottomIcons) {
+    const int offset = UI_BORDER_SIZE + btn_size / 2;
+    drawIcon(p, QPoint(offset, offset), dm_img, blackColor(70), dmActive ? 1.0 : 0.2);
+  }
   p.restore();
 }
 
@@ -1039,6 +1191,7 @@ void AnnotatedCameraWidget::paintGL() {
   double cur_draw_t = millis_since_boot();
   double dt = cur_draw_t - prev_draw_t;
   double fps = fps_filter.update(1. / dt * 1000);
+  optech_fps = fps;
   if (fps < 15) {
     LOGW("slow frame rate: %.2f fps", fps);
   }
@@ -1100,6 +1253,7 @@ void AnnotatedCameraWidget::paintGL() {
   double cur_draw_t = millis_since_boot();
   double dt = cur_draw_t - prev_draw_t;
   double fps = fps_filter.update(1. / dt * 1000);
+  optech_fps = fps;
   if (fps < 15) {
     LOGW("slow frame rate: %.2f fps", fps);
   }

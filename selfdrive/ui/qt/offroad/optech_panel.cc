@@ -145,6 +145,11 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
          "카메라로 앞 도로의 굽은 정도를 보고 커브에 맞는 속도로 미리 줄입니다.");
 
   // ======== 화면 ========
+  disp->addItem(optech_section("주행 화면"));
+  toggle(disp, "OptechHud", "OPTECH 속도 상자",
+         "왼쪽 아래에 optech-hkg와 같은 속도 상자(현재 속도, 설정 속도, 기어, 차간거리, GPS 속도)를 보여 줍니다. 끄면 원래 화면(위쪽 가운데 속도)으로 돌아갑니다.");
+  toggle(disp, "OptechShowDeviceState", "기기 상태",
+         "속도 상자 위에 CPU 온도, CPU 사용률, 화면 FPS를 보여 줍니다. 너무 높으면 빨갛게 깜빡입니다.");
   disp->addItem(optech_section("화면 버튼"));
   toggle(disp, "dp_long_personality_btn", "주행 성향 버튼",
          "주행 화면에 주행 성향(차간거리 성향) 버튼을 보여 줍니다.");

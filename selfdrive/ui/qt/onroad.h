@@ -186,6 +186,23 @@ protected:
   FirstOrderFilter fps_filter;
   const int radius = 192;
 
+  // OPTECH speed box (same layout as optech-hkg's lower-left box)
+  void drawOptechHud(QPainter &p);
+  bool optech_hud = true;          // param OptechHud
+  bool optech_show_dev = false;    // param OptechShowDeviceState
+  bool optech_long = false;        // openpilot longitudinal (gap / accel profile only mean something then)
+  int optech_personality = 1;      // LongitudinalPersonality 0 aggressive .. 2 relaxed
+  int optech_accel_profile = 0;    // dp_long_accel_profile 0 OP, 1 ECO, 2 NOR, 3 SPT
+  QString optech_gear = "P";
+  bool optech_gps_fix = false;
+  bool optech_gps_alive = false;
+  float optech_gps_speed = 0;
+  float optech_cpu_temp = 0;
+  int optech_cpu_use = 0;
+  float optech_fps = 0;
+  int optech_blink = 0;
+  QPixmap speed_bg_img;
+
   //dp
   void drawKnightScanner(QPainter &p);
 };

@@ -69,6 +69,8 @@ def manager_init() -> None:
     ("dp_car_dashcam_mode_removal", "0"),
     ("dp_device_enable_comma_registration", "0"),
     ("dp_long_accel_profile", "0"),
+    ("OptechHud", "1"),
+    ("OptechShowDeviceState", "0"),
     ("dp_long_use_df_tune", "0"),
     ("dp_long_de2e", "0"),
     ("dp_mapd_vision_turn_control", "0"),
