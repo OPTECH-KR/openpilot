@@ -77,7 +77,8 @@ procs = [
   PythonProcess("radard", "selfdrive.controls.radard"),
   PythonProcess("thermald", "selfdrive.thermald.thermald", offroad=True),
   PythonProcess("tombstoned", "selfdrive.tombstoned", enabled=not PC, offroad=True),
-  PythonProcess("updated", "selfdrive.updated", enabled=not PC, onroad=False, offroad=True),
+  # optech: comma's updater is off on C2; the software page checks and pulls with git (selfdrive/assets/addon/sh)
+  PythonProcess("updated", "selfdrive.updated", enabled=False, onroad=False, offroad=True),
   # PythonProcess("uploader", "selfdrive.loggerd.uploader", offroad=True),
   # PythonProcess("statsd", "selfdrive.statsd", offroad=True),
 

@@ -123,6 +123,14 @@ def manager_init() -> None:
   params.put("TermsVersion", terms_version)
   params.put("TrainingVersion", training_version)
   params.put("GitCommit", get_commit(default=""))
+  # optech: release date of the code (Korea time), shown as 브랜치 커밋 on the software page
+  try:
+    commit_date = subprocess.check_output(["git", "log", "-1", "--format=%cd", "--date=format-local:%Y-%m-%d %H:%M:%S"],
+                                          cwd=BASEDIR, encoding="utf8", stderr=subprocess.DEVNULL,
+                                          env=dict(os.environ, TZ="KST-9")).strip()
+  except Exception:
+    commit_date = ""
+  params.put("GitCommitDate", commit_date)
   params.put("GitBranch", get_short_branch(default=""))
   params.put("GitRemote", get_origin(default=""))
   params.put_bool("IsTestedBranch", is_tested_branch())

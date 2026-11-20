@@ -120,6 +120,8 @@ std::unordered_map<std::string, uint32_t> keys = {
     {"ForcePowerDown", PERSISTENT},
     {"GitBranch", PERSISTENT},
     {"GitCommit", PERSISTENT},
+    {"GitCommitRemote", PERSISTENT},
+    {"GitCommitDate", PERSISTENT},
     {"GitDiff", PERSISTENT},
     {"GithubSshKeys", PERSISTENT},
     {"GithubUsername", PERSISTENT},
