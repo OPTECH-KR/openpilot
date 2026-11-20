@@ -123,7 +123,8 @@ def manager_init() -> None:
     ("AutoNaviSpeedCtrlEnd", "6"),
     ("AutoNaviSpeedBumpDist", "10"),
     ("AutoNaviSpeedBumpSpeed", "35"),
-    ("AutoNaviSpeedSafetyFactor", "105"),
+    ("AutoNaviSpeedSafetyFactor", "100"),
+    ("OptechBrakeResumeMode", "1"),
     ("AutoNaviSpeedDecelRate", "80"),
     ("AutoRoadLimitCtrl", "0"),
     ("AutoResumeFromBrakeRelease", "1"),
@@ -233,8 +234,8 @@ def manager_init() -> None:
   # settings removed from the menu (4-tab cleanup): keep them at their defaults so they can't get stuck
   for k, v in (("MixRadarInfo", "0"), ("CarrotRadar", "0"), ("CarrotCutInPredecel", "0"), ("CarrotStoppingLead", "0"),
                ("AutoCurveSpeedFactorIn", "10"), ("CarrotTurnAccel", "0"),
-               ("AutoNaviSpeedCtrlStart", "22"), ("AutoNaviSpeedCtrlEnd", "6"), ("AutoNaviSpeedDecelRate", "80"),
-               ("AutoNaviSpeedSafetyFactor", "105"), ("AutoNaviSpeedCtrlMode", "0"), ("AutoNaviSpeedBumpDist", "10"),
+               ("AutoNaviSpeedDecelRate", "80"),
+               ("AutoNaviSpeedCtrlMode", "0"), ("AutoNaviSpeedBumpDist", "10"),
                ("AutoTurnControl", "0"), ("AutoTurnControlSpeedLaneChange", "60"), ("AutoTurnControlSpeedTurn", "20"),
                ("AutoTurnControlTurnEnd", "3"),
                ("LongitudinalTuningKpV", "100"), ("LongitudinalTuningKiV", "200"), ("LongitudinalTuningKf", "100"),
@@ -247,6 +248,14 @@ def manager_init() -> None:
                # brake release resume is done by cruise_helper (EngageWithLong): the old apilot conditions are off
                ("AutoResumeFromBrakeRelease", "0"), ("BrakeResumeSpeedMode", "1")):  # GPS is always the phone built-in one; the selector is removed  # screen mode fixed to the carrot HUD box; the selector is removed
     params.put(k, v)
+
+  # optech: 감속 시작 / 감속 끝 / 목표 속도 are menu settings again (주행 > 카메라 감속); they used to be reset here on
+  # every boot. Once: start them at 22 s / 6 s / 100 % (driver feedback: pass the camera at the posted limit)
+  if params.get("OptechCamTuneSet") is None:
+    params.put("AutoNaviSpeedCtrlStart", "22")
+    params.put("AutoNaviSpeedCtrlEnd", "6")
+    params.put("AutoNaviSpeedSafetyFactor", "100")
+    params.put("OptechCamTuneSet", "1")
 
   # is this dashcam?
   if os.getenv("PASSIVE") is not None:
