@@ -323,8 +323,9 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
     "이동식·새 카메라는 모르고, 반대 차로의 카메라에도 줄일 수 있습니다.\n"
     "● openpilot이 가감속을 맡는 차량만 속도를 줄입니다. 차의 순정 크루즈를 쓰는 차량은 화면에 CAM 표시만 됩니다. GPS가 안 잡히면 동작하지 않습니다.");
   cam_note->setStyleSheet("font-size: 36px; color: #E0E0E0; background-color: #333333; border-radius: 10px; padding: 20px; margin: 10px 0px;");
-  cam_note->setVisible(params.getBool("OptechSpeedCamDecel"));
   drive->addItem(cam_note);
+  // only after it is in the list: a parentless widget shown would open as its own window and crash the C2 UI
+  cam_note->setVisible(params.getBool("OptechSpeedCamDecel"));
   QObject::connect(cam_decel, &ToggleControl::toggleFlipped, [=](bool on) { cam_note->setVisible(on); });
   toggle(drive, "OptechSpeedCam", "내장 카메라 DB",
          "내비 앱 없이 기기 GPS로 앞쪽 고정식 단속카메라(과속·신호과속·구간단속)를 찾아 화면 속도 상자에 'CAM'으로 보여 줍니다. "
