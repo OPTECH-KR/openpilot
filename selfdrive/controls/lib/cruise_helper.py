@@ -136,6 +136,8 @@ class CruiseHelper:
     # brake release resume while moving: 0 = set speed becomes the current speed, 1 = back to the set speed before braking
     self.brakeResumeSpeedMode = int(Params().get("BrakeResumeSpeedMode", encoding="utf8") or 1)
     self.v_cruise_before_brake = 0.0
+    # optech '브레이크 후 다시 켜기' (주행 > 브레이크): 0 the set speed from before braking, 1 the current speed, 2 not at all
+    self.optechBrakeResumeMode = self.read_brake_resume_mode()
     self.brake_paused = False  # speed control paused by the brake (resumes when the brake is off, see below)
     self.autoSyncCruiseSpeedMax = int(Params().get("AutoSyncCruiseSpeedMax"))
     self.autoResumeFromBrakeReleaseDist = float(int(Params().get("AutoResumeFromBrakeReleaseDist", encoding="utf8")))
@@ -187,6 +189,7 @@ class CruiseHelper:
         self.autoResumeFromGas = int(Params().get("AutoResumeFromGas", encoding="utf8"))
         self.autoResumeFromBrakeRelease = Params().get_bool("AutoResumeFromBrakeRelease")
         self.brakeResumeSpeedMode = int(Params().get("BrakeResumeSpeedMode", encoding="utf8") or 1)
+        self.optechBrakeResumeMode = self.read_brake_resume_mode()
       elif self.update_params_count == 5:
         self.autoSyncCruiseSpeedMax = int(Params().get("AutoSyncCruiseSpeedMax"))
         self.autoResumeFromBrakeReleaseDist = float(int(Params().get("AutoResumeFromBrakeReleaseDist", encoding="utf8")))
@@ -662,6 +665,14 @@ class CruiseHelper:
   #   - 너무빠르다고 생각하여 속도를 줄였다.  -> 설정속도(40) 이상에서 -> cruiseON
   #
   #
+  @staticmethod
+  def read_brake_resume_mode():
+    try:
+      v = int(Params().get("OptechBrakeResumeMode", encoding="utf8") or 1)
+    except (TypeError, ValueError):
+      v = 1
+    return v if v in (0, 1, 2) else 1
+
   def brake_resume_speed(self):
     """Set speed for a brake-release resume while moving (see BrakeResumeSpeedMode)."""
     if self.brakeResumeSpeedMode == 1 and self.v_cruise_before_brake > 0:
@@ -926,10 +937,17 @@ class CruiseHelper:
       # C2 port ('사용 방식' 조향+가감속): speed control paused by the brake comes back, at the set speed from before
       # braking, as soon as the brake is off: right away when moving (>= 10 km/h) or behind a lead within 10 m; from a
       # stop without a lead, once the driver has driven off past 10 km/h and is off the gas (no launch from a stop)
-      if self.engageWithLong and self.brake_paused and longActiveUser <= 0 and not brakePressed and not CS.gasPressed:
+      # optech '브레이크 후 다시 켜기': 1 (default) keeps the speed the driver braked down to (from 30 km/h; slower, e.g.
+      # creeping behind a lead, the set speed from before braking), 0 the set speed from before braking, 2 never (RES / + button)
+      if self.engageWithLong and self.brake_paused and longActiveUser <= 0 and not brakePressed and not CS.gasPressed \
+         and self.optechBrakeResumeMode != 2:
         if self.v_ego_kph >= 10 or 0 < self.dRel < 10:
           longActiveUser = 3
-          v_cruise_kph = self.v_cruise_before_brake if self.v_cruise_before_brake > 0 else self.v_ego_kph_set
+          before = self.v_cruise_before_brake if self.v_cruise_before_brake > 0 else self.v_ego_kph_set
+          if self.optechBrakeResumeMode == 1 and self.v_ego_kph >= 30:
+            v_cruise_kph = self.v_ego_kph_set
+          else:
+            v_cruise_kph = before
       if longActiveUser > 0:
         self.brake_paused = False
 

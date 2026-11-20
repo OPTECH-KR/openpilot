@@ -33,6 +33,10 @@ def process_hud_alert(enabled, fingerprint, hud_control):
     sys_state = 5
   elif hud_control.rightLaneVisible:
     sys_state = 6
+  # optech (K7 HEV HUD feedback): while openpilot is off show no lane lines, not lines that come and go with the model's
+  # lane visibility (lane departure warnings still show)
+  if not enabled and not sys_warning:
+    sys_state = 1
 
   # initialize to no warnings
   left_lane_warning = 0
