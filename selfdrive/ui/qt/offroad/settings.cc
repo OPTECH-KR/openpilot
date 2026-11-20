@@ -586,55 +586,9 @@ SettingsWindow::SettingsWindow(QWidget *parent) : QFrame(parent) {
 
   sidebar_widget->setFixedWidth(400);
   main_layout->addWidget(sidebar_widget);
-//  main_layout->addWidget(panel_widget);
 
-  // car selection panel
-  // create a button
-  QString car_selected = QString::fromUtf8((Params().get("dp_car_assigned")).c_str());
-
-  // Create a QLabel for the "Vehicle Model:" label
-  QLabel* vehicle_model_label = new QLabel(tr("Vehicle Model:"));
-  vehicle_model_label->setStyleSheet("margin-right: 2px; font-size: 40px;"); // Adjust the margin if needed
-
-  // Create the QPushButton
-  QPushButton* car_selection_btn = new QPushButton(car_selected == "" ? tr("[AUTO SELECT]") : car_selected);
-  car_selection_btn->setObjectName("carSelectionBtn");
-  car_selection_btn->setStyleSheet("background-color: #22A0DC; font-size: 40px;");
-
-  // Create a QHBoxLayout to arrange the label and button horizontally
-  QHBoxLayout* layout = new QHBoxLayout;
-  layout->addWidget(vehicle_model_label);
-  layout->addWidget(car_selection_btn);
-  layout->setAlignment(Qt::AlignCenter);
-  layout->setStretch(1, 1); // Stretch the second item (car_selection_btn) to occupy available space
-
-  // Create the panel widget and add the layout
-  QWidget* dp_panel_widget = new QWidget;
-  QVBoxLayout* dp_panel_widget_layout = new QVBoxLayout;
-  dp_panel_widget->setContentsMargins(QMargins());
-  dp_panel_widget_layout->addSpacing(10);
-  dp_panel_widget_layout->addLayout(layout); // Add the QHBoxLayout to the vertical layout
-
-  // Create the scroll panel
-  auto carSelectionPanel = new CarSelectionPanel(this);
-  ScrollView* panel_frame = new ScrollView(carSelectionPanel, dp_panel_widget);
-  panel_widget->addWidget(panel_frame);
-  QObject::connect(car_selection_btn, &QPushButton::clicked, [=, w = panel_frame]() {
-      car_selection_btn->setChecked(true);
-      panel_widget->setCurrentWidget(w);
-  });
-
-  dp_panel_widget_layout->addSpacing(10);
-  dp_panel_widget_layout->addWidget(panel_widget);
-  dp_panel_widget->setLayout(dp_panel_widget_layout);
-
-  main_layout->addWidget(dp_panel_widget);
-
-  // Update the button text when a car is selected
-  connect(carSelectionPanel, &CarSelectionPanel::carSelected, [=]() {
-      QString selectedCarModel = QString::fromStdString(Params().get("dp_car_assigned"));
-      car_selection_btn->setText(selectedCarModel.length() ? selectedCarModel : tr("[AUTO SELECT]"));
-  });
+  // OPTECH: the car is chosen in OPTECH > 시작 (brand first), so no car bar above the panels
+  main_layout->addWidget(panel_widget);
 
   setStyleSheet(R"(
     * {

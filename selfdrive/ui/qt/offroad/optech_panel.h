@@ -4,7 +4,9 @@
 
 #include <QLabel>
 #include <QList>
+#include <QListWidget>
 #include <QPushButton>
+#include <QStackedLayout>
 #include <QVBoxLayout>
 
 #include "selfdrive/ui/qt/widgets/controls.h"
@@ -27,6 +29,30 @@ private:
   void change(int delta);
 };
 
+// optech-hkg style car selection: brands first, then that brand's cars.
+// Stores the car in dp_car_assigned (car_helpers uses it as the fixed fingerprint); empty = auto detect.
+class OptechCarSelect : public QWidget {
+  Q_OBJECT
+public:
+  explicit OptechCarSelect(QWidget *parent = nullptr);
+  void showBrands();
+
+  static QString brandOf(const QString &car);
+  static QString brandKo(const QString &brand);
+  static QString menuName(const QString &car);  // "쉐보레  BOLT EUV 2022"
+
+signals:
+  void backPress();
+  void selectedCar();
+
+private:
+  QListWidget *list;
+  QStringList brands;
+  QMap<QString, QStringList> cars;  // brand -> car names
+  QString cur_brand;
+  void showCars(const QString &brand);
+};
+
 // OPTECH settings menu (same tabs and look as optech-hkg): one list per tab.
 // The items are the dragonpilot (legacypilot) settings this base really uses.
 class OptechPanel : public QWidget {
@@ -37,16 +63,25 @@ public:
 
 private:
   Params params;
+  QStackedLayout *stack;
+  QWidget *home;
+  OptechCarSelect *car_select;
+  QPushButton *car_btn;
   int current_tab = 0;
   QList<QPushButton *> tab_btns;
   QList<ListWidget *> tab_lists;
   QList<OptechValueControl *> values;
   OptechValueControl *auto_shutdown_timer = nullptr;
   OptechValueControl *lane_priority_speed = nullptr;
+  QList<QWidget *> toyota_items, vag_items;
+  QLabel *brand_note = nullptr;
 
   ParamControl *toggle(ListWidget *list, const QString &param, const QString &title, const QString &desc);
   OptechValueControl *value(ListWidget *list, const QString &param, const QString &title, const QString &desc,
                             int min, int max, int step, std::function<QString(int)> format);
+  QString currentBrand();
+  void updateCarButton();
+  void updateBrandItems();
   void showTab(int index);
   void updateTabStyles();
   void updateToggles();

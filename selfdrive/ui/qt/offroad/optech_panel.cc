@@ -3,8 +3,13 @@
 #include <cmath>
 
 #include <QHBoxLayout>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QScroller>
 
 #include "selfdrive/ui/qt/widgets/input.h"
+#include "selfdrive/ui/ui.h"
 
 // ---- small helpers, same look as optech-hkg ----
 
@@ -63,6 +68,131 @@ void OptechValueControl::refresh() {
   label.setText(fmt(QString::fromStdString(Params().get(key)).toInt()));
 }
 
+// ---- car selection: brands first (same as optech-hkg SelectCar) ----
+
+// brands shown in this order; Hyundai / Kia / Genesis belong to optech-hkg and are left out of the list
+static const QStringList BRAND_ORDER = {"CHEVROLET", "GMC", "CADILLAC", "BUICK", "HOLDEN", "TOYOTA", "LEXUS", "HONDA", "ACURA",
+                                        "VOLKSWAGEN", "AUDI", "SKODA", "SEAT", "MAZDA", "NISSAN", "SUBARU", "FORD",
+                                        "CHRYSLER", "JEEP", "RAM", "TESLA"};
+static const QStringList BRAND_HIDDEN = {"HYUNDAI", "KIA", "GENESIS", "COMMA", "mock"};
+
+QString OptechCarSelect::brandOf(const QString &car) {
+  return car.section(' ', 0, 0);
+}
+
+QString OptechCarSelect::brandKo(const QString &brand) {
+  static const QMap<QString, QString> KO = {
+    {"CHEVROLET", "쉐보레"}, {"GMC", "GMC"}, {"CADILLAC", "캐딜락"}, {"BUICK", "뷰익"}, {"HOLDEN", "홀덴"},
+    {"TOYOTA", "토요타"}, {"LEXUS", "렉서스"}, {"HONDA", "혼다"}, {"ACURA", "어큐라"},
+    {"VOLKSWAGEN", "폭스바겐"}, {"AUDI", "아우디"}, {"SKODA", "스코다"}, {"SEAT", "세아트"},
+    {"MAZDA", "마쓰다"}, {"NISSAN", "닛산"}, {"SUBARU", "스바루"}, {"FORD", "포드"},
+    {"CHRYSLER", "크라이슬러"}, {"JEEP", "지프"}, {"RAM", "램"}, {"TESLA", "테슬라"},
+    {"HYUNDAI", "현대"}, {"KIA", "기아"}, {"GENESIS", "제네시스"}};
+  return KO.value(brand);
+}
+
+QString OptechCarSelect::menuName(const QString &car) {
+  const QString brand = brandOf(car);
+  const QString ko = brandKo(brand);
+  return (ko.isEmpty() ? brand : ko) + "  " + car.section(' ', 1);
+}
+
+OptechCarSelect::OptechCarSelect(QWidget *parent) : QWidget(parent) {
+  QVBoxLayout *layout = new QVBoxLayout(this);
+  layout->setMargin(20);
+  layout->setSpacing(20);
+
+  // back: from a brand's cars back to the brands, from the brands back to the menu
+  QPushButton *back = new QPushButton("뒤로");
+  back->setFixedSize(500, 100);
+  back->setStyleSheet("QPushButton { font-size: 50px; border-radius: 15px; background-color: #393939; } QPushButton:pressed { background-color: #4a4a4a; }");
+  layout->addWidget(back, 0, Qt::AlignLeft);
+
+  list = new QListWidget(this);
+  list->setStyleSheet("QListView {padding: 40px; background-color: #393939; border-radius: 15px;} QListView::item{height: 100px}");
+  list->setFixedHeight(900);
+  QScroller::grabGesture(list->viewport(), QScroller::LeftMouseButtonGesture);
+  list->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+  layout->addWidget(list);
+
+  // dp_car_list = {"cars": [...]} written by the manager at every start (all cars this base knows)
+  const QJsonArray all = QJsonDocument::fromJson(QByteArray::fromStdString(Params().get("dp_car_list"))).object().value("cars").toArray();
+  for (const auto &v : all) {
+    const QString car = v.toString();
+    const QString brand = brandOf(car);
+    if (car.isEmpty() || BRAND_HIDDEN.contains(brand)) continue;
+    cars[brand].append(car);
+  }
+  for (const QString &b : BRAND_ORDER) {
+    if (cars.contains(b)) brands.append(b);
+  }
+  for (const QString &b : cars.keys()) {
+    if (!brands.contains(b)) brands.append(b);
+  }
+  for (const QString &b : brands) cars[b].sort();
+
+  QObject::connect(back, &QPushButton::clicked, [=]() {
+    if (!cur_brand.isEmpty()) showBrands();
+    else emit backPress();
+  });
+
+  QObject::connect(list, &QListWidget::itemClicked, [=](QListWidgetItem *item) {
+    const QString brand = item->data(Qt::UserRole + 1).toString();
+    if (!brand.isEmpty()) {  // a brand: show its cars
+      showCars(brand);
+      return;
+    }
+    if (!(item->flags() & Qt::ItemIsSelectable)) return;  // brand header
+    const QString car = item->data(Qt::UserRole).toString();
+    Params().put("dp_car_assigned", car.toStdString());  // empty = auto detect
+    showBrands();  // next time the list starts from the brands again
+    emit selectedCar();
+  });
+
+  showBrands();
+}
+
+void OptechCarSelect::showBrands() {
+  cur_brand.clear();
+  list->clear();
+  const QString selected = QString::fromStdString(Params().get("dp_car_assigned"));
+  QListWidgetItem *auto_item = new QListWidgetItem("[ 자동 인식 ]");
+  auto_item->setData(Qt::UserRole, QString());
+  list->addItem(auto_item);
+  list->setCurrentItem(auto_item);
+  for (const QString &b : brands) {
+    const QString ko = brandKo(b);
+    QListWidgetItem *item = new QListWidgetItem("   " + b + (ko.isEmpty() || ko == b ? "" : "  " + ko) +
+                                                QString("   (%1)   ▶").arg(cars[b].size()));
+    item->setData(Qt::UserRole + 1, b);
+    list->addItem(item);
+    if (cars[b].contains(selected)) list->setCurrentItem(item);
+  }
+  list->scrollToTop();
+}
+
+void OptechCarSelect::showCars(const QString &brand) {
+  cur_brand = brand;
+  list->clear();
+  const QString selected = QString::fromStdString(Params().get("dp_car_assigned"));
+  const QString ko = brandKo(brand);
+  QListWidgetItem *header = new QListWidgetItem("■ " + brand + (ko.isEmpty() || ko == brand ? "" : "  " + ko));
+  header->setFlags(Qt::NoItemFlags);  // not selectable
+  header->setForeground(QColor("#33ab4c"));
+  QFont f = header->font();
+  f.setBold(true);
+  header->setFont(f);
+  list->addItem(header);
+  for (const QString &car : cars[brand]) {
+    QListWidgetItem *item = new QListWidgetItem("      " + car.section(' ', 1));
+    item->setData(Qt::UserRole, car);
+    list->addItem(item);
+    if (car == selected) list->setCurrentItem(item);
+  }
+  if (list->currentItem()) list->scrollToItem(list->currentItem(), QAbstractItemView::PositionAtCenter);
+  else list->scrollToTop();
+}
+
 ParamControl *OptechPanel::toggle(ListWidget *list, const QString &param, const QString &title, const QString &desc) {
   ParamControl *t = new ParamControl(param, title, desc, "", this);
   t->setEnabled(!params.getBool((param + "Lock").toStdString()));
@@ -81,8 +211,13 @@ OptechValueControl *OptechPanel::value(ListWidget *list, const QString &param, c
 // ---- the menu ----
 
 OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
-  QVBoxLayout *main_layout = new QVBoxLayout(this);
+  stack = new QStackedLayout(this);
+  home = new QWidget(this);
+  QVBoxLayout *main_layout = new QVBoxLayout(home);
   main_layout->setMargin(0);
+  car_select = new OptechCarSelect(this);
+  stack->addWidget(home);
+  stack->addWidget(car_select);
 
   // tab buttons (same names and colors as optech-hkg)
   QHBoxLayout *tab_layout = new QHBoxLayout();
@@ -106,8 +241,24 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
   ListWidget *steer = tab_lists[3], *disp = tab_lists[4], *adv = tab_lists[5];
 
   // ======== 시작 ========
-  start->addItem(optech_section("차량"));
-  start->addItem(optech_note("차종은 설정 화면 맨 위의 '차량 모델' 버튼에서 고릅니다. 자동 인식이 되면 그대로 두셔도 됩니다."));
+  car_btn = new QPushButton();
+  car_btn->setStyleSheet(R"(
+    QPushButton {
+      margin-top: 20px; margin-bottom: 20px; padding: 10px; height: 120px; border-radius: 15px;
+      font-size: 50px; color: #FFFFFF; background-color: #2C2CE2;
+    }
+    QPushButton:pressed { background-color: #2424FF; }
+  )");
+  QObject::connect(car_btn, &QPushButton::clicked, [=]() { stack->setCurrentWidget(car_select); });
+  QObject::connect(car_select, &OptechCarSelect::backPress, [=]() { stack->setCurrentWidget(home); });
+  QObject::connect(car_select, &OptechCarSelect::selectedCar, [=]() {
+    updateCarButton();
+    updateBrandItems();
+    stack->setCurrentWidget(home);
+  });
+  start->addItem(car_btn);
+  start->addItem(optech_note("자동 인식이 잘 되면 '자동 인식'으로 두세요. 인식이 안 될 때만 직접 고르면 다음 시동부터 적용됩니다. "
+                             "현대·기아·제네시스는 optech-hkg 브랜치를 쓰세요."));
   start->addItem(optech_section("켜기 방식"));
   toggle(start, "dp_alka", "항상 조향 (ALKA)",
          "크루즈 메인 버튼(ACC MAIN)만 켜져 있으면 크루즈를 켜지 않아도 조향을 계속 도와줍니다. 크루즈만 되는 차량에 특히 좋습니다.\n재부팅해야 적용됩니다.");
@@ -176,21 +327,27 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
   toggle(adv, "dp_car_dashcam_mode_removal", "대시캠 모드 해제 (위험)",
          "주행 중 '대시캠 모드'가 뜨면 이것을 켜서 openpilot 제어를 강제로 켭니다. 대시캠 모드는 보통 완전히 지원되지 않는 차량이라는 뜻입니다.\n본인 책임으로 사용하세요. 재부팅해야 적용됩니다.");
 
-  adv->addItem(optech_section("토요타 / 렉서스 전용"));
-  toggle(adv, "dp_toyota_sng", "정차 후 재출발 (SnG)",
-         "완전히 멈췄을 때 정차 신호를 보내지 않아 다시 출발할 수 있게 합니다.\n일부 차량만 됩니다. 재부팅해야 적용됩니다.");
-  toggle(adv, "dp_toyota_enhanced_bsm", "후측방 감지 강화 (BSM)",
-         "진단용 CAN 메시지로 후측방 신호를 더 많이 받습니다.\n일부 차량만 됩니다. 재부팅해야 적용됩니다.");
-  toggle(adv, "dp_toyota_auto_lock", "자동 문 잠금",
-         "10 km/h 이상으로 달리면 문을 잠급니다.\n재부팅해야 적용됩니다.");
-  toggle(adv, "dp_toyota_auto_unlock", "자동 문 열림",
-         "기어를 P로 놓으면 문 잠금을 풉니다.\n재부팅해야 적용됩니다.");
-  toggle(adv, "dp_toyota_zss", "ZSS 조향 센서 사용",
-         "ZSS(Zorro 조향 센서)를 달았을 때만 켜세요. 더 정확하게 조향합니다.\n재부팅해야 적용됩니다.");
+  brand_note = optech_note("차종이 정해지면(직접 고르거나 한 번 시동을 걸어 자동 인식되면) 그 브랜드 전용 설정이 여기에 나옵니다.");
+  adv->addItem(brand_note);
+  QLabel *toyota_section = optech_section("토요타 / 렉서스 전용");
+  adv->addItem(toyota_section);
+  toyota_items.append(toyota_section);
+  toyota_items.append(toggle(adv, "dp_toyota_sng", "정차 후 재출발 (SnG)",
+         "완전히 멈췄을 때 정차 신호를 보내지 않아 다시 출발할 수 있게 합니다.\n일부 차량만 됩니다. 재부팅해야 적용됩니다."));
+  toyota_items.append(toggle(adv, "dp_toyota_enhanced_bsm", "후측방 감지 강화 (BSM)",
+         "진단용 CAN 메시지로 후측방 신호를 더 많이 받습니다.\n일부 차량만 됩니다. 재부팅해야 적용됩니다."));
+  toyota_items.append(toggle(adv, "dp_toyota_auto_lock", "자동 문 잠금",
+         "10 km/h 이상으로 달리면 문을 잠급니다.\n재부팅해야 적용됩니다."));
+  toyota_items.append(toggle(adv, "dp_toyota_auto_unlock", "자동 문 열림",
+         "기어를 P로 놓으면 문 잠금을 풉니다.\n재부팅해야 적용됩니다."));
+  toyota_items.append(toggle(adv, "dp_toyota_zss", "ZSS 조향 센서 사용",
+         "ZSS(Zorro 조향 센서)를 달았을 때만 켜세요. 더 정확하게 조향합니다.\n재부팅해야 적용됩니다."));
 
-  adv->addItem(optech_section("폭스바겐 / 스코다 / 아우디 전용"));
-  toggle(adv, "dp_vag_timebomb_bypass", "조향 시간 제한 우회",
-         "약 6분마다 조향이 끊기는 제한을 잠깐 껐다 켜서 피합니다.\n5분 40초 경고, 5분 45초 조향 꺼짐, 5분 48초 다시 켜짐.\n재부팅해야 적용됩니다.");
+  QLabel *vag_section = optech_section("폭스바겐 / 아우디 / 스코다 / 세아트 전용");
+  adv->addItem(vag_section);
+  vag_items.append(vag_section);
+  vag_items.append(toggle(adv, "dp_vag_timebomb_bypass", "조향 시간 제한 우회",
+         "약 6분마다 조향이 끊기는 제한을 잠깐 껐다 켜서 피합니다.\n5분 40초 경고, 5분 45초 조향 꺼짐, 5분 48초 다시 켜짐.\n재부팅해야 적용됩니다."));
 
   adv->addItem(optech_section("초기화"));
   ButtonControl *reset_btn = new ButtonControl("설정 초기화", "초기화", "OPTECH 설정을 모두 처음 값으로 되돌립니다.");
@@ -201,7 +358,38 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
   });
   adv->addItem(reset_btn);
 
+  updateCarButton();
+  updateBrandItems();
   showTab(0);
+}
+
+// brand of the car this device drives: the chosen car, else the one auto detected at the last start
+QString OptechPanel::currentBrand() {
+  const QString assigned = QString::fromStdString(params.get("dp_car_assigned")).trimmed();
+  if (!assigned.isEmpty()) return OptechCarSelect::brandOf(assigned);
+  const std::string cp_bytes = params.get("CarParamsPersistent");
+  if (cp_bytes.empty()) return "";
+  AlignedBuffer aligned_buf;
+  capnp::FlatArrayMessageReader cmsg(aligned_buf.align(cp_bytes.data(), cp_bytes.size()));
+  cereal::CarParams::Reader CP = cmsg.getRoot<cereal::CarParams>();
+  const QString name = QString::fromStdString(CP.getCarName());  // "toyota", "volkswagen", ...
+  if (name == "toyota") return "TOYOTA";
+  if (name == "volkswagen") return "VOLKSWAGEN";
+  return name.toUpper();
+}
+
+void OptechPanel::updateCarButton() {
+  const QString assigned = QString::fromStdString(params.get("dp_car_assigned")).trimmed();
+  car_btn->setText(assigned.isEmpty() ? QString("차종 선택  (지금: 자동 인식)") : OptechCarSelect::menuName(assigned));
+}
+
+void OptechPanel::updateBrandItems() {
+  const QString brand = currentBrand();
+  const bool toyota = brand == "TOYOTA" || brand == "LEXUS";
+  const bool vag = brand == "VOLKSWAGEN" || brand == "AUDI" || brand == "SKODA" || brand == "SEAT";
+  for (auto w : toyota_items) w->setVisible(toyota);
+  for (auto w : vag_items) w->setVisible(vag);
+  brand_note->setVisible(brand.isEmpty());  // brand known but nothing special: no note
 }
 
 void OptechPanel::showTab(int index) {
@@ -234,4 +422,6 @@ void OptechPanel::updateToggles() {
 void OptechPanel::showEvent(QShowEvent *event) {
   for (auto v : values) v->refresh();
   updateToggles();
+  updateCarButton();
+  updateBrandItems();
 }
