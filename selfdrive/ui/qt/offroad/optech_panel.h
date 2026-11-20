@@ -73,7 +73,7 @@ private:
   QList<OptechValueControl *> values;
   OptechValueControl *auto_shutdown_timer = nullptr;
   OptechValueControl *lane_priority_speed = nullptr;
-  QList<QWidget *> toyota_items, vag_items;
+  QList<QWidget *> toyota_items, vag_items, bolt_items;
   QLabel *brand_note = nullptr;
 
   ParamControl *toggle(ListWidget *list, const QString &param, const QString &title, const QString &desc);

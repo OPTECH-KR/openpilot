@@ -9,6 +9,20 @@ const SteeringLimits GM_STEERING_LIMITS = {
   .type = TorqueDriverLimited,
 };
 
+// optech: Bolt EV 2017 without ACC (StarPilot GM_BOLT_2017_STEERING_LIMITS): its weaker EPS needs more torque
+const SteeringLimits GM_BOLT_2017_STEERING_LIMITS = {
+  .max_steer = 450,
+  .max_rate_up = 15,
+  .max_rate_down = 34,
+  .driver_torque_allowance = 78,
+  .driver_torque_factor = 6,
+  .max_rt_delta = 345,
+  .max_rt_interval = 250000,
+  .type = TorqueDriverLimited,
+};
+
+const SteeringLimits *gm_steer_limits = &GM_STEERING_LIMITS;
+
 const LongitudinalLimits GM_ASCM_LONG_LIMITS = {
   .max_gas = 3072,
   .min_gas = 1404,
@@ -34,6 +48,10 @@ const CanMsg GM_ASCM_TX_MSGS[] = {{0x180, 0, 4}, {0x409, 0, 7}, {0x40A, 0, 7}, {
 
 const CanMsg GM_CAM_TX_MSGS[] = {{0x180, 0, 4},  // pt bus
                                  {0x1E1, 2, 7}, {0x184, 2, 8}};  // camera bus
+
+// optech: no ACC + comma pedal: GAS_COMMAND (0x200) instead of the stock cruise
+const CanMsg GM_CAM_PEDAL_TX_MSGS[] = {{0x180, 0, 4}, {0x200, 0, 6},  // pt bus
+                                       {0x1E1, 2, 7}, {0x184, 2, 8}};  // camera bus
 
 const CanMsg GM_CAM_LONG_TX_MSGS[] = {{0x180, 0, 4}, {0x315, 0, 5}, {0x2CB, 0, 8}, {0x370, 0, 6},  // pt bus
                                       {0x184, 2, 8}};  // camera bus
@@ -61,10 +79,27 @@ RxCheck gm_no_acc_rx_checks[] = {
   {.msg = {{0x3D1, 0, 8, .frequency = 10U}, { 0 }, { 0 }}},
 };
 
+// ... and with a comma pedal: GAS_SENSOR (0x201)
+RxCheck gm_no_acc_pedal_rx_checks[] = {
+  {.msg = {{0x184, 0, 8, .frequency = 10U}, { 0 }, { 0 }}},
+  {.msg = {{0x34A, 0, 5, .frequency = 10U}, { 0 }, { 0 }}},
+  {.msg = {{0x1E1, 0, 7, .frequency = 10U}, { 0 }, { 0 }}},
+  {.msg = {{0x1C4, 0, 8, .frequency = 10U}, { 0 }, { 0 }}},
+  {.msg = {{0xC9, 0, 8, .frequency = 10U}, { 0 }, { 0 }}},
+  {.msg = {{0x3D1, 0, 8, .frequency = 10U}, { 0 }, { 0 }}},
+  {.msg = {{0x201, 0, 6, .frequency = 50U}, { 0 }, { 0 }}},
+};
+
 const uint16_t GM_PARAM_HW_CAM = 1;
 const uint16_t GM_PARAM_HW_CAM_LONG = 2;
 // optech: no ACC (regular cruise only), with GM_PARAM_HW_CAM: openpilot steers while the car's cruise is on
 const uint16_t GM_PARAM_NO_ACC = 4;
+// optech: ... and a comma pedal does the longitudinal; SET / RESUME engage (the car's cruise main stays off)
+const uint16_t GM_PARAM_PEDAL = 8;
+// optech: Bolt EV 2017 without ACC: GM_BOLT_2017_STEERING_LIMITS
+const uint16_t GM_PARAM_BOLT_2017 = 16;
+// StarPilot GM_GAS_INTERCEPTOR_THRESHOLD (openpilot's carstate threshold stays just below it)
+const int GM_GAS_INTERCEPTOR_THRESHOLD = 595;
 
 enum {
   GM_BTN_UNPRESS = 1,
@@ -77,6 +112,7 @@ enum {GM_ASCM, GM_CAM} gm_hw = GM_ASCM;
 bool gm_cam_long = false;
 bool gm_pcm_cruise = false;
 bool gm_no_acc = false;
+bool gm_pedal = false;
 
 static void gm_rx_hook(const CANPacket_t *to_push) {
   if (GET_BUS(to_push) == 0U) {
@@ -125,8 +161,17 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
       brake_pressed = GET_BIT(to_push, 40U) != 0U;
     }
 
+    // comma pedal: the driver's own pedal shows in GAS_SENSOR (average of the two tracks)
+    if ((addr == 0x201) && enable_gas_interceptor) {
+      int gas_interceptor = (((GET_BYTE(to_push, 0) << 8) + GET_BYTE(to_push, 1)) + ((GET_BYTE(to_push, 2) << 8) + GET_BYTE(to_push, 3))) / 2;
+      gas_pressed = gas_interceptor > GM_GAS_INTERCEPTOR_THRESHOLD;
+      gas_interceptor_prev = gas_interceptor;
+    }
+
     if (addr == 0x1C4) {
-      gas_pressed = GET_BYTE(to_push, 5) != 0U;
+      if (!enable_gas_interceptor) {
+        gas_pressed = GET_BYTE(to_push, 5) != 0U;
+      }
 
       // enter controls on rising edge of ACC, exit controls when ACC off
       if (gm_pcm_cruise && !gm_no_acc) {
@@ -136,7 +181,7 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
     }
 
     // no ACC: enter controls on rising edge of the car's regular cruise (ECMCruiseControl CruiseActive), exit when it is off
-    if ((addr == 0x3D1) && gm_no_acc) {
+    if ((addr == 0x3D1) && gm_no_acc && gm_pcm_cruise) {
       bool cruise_engaged = (GET_BYTE(to_push, 4) >> 7) != 0U;
       pcm_cruise_check(cruise_engaged);
     }
@@ -147,8 +192,8 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
 
     bool stock_ecu_detected = (addr == 0x180);  // ASCMLKASteeringCmd
 
-    // Check ASCMGasRegenCmd only if we're blocking it
-    if (!gm_pcm_cruise && (addr == 0x2CB)) {
+    // Check ASCMGasRegenCmd only if we're blocking it (not with the pedal: openpilot does not send it there)
+    if (!gm_pcm_cruise && !gm_pedal && (addr == 0x2CB)) {
       stock_ecu_detected = true;
     }
     generic_rx_checks(stock_ecu_detected);
@@ -175,7 +220,7 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
 
     bool steer_req = (GET_BIT(to_send, 3U) != 0U);
 
-    if (steer_torque_cmd_checks(desired_torque, steer_req, GM_STEERING_LIMITS)) {
+    if (steer_torque_cmd_checks(desired_torque, steer_req, *gm_steer_limits)) {
       tx = false;
     }
   }
@@ -191,6 +236,13 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
     violation |= longitudinal_gas_checks(gas_regen, *gm_long_limits);
 
     if (violation) {
+      tx = false;
+    }
+  }
+
+  // GAS: comma pedal, only while openpilot is allowed to control the speed
+  if (addr == 0x200) {
+    if (!gm_pedal || longitudinal_interceptor_checks(to_send)) {
       tx = false;
     }
   }
@@ -237,6 +289,9 @@ static int gm_fwd_hook(int bus_num, int addr) {
 static safety_config gm_init(uint16_t param) {
   gm_hw = GET_FLAG(param, GM_PARAM_HW_CAM) ? GM_CAM : GM_ASCM;
   gm_no_acc = (gm_hw == GM_CAM) && GET_FLAG(param, GM_PARAM_NO_ACC);
+  gm_pedal = gm_no_acc && GET_FLAG(param, GM_PARAM_PEDAL);
+  enable_gas_interceptor = gm_pedal;
+  gm_steer_limits = (gm_no_acc && GET_FLAG(param, GM_PARAM_BOLT_2017)) ? &GM_BOLT_2017_STEERING_LIMITS : &GM_STEERING_LIMITS;
 
   if (gm_hw == GM_ASCM) {
     gm_long_limits = &GM_ASCM_LONG_LIMITS;
@@ -248,13 +303,13 @@ static safety_config gm_init(uint16_t param) {
 #ifdef ALLOW_DEBUG
   gm_cam_long = GET_FLAG(param, GM_PARAM_HW_CAM_LONG) && !gm_no_acc;  // no ACC: no stock ACC messages to replace
 #endif
-  gm_pcm_cruise = (gm_hw == GM_CAM) && !gm_cam_long;
+  gm_pcm_cruise = (gm_hw == GM_CAM) && !gm_cam_long && !gm_pedal;
 
   safety_config ret = BUILD_SAFETY_CFG(gm_rx_checks, GM_ASCM_TX_MSGS);
   if (gm_hw == GM_CAM) {
     ret = gm_cam_long ? BUILD_SAFETY_CFG(gm_rx_checks, GM_CAM_LONG_TX_MSGS) : BUILD_SAFETY_CFG(gm_rx_checks, GM_CAM_TX_MSGS);
     if (gm_no_acc) {
-      ret = BUILD_SAFETY_CFG(gm_no_acc_rx_checks, GM_CAM_TX_MSGS);
+      ret = gm_pedal ? BUILD_SAFETY_CFG(gm_no_acc_pedal_rx_checks, GM_CAM_PEDAL_TX_MSGS) : BUILD_SAFETY_CFG(gm_no_acc_rx_checks, GM_CAM_TX_MSGS);
     }
   }
   return ret;

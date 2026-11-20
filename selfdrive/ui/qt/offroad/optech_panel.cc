@@ -74,6 +74,7 @@ void OptechValueControl::refresh() {
 static const QStringList BRAND_ORDER = {"CHEVROLET", "GMC", "CADILLAC", "BUICK", "HOLDEN", "TOYOTA", "LEXUS", "HONDA", "ACURA",
                                         "VOLKSWAGEN", "AUDI", "SKODA", "SEAT", "MAZDA", "NISSAN", "SUBARU", "FORD",
                                         "CHRYSLER", "JEEP", "RAM", "TESLA"};
+static const char *BOLT_CC_CAR = "CHEVROLET BOLT EV NO ACC";  // selfdrive/car/gm/values.py CAR.BOLT_CC
 static const QStringList BRAND_HIDDEN = {"HYUNDAI", "KIA", "GENESIS", "COMMA", "mock"};
 
 QString OptechCarSelect::brandOf(const QString &car) {
@@ -255,10 +256,38 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
     updateCarButton();
     updateBrandItems();
     stack->setCurrentWidget(home);
+    if (QString::fromStdString(params.get("dp_car_assigned")) == BOLT_CC_CAR) {
+      ConfirmationDialog::alert("이 차량은 따로 확인할 설정이 있어요.\n차종 버튼 아래의 '볼트 EV 설정'을 확인해 주세요.", this);
+    }
   });
   start->addItem(car_btn);
   start->addItem(optech_note("자동 인식이 잘 되면 '자동 인식'으로 두세요. 인식이 안 될 때만 직접 고르면 다음 시동부터 적용됩니다. "
-                             "현대·기아·제네시스는 optech-hkg 브랜치를 쓰세요."));
+                             "현대·기아·제네시스는 optech-hkg 브랜치를 쓰세요. ACC 없는 GM 차량(… NO ACC)은 자동 인식이 안 되니 직접 고르세요."));
+
+  // '볼트 EV 설정': only while the Bolt EV without ACC is the chosen car (same texts as optech-hkg)
+  QLabel *bolt_section = optech_section("볼트 EV 설정");
+  start->addItem(bolt_section);
+  bolt_items.append(bolt_section);
+  QLabel *bolt_intro = optech_note(
+    "어댑티브 크루즈(ACC)가 없는 볼트 EV(2017~2021)입니다. 카메라 하네스로 연결합니다. 페달 장치가 없으면 openpilot은 조향만 하고, "
+    "차의 일반 크루즈를 켜면 함께 켜집니다. 레이더가 없으니 앞차와의 거리는 항상 운전자가 지켜 주세요. "
+    "아직 실제 차로 시험하지 않았으니, 처음에는 'openpilot 사용'을 끄고(읽기 전용) 짧게 달려 본 뒤 조향을 켜 주세요.");
+  start->addItem(bolt_intro);
+  bolt_items.append(bolt_intro);
+  bolt_items.append(toggle(start, "BoltYear2017", "2017년식",
+    "2017년식 볼트 EV면 켜세요. 2017년식은 핸들 모터(EPS)가 약해서, 스타파일럿의 2017년식 조향 튜닝과 더 큰 조향 힘 한도를 씁니다. "
+    "2018~2021년식은 끈 채로 두세요. 재부팅해야 적용됩니다."));
+  QLabel *pedal_section = optech_section("페달 (comma 페달 장치)");
+  start->addItem(pedal_section);
+  bolt_items.append(pedal_section);
+  bolt_items.append(toggle(start, "BoltPedal", "페달 사용",
+    "comma 페달 장치를 단 경우에만 켜세요(스타파일럿 볼트 EV 방식). 켜면 openpilot이 가속페달로 가감속을 맡습니다. "
+    "기어는 L(원페달) 모드여야 하고, 차의 크루즈 메인 버튼은 꺼 둔 채 SET 또는 RES 버튼으로 켭니다. "
+    "브레이크 장치가 없어 감속은 회생제동만큼만 됩니다. 페달 장치가 인식되지 않으면 켜 두어도 조향만 합니다. 재부팅해야 적용됩니다."));
+  bolt_items.append(value(start, "BoltPedalMax", "페달 최대 밟는 양",
+    "openpilot이 가속페달을 최대 몇 %까지 밟을지 정합니다. 처음에는 낮게 시작해 보세요. 20~100%, 기본 100%(스타파일럿 그대로). "
+    "저속에서는 스타파일럿이 따로 정한 상한(정지 근처 20%부터)이 먼저 적용됩니다.",
+    20, 100, 5, [](int v) { return QString("%1%").arg(v); }));
   start->addItem(optech_section("켜기 방식"));
   toggle(start, "dp_alka", "항상 조향 (ALKA)",
          "크루즈 메인 버튼(ACC MAIN)만 켜져 있으면 크루즈를 켜지 않아도 조향을 계속 도와줍니다. 크루즈만 되는 차량에 특히 좋습니다.\n재부팅해야 적용됩니다.");
@@ -403,6 +432,8 @@ void OptechPanel::updateBrandItems() {
   const bool vag = brand == "VOLKSWAGEN" || brand == "AUDI" || brand == "SKODA" || brand == "SEAT";
   for (auto w : toyota_items) w->setVisible(toyota);
   for (auto w : vag_items) w->setVisible(vag);
+  const bool bolt_cc = QString::fromStdString(params.get("dp_car_assigned")).trimmed() == BOLT_CC_CAR;
+  for (auto w : bolt_items) w->setVisible(bolt_cc);
   brand_note->setVisible(brand.isEmpty());  // brand known but nothing special: no note
 }
 

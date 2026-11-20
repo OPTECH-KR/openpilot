@@ -266,6 +266,8 @@ class Panda:
   FLAG_GM_HW_CAM = 1
   FLAG_GM_HW_CAM_LONG = 2
   FLAG_GM_NO_ACC = 4  # optech: no ACC (regular cruise only), camera harness
+  FLAG_GM_PEDAL = 8  # optech: ... with a comma pedal for the longitudinal
+  FLAG_GM_BOLT_2017 = 16  # optech: Bolt EV 2017 steering limits
 
   FLAG_FORD_LONG_CONTROL = 1
   FLAG_FORD_CANFD = 2

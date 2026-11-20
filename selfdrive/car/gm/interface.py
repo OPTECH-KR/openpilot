@@ -11,6 +11,8 @@ from openpilot.selfdrive.car.interfaces import CarInterfaceBase, TorqueFromLater
 from openpilot.selfdrive.controls.lib.drive_helpers import get_friction
 
 from openpilot.common.params import Params
+from openpilot.selfdrive.car.gm import bolt_pedal
+from openpilot.selfdrive.car.gm.bolt_tune import get_bolt_tune, make_torque_from_lateral_accel, apply_bolt_tune
 
 ButtonType = car.CarState.ButtonEvent.Type
 EventName = car.CarEvent.EventName
@@ -32,6 +34,8 @@ NON_LINEAR_TORQUE_PARAMS = {
 class CarInterface(CarInterfaceBase):
   @staticmethod
   def get_pid_accel_limits(CP, current_speed, cruise_speed):
+    if CP.carFingerprint == CAR.BOLT_CC and CP.enableGasInterceptor:
+      return bolt_pedal.accel_limits(current_speed)  # StarPilot BOLT_PEDAL_LONG_CARS
     return CarControllerParams.ACCEL_MIN, CarControllerParams.ACCEL_MAX
 
   # Determined by iteratively plotting and minimizing error for f(angle, speed) = steer.
@@ -65,6 +69,9 @@ class CarInterface(CarInterfaceBase):
     return float(steer_torque) + friction
 
   def torque_from_lateral_accel(self) -> TorqueFromLateralAccelCallbackType:
+    bolt_tune = get_bolt_tune(self.CP)  # optech: Bolt EV without ACC, StarPilot's curve
+    if bolt_tune is not None:
+      return make_torque_from_lateral_accel(bolt_tune)
     if self.CP.carFingerprint in NON_LINEAR_TORQUE_PARAMS:
       return self.torque_from_lateral_accel_siglin
     else:
@@ -76,6 +83,13 @@ class CarInterface(CarInterfaceBase):
     ret.safetyConfigs = [get_safety_config(car.CarParams.SafetyModel.gm)]
     ret.autoResumeSng = False
     ret.enableBsm = 0x142 in fingerprint[CanBus.POWERTRAIN]
+
+    # optech: Bolt EV 2017-21 without ACC - comma pedal only with its toggle on the 볼트 EV 설정 page and the pedal on the bus
+    if candidate == CAR.BOLT_CC:
+      ret.enableGasInterceptor = 0x201 in fingerprint[CanBus.POWERTRAIN] and Params().get_bool(bolt_pedal.PEDAL_PARAM)
+      if Params().get_bool(bolt_pedal.YEAR_2017_PARAM):
+        ret.flags |= GMFlags.BOLT_2017.value
+        ret.safetyConfigs[0].safetyParam |= Panda.FLAG_GM_BOLT_2017
 
     if candidate in EV_CAR:
       ret.transmissionType = TransmissionType.direct
@@ -115,6 +129,26 @@ class CarInterface(CarInterfaceBase):
         ret.minEnableSpeed = -1.  # the car's cruise decides when it can be set
         if ACCELERATOR_POS_MSG not in fingerprint[CanBus.POWERTRAIN]:
           ret.flags |= GMFlags.NO_ACCELERATOR_POS_MSG.value
+
+        # ... with a comma pedal openpilot does the speed: SET / RESUME engage, the car's cruise main stays off
+        if ret.enableGasInterceptor:
+          ret.safetyConfigs[0].safetyParam |= Panda.FLAG_GM_PEDAL
+          ret.pcmCruise = False
+          ret.openpilotLongitudinalControl = True
+          ret.stoppingControl = True
+          ret.stoppingDecelRate = 0.8
+          ret.stopAccel = 0.
+          ret.vEgoStopping = 0.5
+          ret.vEgoStarting = 0.5
+          # this base's long control is a PID on the speed error: ds5ajd's Bolt EV gains (same kind of controller);
+          # StarPilot's pedal map and limits turn its output into the pedal (bolt_pedal.py)
+          ret.longitudinalTuning.kpBP = [0., 18.0 * CV.KPH_TO_MS, 80.0 * CV.KPH_TO_MS]
+          ret.longitudinalTuning.kpV = [1.10, 1.0, 0.76]
+          ret.longitudinalTuning.kiBP = [0., 18.0 * CV.KPH_TO_MS, 80.0 * CV.KPH_TO_MS]
+          ret.longitudinalTuning.kiV = [0.140, 0.125, 0.115]
+          ret.longitudinalTuning.kf = 1.0
+          ret.longitudinalTuning.deadzoneBP = [0., 30. * CV.KPH_TO_MS]
+          ret.longitudinalTuning.deadzoneV = [0., 0.10]
 
     else:  # ASCM, OBD-II harness
       ret.openpilotLongitudinalControl = True
@@ -305,6 +339,7 @@ class CarInterface(CarInterfaceBase):
       ret.tireStiffnessFactor = 1.0
       ret.steerActuatorDelay = 0.2
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+      apply_bolt_tune(ret, get_bolt_tune(ret))  # StarPilot 2018-21 / 2017 (볼트 EV 설정)
 
     elif candidate == CAR.TRAILBLAZER_CC:
       ret.mass = 1345.
@@ -408,6 +443,9 @@ class CarInterface(CarInterfaceBase):
       events.add(EventName.resumeRequired)
     if ret.vEgo < self.CP.minSteerSpeed:
       events.add(EventName.belowSteerSpeed)
+    # optech: comma pedal on an EV - no pedal is regen braking only in L / one pedal mode
+    if self.CP.enableGasInterceptor and self.CP.transmissionType == TransmissionType.direct and not self.CS.single_pedal_mode:
+      events.add(EventName.brakeUnavailable)
 
     ret.events = events.to_msg()
 

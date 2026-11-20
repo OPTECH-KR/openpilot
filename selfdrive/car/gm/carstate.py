@@ -8,6 +8,7 @@ from openpilot.selfdrive.car.interfaces import CarStateBase
 from openpilot.selfdrive.car.gm.values import DBC, AccState, CanBus, STEER_THRESHOLD, CC_ONLY_CAR, GMFlags
 
 TransmissionType = car.CarParams.TransmissionType
+GearShifter = car.CarState.GearShifter
 NetworkLocation = car.CarParams.NetworkLocation
 STANDSTILL_THRESHOLD = 10 * 0.0311 * CV.KPH_TO_MS
 
@@ -25,6 +26,7 @@ class CarState(CarStateBase):
     self.pt_lka_steering_cmd_counter = 0
     self.cam_lka_steering_cmd_counter = 0
     self.buttons_counter = 0
+    self.single_pedal_mode = False
 
   def update(self, pt_cp, cam_cp, loopback_cp):
     ret = car.CarState.new_message()
@@ -76,9 +78,16 @@ class CarState(CarStateBase):
     # Regen braking is braking
     if self.CP.transmissionType == TransmissionType.direct:
       ret.regenBraking = pt_cp.vl["EBCMRegenPaddle"]["RegenPaddle"] != 0
+      if self.CP.enableGasInterceptor:
+        self.single_pedal_mode = ret.gearShifter == GearShifter.low or pt_cp.vl["EVDriveMode"]["SinglePedalModeActive"] == 1
 
-    ret.gas = pt_cp.vl["AcceleratorPedal2"]["AcceleratorPedal2"] / 254.
-    ret.gasPressed = ret.gas > 1e-5
+    if self.CP.enableGasInterceptor:
+      # optech: comma pedal - the driver's pedal in GAS_SENSOR; panda's 595 threshold is about 23.65 here (StarPilot)
+      ret.gas = (pt_cp.vl["GAS_SENSOR"]["INTERCEPTOR_GAS"] + pt_cp.vl["GAS_SENSOR"]["INTERCEPTOR_GAS2"]) / 2.
+      ret.gasPressed = ret.gas > 23
+    else:
+      ret.gas = pt_cp.vl["AcceleratorPedal2"]["AcceleratorPedal2"] / 254.
+      ret.gasPressed = ret.gas > 1e-5
 
     ret.steeringAngleDeg = pt_cp.vl["PSCMSteeringAngle"]["SteeringWheelAngle"]
     ret.steeringRateDeg = pt_cp.vl["PSCMSteeringAngle"]["SteeringWheelRate"]
@@ -123,6 +132,8 @@ class CarState(CarStateBase):
       ret.cruiseState.speed = pt_cp.vl["ECMCruiseControl"]["CruiseSetSpeed"] * CV.KPH_TO_MS
       ret.cruiseState.enabled = pt_cp.vl["ECMCruiseControl"]["CruiseActive"] != 0
       ret.cruiseState.standstill = False
+      if self.CP.enableGasInterceptor:  # the pedal does the speed: openpilot is available while the car's cruise main is off
+        ret.cruiseState.available = not ret.cruiseState.available
 
     if self.CP.enableBsm:
       ret.leftBlindspot = pt_cp.vl["BCMBlindSpotMonitor"]["LeftBSM"] == 1
@@ -180,6 +191,10 @@ class CarState(CarStateBase):
       messages.append(("EBCMBrakePedalPosition", 100))
     if CP.carFingerprint in CC_ONLY_CAR:
       messages.append(("ECMCruiseControl", 10))
+    if CP.enableGasInterceptor:
+      messages.append(("GAS_SENSOR", 50))
+      if CP.transmissionType == TransmissionType.direct:
+        messages.append(("EVDriveMode", 0))
 
     return CANParser(DBC[CP.carFingerprint]["pt"], messages, CanBus.POWERTRAIN)
 

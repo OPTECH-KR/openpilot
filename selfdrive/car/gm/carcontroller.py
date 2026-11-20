@@ -3,7 +3,9 @@ from openpilot.common.conversions import Conversions as CV
 from openpilot.common.numpy_fast import interp
 from openpilot.common.realtime import DT_CTRL
 from opendbc.can.packer import CANPacker
-from openpilot.selfdrive.car import apply_driver_steer_torque_limits
+from openpilot.selfdrive.car import apply_driver_steer_torque_limits, create_gas_interceptor_command
+from openpilot.common.params import Params
+from openpilot.selfdrive.car.gm import bolt_pedal
 from openpilot.selfdrive.car.gm import gmcan
 from openpilot.selfdrive.car.gm.values import DBC, CanBus, CarControllerParams, CruiseButtons
 
@@ -33,6 +35,11 @@ class CarController:
     self.lka_icon_status_last = (False, False)
 
     self.params = CarControllerParams(self.CP)
+
+    # optech: Bolt EV without ACC with the comma pedal - StarPilot pedal model, capped by the 볼트 EV 설정 page
+    self.pedal_steady = 0.
+    self.pedal_active_last = False
+    self.pedal_max = bolt_pedal.pedal_max(Params().get(bolt_pedal.PEDAL_MAX_PARAM)) if CP.enableGasInterceptor else 0.
 
     self.packer_pt = CANPacker(DBC[self.CP.carFingerprint]['pt'])
     self.packer_obj = CANPacker(DBC[self.CP.carFingerprint]['radar'])
@@ -82,7 +89,21 @@ class CarController:
       idx = self.lka_steering_cmd_counter % 4
       can_sends.append(gmcan.create_steering_control(self.packer_pt, CanBus.POWERTRAIN, apply_steer, idx, CC.latActive))
 
-    if self.CP.openpilotLongitudinalControl:
+    if self.CP.openpilotLongitudinalControl and self.CP.enableGasInterceptor:
+      # optech: comma pedal (25 Hz): the pedal is the only longitudinal actuator, the car stays in L for regen
+      if self.frame % 4 == 0:
+        if CC.longActive:
+          pedal_gas, self.pedal_steady = bolt_pedal.pedal_command(actuators.accel, CS.out.vEgo, self.pedal_steady,
+                                                                  self.pedal_active_last, self.pedal_max)
+          self.pedal_active_last = True
+        else:
+          pedal_gas = 0.
+          self.pedal_steady = 0.
+          self.pedal_active_last = False
+        self.apply_gas = pedal_gas
+        can_sends.append(create_gas_interceptor_command(self.packer_pt, pedal_gas, (self.frame // 4) % 4))
+
+    elif self.CP.openpilotLongitudinalControl:
       # Gas/regen, brakes, and UI commands - all at 25Hz
       if self.frame % 4 == 0:
         stopping = actuators.longControlState == LongCtrlState.stopping

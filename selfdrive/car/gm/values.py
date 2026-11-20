@@ -34,6 +34,14 @@ class CarControllerParams:
   ACCEL_MIN = -4.  # m/s^2
 
   def __init__(self, CP):
+    # optech: Bolt EV 2017 - StarPilot GM_BOLT_2017_STEERING_LIMITS (the panda checks the same with FLAG_GM_BOLT_2017)
+    if CP.flags & GMFlags.BOLT_2017:
+      self.STEER_MAX = 450
+      self.STEER_DELTA_UP = 15
+      self.STEER_DELTA_DOWN = 34
+      self.STEER_DRIVER_ALLOWANCE = 78
+      self.STEER_DRIVER_MULTIPLIER = 6
+
     # Gas/brake lookups
     self.ZERO_GAS = 2048  # Coasting
     self.MAX_BRAKE = 400  # ~ -4.0 m/s^2 with regen
@@ -192,5 +200,6 @@ ALT_ACC_CAR = {CAR.SUBURBAN}
 
 class GMFlags(IntFlag):
   NO_ACCELERATOR_POS_MSG = 1  # optech: no ECMAcceleratorPos (0xBE); brake position from EBCMBrakePedalPosition
+  BOLT_2017 = 2  # optech: Bolt EV 2017 without ACC (볼트 EV 설정): StarPilot's 2017 steering tune and limits
 
 STEER_THRESHOLD = 1.0
