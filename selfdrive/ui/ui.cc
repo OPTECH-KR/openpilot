@@ -305,6 +305,8 @@ UIState::UIState(QObject *parent) : QObject(parent) {
     "longitudinalPlanExt",
     // dp - for gps accuracy in sidebar
     "gpsLocationExternal",
+    // optech - speed camera ahead
+    "optechSpeedCam",
   });
 
   Params params;

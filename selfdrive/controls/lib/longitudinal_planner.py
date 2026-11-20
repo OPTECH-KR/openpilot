@@ -76,6 +76,7 @@ class LongitudinalPlanner:
     self.read_param()
     self.personality = log.LongitudinalPersonality.standard
     self.dp_long_use_df_tune = False
+    self.optech_cam_decel = False
     self.dp_long_use_df_tune_active = False
     self.dp_long_use_krkeegen_tune = False
     self.dp_long_use_krkeegen_tune_active = False
@@ -88,6 +89,7 @@ class LongitudinalPlanner:
 
     self.dp_long_use_df_tune = self.params.get_bool('dp_long_use_df_tune')
     self.dp_long_use_krkeegen_tune = self.params.get_bool('dp_long_use_krkeegen_tune')
+    self.optech_cam_decel = self.params.get_bool('OptechSpeedCamDecel')
 
   @staticmethod
   def parse_model(model_msg, model_error, v_ego, taco=False):
@@ -241,6 +243,13 @@ class LongitudinalPlanner:
     if self.vision_turn_controller.is_active:
       a_solutions['turn'] = self.vision_turn_controller.a_target
       v_solutions['turn'] = self.vision_turn_controller.v_turn
+
+    # optech - slow down for the speed camera ahead (selfdrive/optech/speedcamd.py)
+    if self.optech_cam_decel and enabled and sm.alive['optechSpeedCam']:
+      cam = sm['optechSpeedCam']
+      if cam.active and cam.targetSpeed > 0:
+        a_solutions['limit'] = float("inf")  # 'limit': plan source enum has no camera entry
+        v_solutions['limit'] = cam.targetSpeed * CV.KPH_TO_MS
 
     source = min(v_solutions, key=v_solutions.get)
 

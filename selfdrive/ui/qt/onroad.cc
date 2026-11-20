@@ -604,6 +604,16 @@ void AnnotatedCameraWidget::updateState(const UIState &s) {
     case cereal::CarState::GearShifter::UNKNOWN: optech_gear = "U"; break;
     default: optech_gear = "M"; break;
   }
+  if (sm.alive("optechSpeedCam")) {
+    const auto cam = sm["optechSpeedCam"].getOptechSpeedCam();
+    optech_cam_limit = cam.getCamLimit();
+    optech_cam_dist = cam.getCamDist();
+    optech_cam_section = cam.getSection();
+    optech_cam_target = cam.getActive() ? cam.getTargetSpeed() : 0;
+  } else {
+    optech_cam_limit = 0;
+    optech_cam_target = 0;
+  }
   optech_gps_alive = sm.alive("gpsLocationExternal");
   if (optech_gps_alive) {
     const auto gps = sm["gpsLocationExternal"].getGpsLocationExternal();
@@ -763,7 +773,8 @@ void AnnotatedCameraWidget::drawOptechHud(QPainter &p) {
   const int by = height() - 230;
 
   // background box (+ CPU / FPS tiles above the speed when 기기 상태 is on)
-  const QColor bg(0, 0, 0, 90);
+  const bool cam_on = optech_cam_limit > 0;
+  const QColor bg = (cam_on && !blink_on) ? QColor(255, 0, 0, 180) : QColor(0, 0, 0, 90);
   if (optech_show_dev) optech_box(p, bx - 120, by - 270, 475, 495, bg, 15, 2);
   else                 optech_box(p, bx - 120, by - 130, 475, 355, bg, 15, 2);
   if (optech_show_dev) {
@@ -787,6 +798,11 @@ void AnnotatedCameraWidget::drawOptechHud(QPainter &p) {
 
   // set speed (green), "--" while cruise is not set
   optech_text(p, bx + 170, by + 15, is_cruise_set ? QString::number((int)std::nearbyint(setSpeed)) : "--", 60, green);
+  if (optech_cam_target > 0 && is_cruise_set && optech_cam_target < setSpeed) {
+    const QColor ochre(218, 111, 37, 255);
+    optech_text(p, bx + 250, by - 50, QString::number((int)std::nearbyint(optech_cam_target)), 50, ochre);
+    optech_text(p, bx + 250, by - 100, "cam", 30, ochre);
+  }
 
   // acceleration profile tile (연비 / 일반 / 고속) + GPS speed above it; only with openpilot longitudinal
   QString mode_text;
@@ -823,8 +839,17 @@ void AnnotatedCameraWidget::drawOptechHud(QPainter &p) {
   optech_box(p, gx - 35, gy - 70, 70, 80, QColor(0, 255, 0, 210), 7, 3);
   optech_text(p, gx, gy + 5, optech_gear, 70, white);
 
+  // speed camera ahead: CAM tile blinking red / yellow with its limit and the distance above it
+  if (cam_on) {
+    const int lx = bx + 75, ly = by + 175;
+    const QString dist = optech_cam_dist >= 1000 ? QString::number(optech_cam_dist / 1000., 'f', 1) + "km"
+                                                 : QString::number((int)optech_cam_dist) + "m";
+    optech_text(p, lx, ly - 45, (optech_cam_section ? "구간 " : "CAM ") + dist, 30, white);
+    optech_box(p, lx - 55, ly - 38, 110, 48, blink_on ? QColor(255, 0, 0, 210) : QColor(255, 255, 0, 210), 6, 2);
+    optech_text(p, lx, ly, QString::number(optech_cam_limit), 40, blink_on ? white : QColor(0, 0, 0, 255));
+  }
   // speed limit (map data), red when over
-  if (speedLimit > 1) {
+  else if (speedLimit > 1) {
     const int lx = bx + 75, ly = by + 175;
     const int limit = (int)std::nearbyint(speedLimit);
     const QColor lcolor = speed > limit + 2 ? QColor(255, 0, 0, 210) : QColor(255, 255, 255, 210);

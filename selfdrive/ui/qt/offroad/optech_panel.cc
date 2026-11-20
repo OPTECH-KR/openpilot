@@ -264,8 +264,22 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
          "크루즈 메인 버튼(ACC MAIN)만 켜져 있으면 크루즈를 켜지 않아도 조향을 계속 도와줍니다. 크루즈만 되는 차량에 특히 좋습니다.\n재부팅해야 적용됩니다.");
 
   // ======== 주행 ========
-  drive->addItem(optech_section("과속카메라 · 방지턱"));
-  drive->addItem(optech_note("준비 중입니다. 과속카메라 감속은 다음 업데이트에서 추가됩니다."));
+  drive->addItem(optech_section("과속카메라"));
+  toggle(drive, "OptechSpeedCam", "내장 카메라 DB",
+         "내비 앱 없이 기기 GPS로 앞쪽 고정식 단속카메라(과속·신호과속·구간단속)를 찾아 화면 속도 상자에 'CAM'으로 보여 줍니다. "
+         "자료: 공공데이터포털 전국무인교통단속카메라 (2026년 10월, 약 3만 1천 대).\n시동을 다시 걸면 적용됩니다.");
+  toggle(drive, "OptechSpeedCamDecel", "카메라 감속",
+         "내장 카메라 DB가 찾은 카메라 앞에서 제한 속도까지 미리 줄입니다. 구간단속 안에서는 제한 속도를 유지합니다.\n"
+         "openpilot이 가감속을 맡는 차량만 동작합니다. 차의 원래 크루즈를 쓰는 차량은 화면 표시만 됩니다.");
+  value(drive, "OptechCamDecelStart", "감속 시작",
+        "카메라에 도착하기 몇 초 전부터 줄이기 시작할지 정합니다. 클수록 일찍, 부드럽게 줄입니다.",
+        5, 60, 1, [](int v) { return QString("%1초 전").arg(v); });
+  value(drive, "OptechCamDecelEnd", "감속 끝",
+        "카메라에 도착하기 몇 초 전까지 목표 속도에 맞출지 정합니다.",
+        0, 20, 1, [](int v) { return QString("%1초 전").arg(v); });
+  value(drive, "OptechCamSafetyFactor", "카메라 앞 목표 속도",
+        "제한 속도의 몇 %로 지나갈지 정합니다. 100%는 제한 속도 그대로, 105%는 5% 더 빠르게 지나갑니다.",
+        90, 120, 1, [](int v) { return QString("%1%").arg(v); });
 
   // ======== 속도 ========
   speed->addItem(optech_note("이 탭의 설정은 openpilot이 가감속을 맡는 차량에서만 동작합니다. 차의 원래 크루즈를 쓰는 차량(볼트 EUV 등)은 변화가 없습니다."));

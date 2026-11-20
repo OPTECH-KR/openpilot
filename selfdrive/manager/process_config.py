@@ -12,6 +12,9 @@ WEBCAM = os.getenv("USE_WEBCAM") is not None
 def driverview(started: bool, params: Params, CP: car.CarParams) -> bool:
   return params.get_bool("IsDriverViewEnabled")  # type: ignore
 
+def optech_speedcam(started: bool, params: Params, CP: car.CarParams) -> bool:
+  return started and params.get_bool("OptechSpeedCam")
+
 def notcar(started: bool, params: Params, CP: car.CarParams) -> bool:
   return CP.notCar  # type: ignore
 
@@ -90,6 +93,8 @@ procs = [
 
   # mapd
   PythonProcess("mapd", "selfdrive.mapd.mapd"),
+  # optech - built-in speed camera DB
+  PythonProcess("speedcamd", "selfdrive.optech.speedcamd", onroad=False, callback=optech_speedcam),
   # gpxd
   # PythonProcess("gpxd", "selfdrive.dragonpilot.gpxd"),
   # PythonProcess("gpx_uploader", "selfdrive.dragonpilot.gpx_uploader", offroad=True),

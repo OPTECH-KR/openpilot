@@ -107,6 +107,8 @@ services = {
   "longitudinalPlanExt": (False, 20., 5),
   "lateralPlanExt": (False, 20., 5),
   "controlsStateExt": (False, 100., 10),
+  # optech
+  "optechSpeedCam": (False, 5.),
 }
 SERVICE_LIST = {name: Service(new_port(idx), *vals) for  # type: ignore
                 idx, (name, vals) in enumerate(services.items())}

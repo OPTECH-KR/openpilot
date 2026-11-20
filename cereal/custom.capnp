@@ -86,7 +86,13 @@ struct ControlsStateExt @0xda96579883444c35 {
   alkaEnabled @1 :Bool;
 }
 
-struct CustomReserved4 @0x80ae746ee2596b11 {
+# OPTECH speed camera ahead (selfdrive/optech/speedcamd.py, built-in Korean camera DB)
+struct OptechSpeedCam @0x80ae746ee2596b11 {
+  camLimit @0 :Int16;       # km/h, 0 = no camera ahead
+  camDist @1 :Float32;      # m to the camera (inside a section: m left in the section)
+  section @2 :Bool;         # inside an average-speed section
+  targetSpeed @3 :Float32;  # km/h to drive now, 0 = no slowdown
+  active @4 :Bool;          # slowing down for the camera
 }
 
 struct CustomReserved5 @0xa5cd762cd951a455 {

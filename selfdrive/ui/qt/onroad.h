@@ -201,6 +201,10 @@ protected:
   int optech_cpu_use = 0;
   float optech_fps = 0;
   int optech_blink = 0;
+  int optech_cam_limit = 0;      // km/h, speed camera ahead (optechSpeedCam)
+  float optech_cam_dist = 0;
+  bool optech_cam_section = false;
+  float optech_cam_target = 0;   // km/h while slowing down for it
   QPixmap speed_bg_img;
 
   //dp
