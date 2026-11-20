@@ -26,6 +26,7 @@
 #include "selfdrive/ui/qt/qt_window.h"
 #include "selfdrive/ui/qt/widgets/input.h"
 #include "selfdrive/ui/qt/offroad/settings_dp.h"
+#include "selfdrive/ui/qt/offroad/optech_panel.h"
 
 // car selection panel
 #include <QJsonObject>
@@ -540,7 +541,7 @@ SettingsWindow::SettingsWindow(QWidget *parent) : QFrame(parent) {
     #endif
     {tr("Toggles"), toggles},
     {tr("Software"), new SoftwarePanel(this)},
-    {"dragonpilot", new DPCtrlPanel(this)},
+    {"OPTECH", new OptechPanel(this)},
   };
 
   nav_btns = new QButtonGroup(this);
