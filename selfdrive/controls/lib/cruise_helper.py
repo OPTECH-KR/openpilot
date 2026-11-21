@@ -138,6 +138,8 @@ class CruiseHelper:
     self.v_cruise_before_brake = 0.0
     # optech '브레이크 후 다시 켜기' (주행 > 브레이크): 0 the set speed from before braking, 1 the current speed, 2 not at all
     self.optechBrakeResumeMode = self.read_brake_resume_mode()
+    # optech '악셀로 다시 켜기' (주행 > 브레이크): speed control paused by the brake comes back while on the gas
+    self.optechGasResume = Params().get_bool("OptechGasResume")
     self.brake_paused = False  # speed control paused by the brake (resumes when the brake is off, see below)
     self.autoSyncCruiseSpeedMax = int(Params().get("AutoSyncCruiseSpeedMax"))
     self.autoResumeFromBrakeReleaseDist = float(int(Params().get("AutoResumeFromBrakeReleaseDist", encoding="utf8")))
@@ -190,6 +192,7 @@ class CruiseHelper:
         self.autoResumeFromBrakeRelease = Params().get_bool("AutoResumeFromBrakeRelease")
         self.brakeResumeSpeedMode = int(Params().get("BrakeResumeSpeedMode", encoding="utf8") or 1)
         self.optechBrakeResumeMode = self.read_brake_resume_mode()
+        self.optechGasResume = Params().get_bool("OptechGasResume")
       elif self.update_params_count == 5:
         self.autoSyncCruiseSpeedMax = int(Params().get("AutoSyncCruiseSpeedMax"))
         self.autoResumeFromBrakeReleaseDist = float(int(Params().get("AutoResumeFromBrakeReleaseDist", encoding="utf8")))
@@ -933,6 +936,16 @@ class CruiseHelper:
           self.send_apilot_event(controls, EventName.stopStop, 10.0)
           if self.cruiseOnDist > 0.0:
             longActiveUser = 3
+
+      # optech '악셀로 다시 켜기' (driver feedback: brake, then straight onto the gas left the SCC off): speed control
+      # paused by the brake comes back while the driver is on the gas - held 0.5 s, 30 km/h or more, wheel near straight,
+      # not at a red light - at the current speed. While the gas stays down, '가속페달 속도 맞춤 상한' (check_gas_cruise_on)
+      # then raises the set speed with the car. A cancel press clears brake_paused: no gas resume after the driver's own off
+      if self.engageWithLong and self.optechGasResume and self.brake_paused and longActiveUser <= 0 and CS.gasPressed \
+         and not brakePressed and self.gasPressedCount * DT_CTRL >= 0.5 and self.v_ego_kph >= 30 \
+         and abs(CS.steeringAngleDeg) < 20 and (self.trafficState % 10) != 1:
+        longActiveUser = 3
+        v_cruise_kph = self.v_ego_kph_set
 
       # C2 port ('사용 방식' 조향+가감속): speed control paused by the brake comes back, at the set speed from before
       # braking, as soon as the brake is off: right away when moving (>= 10 km/h) or behind a lead within 10 m; from a
