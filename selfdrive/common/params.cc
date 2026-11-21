@@ -259,6 +259,8 @@ std::unordered_map<std::string, uint32_t> keys = {
     { "OptechNaviLinkMode", PERSISTENT },
     { "OptechCamTuneSet", PERSISTENT },
     { "OptechBrakeResumeMode", PERSISTENT },
+    { "OptechGasResume", PERSISTENT },
+    { "OptechOffShutdown", PERSISTENT },
     { "AutoCurveSpeedFactor", PERSISTENT },
     { "AutoCurveSpeedFactorIn", PERSISTENT },
     { "AutoTurnControl", PERSISTENT },

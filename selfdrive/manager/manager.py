@@ -106,6 +106,8 @@ def manager_init() -> None:
     ("AutoNaviSpeedBumpSpeed", "35"),
     ("AutoNaviSpeedSafetyFactor", "100"),
     ("OptechBrakeResumeMode", "1"),
+    ("OptechGasResume", "0"),    # 주행 > 브레이크 > 악셀로 다시 켜기 (off: the driver turns it on)
+    ("OptechOffShutdown", "0"),  # 고급 > 시동 끈 뒤 꺼짐 (seconds, 0 off)
     ("AutoNaviSpeedDecelRate", "80"),
     ("AutoRoadLimitCtrl", "0"),
     ("AutoResumeFromBrakeRelease", "1"),

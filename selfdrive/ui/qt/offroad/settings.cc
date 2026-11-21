@@ -853,6 +853,13 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     brake_resume_btn->setTitle(brake_resume_name());
   });
   cruiseToggles->addItem(brake_resume_btn);
+  // OptechGasResume (cruise_helper): brake, then straight onto the gas also brings speed control back (driver feedback)
+  cruiseToggles->addItem(new ParamControl("OptechGasResume", "악셀로 다시 켜기",
+    "켜 두면(초록색) 브레이크로 꺼진 가감속이, 악셀을 밟고 있을 때도 다시 켜집니다. "
+    "시속 30km 이상에서 악셀을 0.5초 넘게 밟고 있으면, 그때 속도로 켜집니다. "
+    "악셀을 더 밟아 빨라지면 설정 속도도 따라 올라갑니다 (속도 탭 '가속페달 속도 맞춤 상한'까지). "
+    "핸들을 많이 꺾었거나 빨간 신호 앞에서는 켜지지 않고, 크루즈 버튼으로 직접 끈 뒤에도 켜지지 않습니다.",
+    ROAD_ICON, this));
   cruiseToggles->addItem(new CValueControl("SoftHoldMode", "소프트홀드", "정차 후 브레이크를 떼도 차를 멈춘 상태로 잡아 주는 기능입니다. 0:사용 안 함, 1:사용, 2:SCC와 함께 사용(일부 차량은 전자식 주차 브레이크가 걸릴 수 있음)", ROAD_ICON, 0, 2, 1));
   cruiseToggles->addItem(carrot_section("크루즈 버튼"));
   cruiseToggles->addItem(new CValueControl("LongControlActiveSound", "크루즈 알림음", "크루즈가 켜지고 꺼질 때 나는 알림음 크기입니다. 0:끄기, 1:작게, 2:크게", ROAD_ICON, 0, 2, 1));
@@ -918,7 +925,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   // ---- 속도: cruise speed, camera / bump, accel ----
   speedToggles = new ListWidget(this);
   speedToggles->addItem(carrot_section("크루즈 속도"));
-  speedToggles->addItem(new CValueControl("AutoSyncCruiseSpeedMax", "가속페달 속도 맞춤 상한", "가속페달로 크루즈 설정 속도보다 빨리 달리면, 페달을 뗄 때 설정 속도를 지금 속도로 올려 줍니다. 이 값(km/h)까지만 올립니다. 0:사용 안 함", ROAD_ICON, 0, 200, 10));
+  speedToggles->addItem(new CValueControl("AutoSyncCruiseSpeedMax", "가속페달 속도 맞춤 상한", "크루즈(가감속)가 켜진 상태에서 악셀로 설정 속도보다 빨리 달리면, 설정 속도도 지금 속도로 따라 올라갑니다 (예: 설정 50km/h에서 악셀로 80km/h까지 가면 설정 속도 80km/h). 이 값(km/h)까지만 올립니다. 0:사용 안 함", ROAD_ICON, 0, 200, 10));
   speedToggles->addItem(new CValueControl("AutoSpeedUptoRoadSpeedLimit", "제한속도까지 자동 올림", "앞차를 따라갈 때 도로 제한속도의 이 비율(%)까지 설정 속도를 자동으로 올립니다. 0:사용 안 함, 100:제한속도까지", ROAD_ICON, 0, 200, 10));
   speedToggles->addItem(carrot_section("출발·정지 (출발이 굼뜨거나 정지가 거칠 때)"));
   speedToggles->addItem(new CValueControl("JerkStartLimit", "출발 저크", "정차 후 출발할 때 가속이 얼마나 빨리 붙을지 정합니다(0.1 단위). 높이면 빠르게, 낮추면 부드럽게 출발합니다.", ROAD_ICON, 1, 50, 1));
@@ -973,7 +980,27 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   advancedToggles = new ListWidget(this);
   advancedToggles->addItem(carrot_section("기기"));
   advancedToggles->addItem(gps_btn);  // GPS 확인 (made with the 시작 items above)
-  advancedToggles->addItem(new ParamControl("AutoShutdown", "자동 꺼짐", "켜 두면(초록색) 차량이나 충전기 전원 없이 배터리로만 켜져 있고 주행 중이 아닐 때, 약 10분 뒤 기기가 스스로 꺼져 배터리를 보호합니다. 끄면 배터리가 다 닳을 때까지 켜져 있습니다. 주행 중이거나 전원이 연결돼 있으면 이 설정과 상관없이 꺼지지 않습니다.", SHELL_ICON, this));
+  advancedToggles->addItem(new ParamControl("AutoShutdown", "자동 꺼짐", "켜 두면(초록색) 차량이나 충전기 전원 없이 배터리로만 켜져 있고 주행 중이 아닐 때, 약 10분 뒤 기기가 스스로 꺼져 배터리를 보호합니다. 끄면 배터리가 다 닳을 때까지 켜져 있습니다. 주행 중이거나 전원이 연결돼 있으면 이 설정과 상관없이 꺼지지 않습니다. 시동을 끈 뒤 바로 끄려면 아래 '시동 끈 뒤 꺼짐'을 쓰세요.", SHELL_ICON, this));
+  // OptechOffShutdown (autoshutdownd): after a drive, turn the device off this long after the car is off (tester feedback)
+  {
+    auto off_btn = new ButtonControl("", "선택",
+      "주행을 마치고 시동을 끈 뒤 기기가 스스로 꺼질 때까지의 시간입니다. 차 전원이 연결돼 있어도 꺼집니다. "
+      "끔(처음 값)이면 지금처럼 켜져 있습니다. 기기를 켠 뒤 한 번도 시동을 걸지 않았으면 (집에서 업데이트·설정할 때) 꺼지지 않습니다.");
+    const QStringList off_names = {"끔", "30초", "1분", "3분", "5분", "10분"};
+    const QList<int> off_secs = {0, 30, 60, 180, 300, 600};
+    auto off_name = [=]() {
+      const int i = off_secs.indexOf(std::atoi(Params().get("OptechOffShutdown").c_str()));
+      return "시동 끈 뒤 꺼짐: " + off_names[i < 0 ? 0 : i];
+    };
+    off_btn->setTitle(off_name());
+    QObject::connect(off_btn, &ButtonControl::clicked, [=]() {
+      const QString sel = MultiOptionDialog::getSelection("시동 끈 뒤 꺼짐", off_names, off_name().section(": ", 1), this);
+      if (sel.isEmpty()) return;
+      Params().put("OptechOffShutdown", std::to_string(off_secs[off_names.indexOf(sel)]));
+      off_btn->setTitle(off_name());
+    });
+    advancedToggles->addItem(off_btn);
+  }
   advancedToggles->addItem(new ParamControl("OpkrHotspotOnBoot", "부팅 시 핫스팟 켜기", "켜 두면 기기가 켜질 때 핫스팟(테더링)이 자동으로 켜집니다.", SHELL_ICON, this));
   advancedToggles->addItem(carrot_section("주행 기록"));
   auto drivelog_btn = new ButtonControl("주행 기록 보기", "보기", "주행할 때마다 자동으로 남는 기록입니다. 고른 주행에서 켜짐·꺼짐, 경고, 오류, 프로그램 멈춤을 시간순으로 보여 줍니다. (최근 30번 보관)");
