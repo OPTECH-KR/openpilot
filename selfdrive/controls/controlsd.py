@@ -833,7 +833,7 @@ class Controls:
     # carcontroller then presses SET- until the car's set speed is there. It stays low after the alert; the driver
     # raises it again. Stock SCC can't go below its minimum, so this does not stop the car
     if self.CP.pcmCruise and self.enabled and self.sm['driverMonitoringState'].awarenessStatus < 0.:
-      v_min = self.cruise_helper.cruiseSpeedMin
+      v_min = max(30, self.cruise_helper.cruiseSpeedMin)  # stock SCC can not be set below 30 km/h
       self.v_cruise_helper.v_cruise_kph = v_min
       self.v_cruise_helper.v_cruise_cluster_kph = v_min
       hudControl.setSpeed = v_min * CV.KPH_TO_MS
