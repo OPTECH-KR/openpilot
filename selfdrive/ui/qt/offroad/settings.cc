@@ -971,8 +971,9 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   // open and the screen stays on with the car off, untouched (replaces '화면 항상 켜기')
   {
     auto keep_btn = new ButtonControl("", "선택",
-      "설정 화면을 안 만지고 두면, 몇 분 뒤에 닫을지 고릅니다. "
-      "항상: 닫히지 않습니다.");
+      "설정을 천천히 보고 만질 수 있게 시간 여유를 둡니다. "
+      "설정한 시간이 지나면 자동으로 메인 화면으로 돌아갑니다. 차량에 연결되어 있으면 주행 화면으로 돌아갑니다. "
+      "항상: 돌아가지 않습니다.");
     const QStringList keep_names = {"1분", "3분", "5분", "10분", "항상"};
     const QList<int> keep_secs = {60, 180, 300, 600, -1};  // -1: never (ui.cc updateWakefulness)
     auto keep_name = [=]() {
