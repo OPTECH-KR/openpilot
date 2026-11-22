@@ -773,8 +773,10 @@ void Device::setAwake(bool on) {
 
 void Device::resetInteractiveTimout() {
   // optech '설정 화면 유지 시간' (화면 탭, tester feedback: the menu closed while reading it): while the settings
-  // window is open, untouched it stays this long; elsewhere 10 s with the car on, 30 s off as before
-  const int settings_s = uiState()->settings_timeout_s;
+  // window is open, untouched it stays this long (-1 '항상': never, see updateWakefulness); elsewhere 10 s with the
+  // car on, 30 s off as before. A value not in the menu (empty / 0) counts as 3 minutes
+  int settings_s = uiState()->settings_timeout_s;
+  if (settings_s == 0) settings_s = 180;
   if (settings_open && settings_s > 0) {
     interactive_timeout = settings_s * UI_FREQ;
   } else {
@@ -831,7 +833,8 @@ void Device::updateWakefulness(const UIState &s) {
 
   if (ignition_just_turned_off || motionTriggered(s)) {
     resetInteractiveTimout();
-  } else if (s.screen_always_on > 0) {
+  } else if (s.screen_always_on > 0 || (settings_open && s.settings_timeout_s < 0)) {
+    // (also '설정 화면 유지 시간: 항상' while the settings window is open)
     // ScreenAlwaysOn: never time out while the car is off (and don't fire interactiveTimout,
     // which would keep closing the settings window)
     if (interactive_timeout <= 0) interactive_timeout = 1;
