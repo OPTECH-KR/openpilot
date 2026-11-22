@@ -885,11 +885,6 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     Params().putBool("EngageWithLong", sel == names[0]);
     engage_mode_btn->setTitle(engage_mode_name());
   });
-  auto tmuxlog_btn = new ButtonControl("오류 로그 (Tmux)", "보기");
-  QObject::connect(tmuxlog_btn, &ButtonControl::clicked, [=]() {
-    const std::string txt = util::read_file("/data/tmux_error.log");
-    ConfirmationDialog::alert(QString::fromStdString(txt), this);
-  });
 
   // ---- 주행: brake / cruise buttons ----
   cruiseToggles = new ListWidget(this);
@@ -1202,7 +1197,6 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   advancedToggles->addItem(carrot_section("개발용"));
   advancedToggles->addItem(new ParamControl("ShowDebugUI", "디버그 정보", "켜 두면 주행 화면에 개발용 상세 정보를 글자로 보여줍니다.", SHELL_ICON, this));
   advancedToggles->addItem(new CValueControl("ShowPlotMode", "디버그 그래프", "개발용 그래프를 보여줍니다. 0:안 보임, 1~5:그래프 종류", SHELL_ICON, 0, 5, 1));
-  advancedToggles->addItem(tmuxlog_btn);
 
   toggles_layout->addWidget(startToggles);
   toggles_layout->addWidget(cruiseToggles);
