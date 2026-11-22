@@ -215,8 +215,8 @@ public:
   int show_path_color_lane = 14;
   float show_path_width = 1.0;
   int show_plot_mode = 0;
-  int screen_always_on = 0;
-  int settings_timeout_s = 180;  // optech '설정 화면 유지 시간' (OptechSettingsTimeout seconds, -1: never)
+  int settings_timeout_s = 180;  // optech '화면 유지 시간' (OptechSettingsTimeout seconds, -1: never)
+  int drive_dim = 0;             // optech '주행 중 밝기' (OptechDriveDim %, 0: off)
 
 signals:
   void uiUpdate(const UIState &s);
@@ -251,11 +251,14 @@ private:
   int interactive_timeout = 0;
   bool ignition_on = false;
   int last_brightness = 0;
+  int idle_frames = 0;    // frames since the last touch ('주행 중 밝기')
+  bool dimmed = false;
   FirstOrderFilter brightness_filter;
   QFuture<void> brightness_future;
 
   void updateBrightness(const UIState &s);
   void updateWakefulness(const UIState &s);
+  bool keepApplies() const;
   bool motionTriggered(const UIState &s);
   void setAwake(bool on);
 

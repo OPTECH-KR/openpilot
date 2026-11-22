@@ -1032,28 +1032,50 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
 
   // ---- 화면 ----
   dispToggles = new ListWidget(this);
-  dispToggles->addItem(new CValueControl("ScreenAlwaysOn", "화면 항상 켜기", "시동이 꺼져 있을 때 아무것도 만지지 않아도 화면이 꺼지지 않게 합니다. 기본은 30초 뒤 꺼집니다. 켜 두면 차 배터리를 조금 더 쓰고 기기 발열이 늘 수 있습니다. 0:기본(30초 뒤 꺼짐), 1:항상 켜기", SHELL_ICON, 0, 1, 1));
-  // OptechSettingsTimeout (ui.cc Device::resetInteractiveTimout): how long the settings window stays open untouched
+  // OptechSettingsTimeout '화면 유지 시간' (ui.cc Device::resetInteractiveTimout): how long the settings window stays
+  // open and the screen stays on with the car off, untouched (replaces '화면 항상 켜기')
   {
     auto keep_btn = new ButtonControl("", "선택",
-      "설정 화면을 만지지 않고 둘 때, 몇 분 뒤에 저절로 닫힐지 고릅니다. 설명을 천천히 읽을 때 길게 두세요. "
-      "화면을 만질 때마다 처음부터 다시 셉니다. 항상: 설정 화면을 직접 닫을 때까지 열려 있고 화면도 꺼지지 않습니다. "
-      "주행 화면에는 영향이 없습니다.");
+      "화면을 만지지 않고 둘 때 얼마 동안 그대로 둘지 고릅니다. 설정 화면은 이 시간이 지나면 저절로 닫히고, "
+      "시동이 꺼져 있을 때는 이 시간이 지나면 화면이 꺼집니다. 화면을 만질 때마다 처음부터 다시 셉니다. "
+      "항상: 설정 화면은 직접 닫을 때까지 열려 있고, 시동이 꺼져 있어도 화면이 꺼지지 않습니다. "
+      "주행 중에는 화면이 항상 켜져 있습니다.");
     const QStringList keep_names = {"1분", "3분", "5분", "10분", "항상"};
     const QList<int> keep_secs = {60, 180, 300, 600, -1};  // -1: never (ui.cc updateWakefulness)
     auto keep_name = [=]() {
       const std::string v = Params().get("OptechSettingsTimeout");
       const int i = keep_secs.indexOf(v.empty() ? 180 : std::atoi(v.c_str()));
-      return "설정 화면 유지 시간: " + keep_names[i < 0 ? 1 : i];
+      return "화면 유지 시간: " + keep_names[i < 0 ? 1 : i];
     };
     keep_btn->setTitle(keep_name());
     QObject::connect(keep_btn, &ButtonControl::clicked, [=]() {
-      const QString sel = MultiOptionDialog::getSelection("설정 화면 유지 시간", keep_names, keep_name().section(": ", 1), this);
+      const QString sel = MultiOptionDialog::getSelection("화면 유지 시간", keep_names, keep_name().section(": ", 1), this);
       if (sel.isEmpty()) return;
       Params().put("OptechSettingsTimeout", std::to_string(keep_secs[keep_names.indexOf(sel)]));
       keep_btn->setTitle(keep_name());
     });
     dispToggles->addItem(keep_btn);
+  }
+  // OptechDriveDim '주행 중 밝기' (ui.cc Device::updateBrightness): while driving, 30 s without a touch -> this %
+  {
+    auto dim_btn = new ButtonControl("", "선택",
+      "주행 중에 화면을 30초 동안 만지지 않으면 화면 밝기를 고른 만큼 낮춥니다. 밤에 화면이 눈부시지 않게 할 때 쓰세요. "
+      "화면을 만지거나 경고가 뜨면 바로 원래 밝기로 돌아옵니다. 주변이 이미 어두워 화면이 더 어두우면 그대로 둡니다. "
+      "끔(처음 값)이면 지금처럼 밝기를 낮추지 않습니다.");
+    const QStringList dim_names = {"끔", "10%", "20%", "30%", "40%", "50%", "70%"};
+    const QList<int> dim_pcts = {0, 10, 20, 30, 40, 50, 70};
+    auto dim_name = [=]() {
+      const int i = dim_pcts.indexOf(std::atoi(Params().get("OptechDriveDim").c_str()));
+      return "주행 중 밝기: " + dim_names[i < 0 ? 0 : i];
+    };
+    dim_btn->setTitle(dim_name());
+    QObject::connect(dim_btn, &ButtonControl::clicked, [=]() {
+      const QString sel = MultiOptionDialog::getSelection("주행 중 밝기", dim_names, dim_name().section(": ", 1), this);
+      if (sel.isEmpty()) return;
+      Params().put("OptechDriveDim", std::to_string(dim_pcts[dim_names.indexOf(sel)]));
+      dim_btn->setTitle(dim_name());
+    });
+    dispToggles->addItem(dim_btn);
   }
   dispToggles->addItem(new CValueControl("ShowTpms", "타이어 공기압", "타이어 공기압을 주행 화면에 보여줍니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
   dispToggles->addItem(new CValueControl("ShowDateTime", "시간 표시", "주행 화면에 시간과 날짜를 보여줍니다. 0:안 보임, 1:시간+날짜, 2:시간만, 3:날짜만", SHELL_ICON, 0, 3, 1));
@@ -1067,12 +1089,13 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   advancedToggles = new ListWidget(this);
   advancedToggles->addItem(carrot_section("기기"));
   advancedToggles->addItem(gps_btn);  // GPS 확인 (made with the 시작 items above)
-  advancedToggles->addItem(new ParamControl("AutoShutdown", "자동 꺼짐", "켜 두면(초록색) 차량이나 충전기 전원 없이 배터리로만 켜져 있고 주행 중이 아닐 때, 약 10분 뒤 기기가 스스로 꺼져 배터리를 보호합니다. 끄면 배터리가 다 닳을 때까지 켜져 있습니다. 주행 중이거나 전원이 연결돼 있으면 이 설정과 상관없이 꺼지지 않습니다. 시동을 끈 뒤 바로 끄려면 아래 '시동 끈 뒤 꺼짐'을 쓰세요.", SHELL_ICON, this));
   // OptechOffShutdown (autoshutdownd): after a drive, turn the device off this long after the car is off (tester feedback)
   {
     auto off_btn = new ButtonControl("", "선택",
-      "주행을 마치고 시동을 끈 뒤 기기가 스스로 꺼질 때까지의 시간입니다. 차 전원이 연결돼 있어도 꺼집니다. "
-      "끔(처음 값)이면 지금처럼 켜져 있습니다. 기기를 켠 뒤 한 번도 시동을 걸지 않았으면 (집에서 업데이트·설정할 때) 꺼지지 않습니다.");
+      "상시 전원(시동을 꺼도 전기가 계속 들어오는 곳)에 연결한 차량에서 쓰는 설정입니다. "
+      "주행을 마치고 시동을 끈 뒤 고른 시간이 지나면 기기가 스스로 꺼져 차 배터리가 닳지 않게 합니다. "
+      "시동을 끄면 전기가 끊기는 곳에 연결했다면 기기도 함께 꺼지므로 끔으로 두면 됩니다. "
+      "끔(처음 값)이면 꺼지지 않고 계속 켜져 있습니다. 기기를 켠 뒤 한 번도 시동을 걸지 않았으면 (집에서 업데이트·설정할 때) 꺼지지 않습니다.");
     const QStringList off_names = {"끔", "30초", "1분", "3분", "5분", "10분"};
     const QList<int> off_secs = {0, 30, 60, 180, 300, 600};
     auto off_name = [=]() {
