@@ -50,6 +50,15 @@
 #include <QrCode.hpp>
 #include <QLabel>
 
+// optech '운전자 모니터링' (OptechDmMode, applied at reboot): 0 기본 사용 (camera, dmonitoringd), 1 경도 사용 (no camera,
+// dpmonitoringd: 5 min without any steering / pedal / button), 2 사용 안 함 (dpmonitoringd sends no warnings).
+// ShowDmInfo follows it for process_config / boardd: -1 camera off, 0 / 1 icon hidden / shown
+static int optech_dm_mode() {
+  const std::string v = Params().get("OptechDmMode");
+  if (v.empty()) return std::atoi(Params().get("ShowDmInfo").c_str()) < 0 ? 1 : 0;  // set before this menu existed
+  return std::clamp(std::atoi(v.c_str()), 0, 2);
+}
+
 TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
   // param, title, desc, icon, confirm
   std::vector<std::tuple<QString, QString, QString, QString>> toggle_defs{
@@ -137,6 +146,30 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
   connect(toggles["ExperimentalLongitudinalEnabled"], &ToggleControl::toggleFlipped, [=]() {
     updateToggles();
   });
+  // 운전자 모니터링: 기본 사용 / 경도 사용 / 사용 안 함 (the icon switch stays on OPTECH > 화면)
+  {
+    const QStringList dm_names = {"기본 사용", "경도 사용", "사용 안 함"};
+    auto dm_btn = new ButtonControl("", "선택",
+      "운전자가 운전에 집중하는지 확인하는 방식을 고릅니다. 바꾼 뒤 기기를 다시 켜야 적용됩니다.\n"
+      "기본 사용: 기기 앞쪽 카메라로 운전자의 얼굴을 봅니다. 화면에 얼굴 아이콘을 보여 줄 수 있습니다. "
+      "앞을 보지 않거나 졸아서 1분이 지나면 경고하고, 그래도 계속되면 경고음과 함께 감속합니다.\n"
+      "경도 사용: 카메라를 쓰지 않아 기기 발열이 줄어듭니다. 핸들·페달·버튼을 5분 동안 전혀 쓰지 않으면 "
+      "경고하고 감속합니다. 졸거나 정신을 잃었을 때를 대비한 최소한의 안전장치입니다.\n"
+      "사용 안 함: 카메라도 쓰지 않고 경고도 없습니다. 운전자가 반응이 없어도 오픈파일럿이 계속 운전하므로 사용을 추천하지 않습니다.");
+    auto dm_title = [=]() { dm_btn->setTitle("운전자 모니터링: " + dm_names[optech_dm_mode()]); };
+    dm_title();
+    QObject::connect(dm_btn, &ButtonControl::clicked, [=]() {
+      const QString cur = dm_names[optech_dm_mode()];
+      const QString sel = MultiOptionDialog::getSelection("운전자 모니터링", dm_names, cur, this);
+      if (sel.isEmpty() || sel == cur) return;
+      const int m = dm_names.indexOf(sel);
+      Params().put("OptechDmMode", std::to_string(m));
+      Params().put("ShowDmInfo", m == 0 ? "1" : "-1");
+      dm_title();
+      ConfirmationDialog::alert("기기를 다시 켜야 적용됩니다.", this);
+    });
+    addItem(dm_btn);
+  }
 }
 
 void TogglesPanel::expandToggleDescription(const QString &param) {
@@ -1083,53 +1116,14 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   dispToggles->addItem(new CValueControl("ShowDeviceState", "기기 상태", "기기 상태(CPU 온도, 메모리, 저장공간)를 보여줍니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
   dispToggles->addItem(new CValueControl("ShowBlindSpot", "후측방(BSD) 경고", "후측방 감지(BSD) 경고를 화면에 표시합니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
   dispToggles->addItem(new CValueControl("ShowConnInfo", "APM 연결 표시", "내비(APM/NDA) 연결 상태 아이콘을 보여줍니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
-  // '운전자 모니터링' (OptechDmMode, applied at reboot): 0 기본 사용 (camera, dmonitoringd), 1 경도 사용 (no camera,
-  // dpmonitoringd: 5 min without any steering / pedal / button), 2 사용 안 함 (no camera, dpmonitoringd sends no
-  // warnings). ShowDmInfo follows it for process_config / boardd: -1 camera off, 0 / 1 icon hidden / shown
-  {
-    auto dm_mode = []() {
-      const std::string v = Params().get("OptechDmMode");
-      if (v.empty()) return std::atoi(Params().get("ShowDmInfo").c_str()) < 0 ? 1 : 0;  // before this menu
-      return std::clamp(std::atoi(v.c_str()), 0, 2);
-    };
-    const QStringList dm_names = {"기본 사용", "경도 사용", "사용 안 함"};
-    auto dm_btn = new ButtonControl("", "선택",
-      "운전자가 운전에 집중하는지 확인하는 방식을 고릅니다. 바꾼 뒤 기기를 다시 켜야 적용됩니다.
-"
-      "기본 사용: 기기 앞쪽 카메라로 운전자의 얼굴을 봅니다. 화면에 얼굴 아이콘을 보여 줄 수 있습니다. "
-      "앞을 보지 않거나 졸아서 1분이 지나면 경고하고, 그래도 계속되면 경고음과 함께 감속합니다.
-"
-      "경도 사용: 카메라를 쓰지 않아 기기 발열이 줄어듭니다. 핸들·페달·버튼을 5분 동안 전혀 쓰지 않으면 "
-      "경고하고 감속합니다. 졸거나 정신을 잃었을 때를 대비한 최소한의 안전장치입니다.
-"
-      "사용 안 함: 카메라도 쓰지 않고 경고도 없습니다. 운전자가 반응이 없어도 오픈파일럿이 계속 운전하므로 사용을 추천하지 않습니다.");
-    auto dm_icon = new ToggleControl("운전자 모니터링 아이콘",
-      "주행 화면에 운전자 모니터링 아이콘(얼굴 모양)을 보여 줍니다. 운전자 모니터링이 '기본 사용'일 때만 쓸 수 있습니다.",
-      SHELL_ICON, std::atoi(Params().get("ShowDmInfo").c_str()) >= 1, this);
-    auto dm_refresh = [=]() {
-      const int m = dm_mode();
-      dm_btn->setTitle("운전자 모니터링: " + dm_names[m]);
-      dm_icon->setEnabled(m == 0);
-      if (m != 0) dm_icon->setToggled(false);
-    };
-    dm_refresh();
-    QObject::connect(dm_btn, &ButtonControl::clicked, [=]() {
-      const QString cur = dm_names[dm_mode()];
-      const QString sel = MultiOptionDialog::getSelection("운전자 모니터링", dm_names, cur, this);
-      if (sel.isEmpty() || sel == cur) return;
-      const int m = dm_names.indexOf(sel);
-      Params().put("OptechDmMode", std::to_string(m));
-      Params().put("ShowDmInfo", m == 0 ? "1" : "-1");
-      if (m == 0) dm_icon->setToggled(true);
-      dm_refresh();
-      ConfirmationDialog::alert("기기를 다시 켜야 적용됩니다.", this);
-    });
-    QObject::connect(dm_icon, &ToggleControl::toggleFlipped, [=](bool on) {
-      if (dm_mode() == 0) Params().put("ShowDmInfo", on ? "1" : "0");
-    });
-    dispToggles->addItem(dm_btn);
-    dispToggles->addItem(dm_icon);
-  }
+  // '운전자 모니터링 아이콘' (ShowDmInfo 0 / 1); the mode itself is chosen on the 토글 page (optech_dm_mode)
+  dmIcon = new ToggleControl("운전자 모니터링 아이콘",
+    "주행 화면에 운전자 모니터링 아이콘(얼굴 모양)을 보여 줍니다. 토글 화면의 운전자 모니터링이 '기본 사용'일 때만 쓸 수 있습니다.",
+    SHELL_ICON, std::atoi(Params().get("ShowDmInfo").c_str()) >= 1, this);
+  QObject::connect(dmIcon, &ToggleControl::toggleFlipped, [=](bool on) {
+    if (optech_dm_mode() == 0) Params().put("ShowDmInfo", on ? "1" : "0");
+  });
+  dispToggles->addItem(dmIcon);
 
   // ---- 고급: experimental / developer ----
   advancedToggles = new ListWidget(this);
@@ -1275,6 +1269,18 @@ void CarrotPanel::togglesCarrot(int widgetIndex) {
   steerToggles->setVisible(widgetIndex == 3);
   dispToggles->setVisible(widgetIndex == 4);
   advancedToggles->setVisible(widgetIndex == 5);
+  refreshDmIcon();
+}
+
+void CarrotPanel::refreshDmIcon() {
+  const bool basic = optech_dm_mode() == 0;
+  dmIcon->setEnabled(basic);
+  dmIcon->setToggled(basic && std::atoi(Params().get("ShowDmInfo").c_str()) >= 1);
+}
+
+void CarrotPanel::showEvent(QShowEvent *event) {
+  QWidget::showEvent(event);
+  refreshDmIcon();
 }
 
 void CarrotPanel::updateButtonStyles() {

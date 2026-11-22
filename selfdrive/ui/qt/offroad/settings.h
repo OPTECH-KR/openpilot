@@ -162,8 +162,14 @@ private:
   ListWidget* startToggles;
   ListWidget* advancedToggles;
 
+  ToggleControl* dmIcon = nullptr;  // optech '운전자 모니터링 아이콘' (화면 tab)
+
   void togglesCarrot(int widgetIndex);
   void updateButtonStyles();
+  void refreshDmIcon();
+
+protected:
+  void showEvent(QShowEvent *event) override;
 
 public:
   explicit CarrotPanel(QWidget* parent = nullptr);
