@@ -87,6 +87,26 @@ class CarController:
     self.resume_wait_timer = 0
     self.button_alive = 0
     self.button_alive_frame = 0
+    # optech drive record: cruise buttons openpilot sent to the car (CLU11), counted since start -
+    # RES while the car's SCC is off / RES while on / SET- / GAP / CANCEL (drivelog reads the change)
+    self.btn_counts = [0, 0, 0, 0, 0]
+
+  def drive_record_text(self, CS, can_sends):
+    """carControl.debugTextCC for selfdrive/carrot/tools/drivelog.py (nothing else shows it)."""
+    for msg in can_sends:
+      if msg[0] == 1265:  # CLU11: CF_Clu_CruiseSwState is the low 3 bits of byte 0
+        btn = msg[2][0] & 0x7
+        if btn == Buttons.RES_ACCEL:
+          self.btn_counts[1 if CS.out.cruiseState.enabled else 0] += 1
+        elif btn == Buttons.SET_DECEL:
+          self.btn_counts[2] += 1
+        elif btn == Buttons.GAP_DIST:
+          self.btn_counts[3] += 1
+        elif btn == Buttons.CANCEL:
+          self.btn_counts[4] += 1
+    scc = CS.scc_diag if CS.scc_diag is not None else (-1, -1, -1, -1)
+    cam = CS.cam_lkas_diag if CS.cam_lkas_diag is not None else (-1, -1)
+    return "OPT i={} a={} f={} m={} cl={} cw={} r0={} r1={} s={} g={} c={}".format(*scc, *cam, *self.btn_counts)
 
   def update(self, CC, CS):
     actuators = CC.actuators
@@ -345,6 +365,11 @@ class CarController:
     new_actuators = actuators.copy()
     new_actuators.steer = apply_steer / self.params.STEER_MAX
     new_actuators.accel = accel
+
+    try:
+      CC.debugTextCC = self.drive_record_text(CS, can_sends)
+    except Exception:  # noqa: BLE001  (the drive record must never stop the car's messages)
+      pass
 
     self.frame += 1
     return new_actuators, can_sends

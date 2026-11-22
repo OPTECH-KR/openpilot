@@ -43,6 +43,10 @@
 #include <QFileInfo> // opkr
 #include <QDir>
 #include <QElapsedTimer>
+#include <QNetworkInterface>  // optech 주행 기록 내려받기
+#include <QImage>
+#include <QPixmap>
+#include <QrCode.hpp>
 #include <QLabel>
 
 TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
@@ -629,6 +633,67 @@ SettingsWindow::SettingsWindow(QWidget *parent) : QFrame(parent) {
 static const char *ROAD_ICON = "";
 static const char *SHELL_ICON = "";
 
+// optech '주행 기록 내려받기': the device's addresses on Wi-Fi / hotspot, as the log page URL (selfdrive/carrot/tools/
+// logserver.py, port 8088). The phone hotspot / the device's own hotspot (192.168.43.x) first
+static QStringList log_page_urls() {
+  QStringList urls, others;
+  for (const QNetworkInterface &nif : QNetworkInterface::allInterfaces()) {
+    if (!(nif.flags() & QNetworkInterface::IsUp) || (nif.flags() & QNetworkInterface::IsLoopBack)) continue;
+    if (nif.name().startsWith("rmnet")) continue;  // mobile data: a phone can't reach it
+    for (const QNetworkAddressEntry &e : nif.addressEntries()) {
+      if (e.ip().protocol() != QAbstractSocket::IPv4Protocol) continue;
+      const QString url = QString("http://%1:8088").arg(e.ip().toString());
+      (e.ip().toString().startsWith("192.168.43.") ? urls : others) << url;
+    }
+  }
+  return urls + others;
+}
+
+// QR code + how to use it, for the phone to open the log page
+class LogQrDialog : public QDialogBase {
+public:
+  LogQrDialog(QWidget *parent, const QStringList &urls) : QDialogBase(parent) {
+    QHBoxLayout *main = new QHBoxLayout(this);
+    main->setContentsMargins(60, 50, 60, 50);
+    main->setSpacing(60);
+
+    QLabel *qr = new QLabel();
+    qrcodegen::QrCode code = qrcodegen::QrCode::encodeText(urls[0].toUtf8().data(), qrcodegen::QrCode::Ecc::MEDIUM);
+    const int sz = code.getSize();
+    QImage im(sz + 8, sz + 8, QImage::Format_RGB32);  // 4-module white border
+    im.fill(qRgb(255, 255, 255));
+    for (int y = 0; y < sz; y++) {
+      for (int x = 0; x < sz; x++) {
+        if (code.getModule(x, y)) im.setPixel(x + 4, y + 4, qRgb(0, 0, 0));
+      }
+    }
+    const int px = (720 / (sz + 8)) * (sz + 8);
+    qr->setPixmap(QPixmap::fromImage(im.scaled(px, px, Qt::KeepAspectRatio, Qt::FastTransformation)));
+    main->addWidget(qr, 0, Qt::AlignVCenter);
+
+    QVBoxLayout *right = new QVBoxLayout();
+    right->setSpacing(30);
+    QLabel *title = new QLabel("폰 카메라로 QR 코드를 찍으세요");
+    title->setStyleSheet("font-size: 60px; font-weight: 600;");
+    title->setWordWrap(true);
+    right->addWidget(title);
+    QLabel *desc = new QLabel(
+      "열린 화면에서 '전체 기록 한 번에 받기'를 누르고, 받은 파일을 카카오톡으로 보내 주세요.\n\n"
+      "폰이 이 기기와 같은 와이파이나 핫스팟에 연결돼 있어야 열립니다. 15분 뒤 자동으로 닫힙니다.\n\n"
+      "주소: " + urls.join("  /  "));
+    desc->setStyleSheet("font-size: 40px; color: #CCCCCC;");
+    desc->setWordWrap(true);
+    right->addWidget(desc);
+    right->addStretch(1);
+    QPushButton *close = new QPushButton("닫기");
+    close->setFixedHeight(140);
+    close->setStyleSheet("font-size: 50px; border-radius: 20px; background-color: #393939;");
+    QObject::connect(close, &QPushButton::clicked, this, &QDialog::accept);
+    right->addWidget(close);
+    main->addLayout(right, 1);
+  }
+};
+
 // group title inside a tab list
 static QLabel *carrot_section(const QString &title) {
   QLabel *label = new QLabel(title);
@@ -1061,6 +1126,23 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     d.exec();
   });
   advancedToggles->addItem(drivelog_btn);
+  // optech: the drive records to the driver's phone (QR code -> page on this device -> share to the developer)
+  auto drivelog_get_btn = new ButtonControl("주행 기록 내려받기", "QR 보기",
+    "주행 기록을 폰으로 받아 카카오톡 등으로 보낼 수 있습니다. 누르면 QR 코드가 뜨고, 폰으로 찍으면 기록 목록이 열립니다. "
+    "기록에는 켜짐·꺼짐, 경고, 오류와 함께 순정 SCC 상태, 계기판 SCC 안내 신호, 차선 인식, 브레이크등, "
+    "openpilot이 보낸 크루즈 버튼(RES 등)이 1초마다 들어 있고, 위치(좌표)는 들어 있지 않습니다. "
+    "폰이 이 기기와 같은 와이파이나 핫스팟에 연결돼 있어야 합니다.");
+  QObject::connect(drivelog_get_btn, &ButtonControl::clicked, [=]() {
+    const QStringList urls = log_page_urls();
+    if (urls.isEmpty()) {
+      ConfirmationDialog::alert("와이파이나 핫스팟에 연결돼 있지 않아요. 폰 핫스팟에 이 기기를 연결하거나, '부팅 시 핫스팟 켜기'로 "
+                                "이 기기의 핫스팟을 켠 뒤 폰을 연결하고 다시 눌러 주세요.", this);
+      return;
+    }
+    Params().put("OptechLogServer", "1");  // logserver.py serves the page for 15 minutes
+    LogQrDialog(this, urls).exec();
+  });
+  advancedToggles->addItem(drivelog_get_btn);
   advancedToggles->addItem(carrot_section("실험 모드"));
   {
     auto op_long = new ParamControl("ExperimentalLongitudinalEnabled", "openpilot 가감속 제어 (알파)", "CAN FD 현대·기아용 롱컨 스위치입니다. 일반 CAN 현대·기아는 이 스위치 대신 토글의 '롱컨'으로 롱컨을 켜지만, 실험 모드 스위치는 이 값이 켜져 있어야 동작합니다. 켜면 자동 긴급 제동(AEB)이 꺼질 수 있습니다.", SHELL_ICON, this);

@@ -313,6 +313,8 @@ def manager_thread() -> None:
 
   if EON:
     Process(name="autoshutdownd", target=launcher, args=("selfdrive.autoshutdownd", "autoshutdownd")).start()
+    # optech 고급 > 주행 기록 내려받기: serves /data/drivelog to the phone for 15 min after the menu button
+    Process(name="logserver", target=launcher, args=("selfdrive.carrot.tools.logserver", "logserver")).start()
     system("am startservice com.neokii.optool/.MainService")
 
   Process(name="road_speed_limiter", target=launcher, args=("selfdrive.road_speed_limiter", "road_speed_limiter")).start()
