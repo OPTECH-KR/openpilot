@@ -82,6 +82,12 @@ OnroadWindow::OnroadWindow(QWidget *parent) : QWidget(parent) {
 }
 
 void OnroadWindow::updateState(const UIState &s) {
+  // optech '녹화 버튼' (화면 탭): show or hide the screen record button; hiding it stops a recording
+  if (recorder && recorder->isVisible() != s.show_record_btn) {
+    if (!s.show_record_btn) recorder->stop(false);
+    recorder->setVisible(s.show_record_btn);
+  }
+
   QColor bgColor = bg_colors[s.status];
   Alert alert = Alert::get(*(s.sm), s.scene.started_frame);
   if (s.sm->updated("controlsState") || !alert.equal({})) {

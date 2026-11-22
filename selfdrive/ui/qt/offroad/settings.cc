@@ -1008,6 +1008,9 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     });
     dispToggles->addItem(dim_btn);
   }
+  dispToggles->addItem(new ParamControl("OptechShowRecordBtn", "녹화 버튼",
+    "켜 두면(초록색) 주행 화면 오른쪽 아래에 화면 녹화 버튼이 보입니다. 누르면 기기 화면을 동영상으로 녹화하고, "
+    "다시 누르면 멈춥니다. 주행 영상을 남기고 싶을 때만 켜세요. 끄면 버튼이 사라지고 하던 녹화도 멈춥니다.", SHELL_ICON, this));
   dispToggles->addItem(new CValueControl("ShowTpms", "타이어 공기압", "타이어 공기압을 주행 화면에 보여줍니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
   dispToggles->addItem(new CValueControl("ShowDateTime", "시간 표시", "주행 화면에 시간과 날짜를 보여줍니다. 0:안 보임, 1:시간+날짜, 2:시간만, 3:날짜만", SHELL_ICON, 0, 3, 1));
   dispToggles->addItem(new CValueControl("ShowGpsInfo", "GPS 상태", "주행 화면 오른쪽 아래에 GPS가 잡혔는지, 신호 세기(막대 4칸), 보이는 위성 수, 위치 오차(m)를 보여줍니다. GPS는 시동이 켜져 있을 때만 동작합니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));

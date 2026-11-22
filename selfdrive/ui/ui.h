@@ -217,6 +217,7 @@ public:
   int show_plot_mode = 0;
   int settings_timeout_s = 180;  // optech '화면 유지 시간' (OptechSettingsTimeout seconds, -1: never)
   int drive_dim = 0;             // optech '주행 중 밝기' (OptechDriveDim %, 0: off)
+  bool show_record_btn = false;  // optech '녹화 버튼' (OptechShowRecordBtn)
 
 signals:
   void uiUpdate(const UIState &s);
