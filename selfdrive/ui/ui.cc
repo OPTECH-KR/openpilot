@@ -746,6 +746,7 @@ void UIState::update() {
     Params params;
     settings_timeout_s = std::atoi(params.get("OptechSettingsTimeout").c_str());
     drive_dim = std::atoi(params.get("OptechDriveDim").c_str());
+    show_record_btn = params.getBool("OptechShowRecordBtn");
   }
   emit uiUpdate(*this);
 }

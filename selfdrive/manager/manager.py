@@ -110,6 +110,7 @@ def manager_init() -> None:
     ("OptechOffShutdown", "0"),  # 고급 > 시동 끈 뒤 꺼짐 (seconds, 0 off)
     ("OptechSettingsTimeout", "180"),  # 화면 > 화면 유지 시간 (seconds, -1 항상)
     ("OptechDriveDim", "0"),  # 화면 > 주행 중 밝기 (%, 0 off)
+    ("OptechShowRecordBtn", "0"),  # 화면 > 녹화 버튼 (0 hidden)
     ("AutoNaviSpeedDecelRate", "80"),
     ("AutoRoadLimitCtrl", "0"),
     ("AutoResumeFromBrakeRelease", "1"),
