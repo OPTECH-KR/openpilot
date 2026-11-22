@@ -34,7 +34,23 @@ NORMAL_EVENTS = {
 LAG_EVENT_MS = 100  # controlsd frame late by more than this -> event (at most every 10 s)
 
 HEADER = ("# time | v km/h | set | en act lat lon | gas brk str | angle torque | steerCmd accel | "
-          "lead d/vrel | cpu% temp mem% freeGB | lag ms | gps fix sats strong cno accm | fdrop% radarlag")
+          "lead d/vrel | cpu% temp mem% freeGB | lag ms | gps fix sats strong cno accm | fdrop% radarlag | "
+          "carSCC main on mode | cluster info alert fail | lane L R cam camWarn | brakeLight | btn/s RESoff RESon SET GAP CANCEL")
+
+# carControl.debugTextCC from the Hyundai carcontroller (drive_record_text): SCC radar -> cluster codes, the stock
+# camera's lane state and the cruise buttons openpilot sent (counts since start)
+OPT_KEYS = ("i", "a", "f", "m", "cl", "cw", "r0", "r1", "s", "g", "c")
+BTN_KEYS = ("r0", "r1", "s", "g", "c")
+
+
+def parse_opt(text):
+  if not text.startswith("OPT "):
+    return None
+  try:
+    d = dict(kv.split("=") for kv in text[4:].split())
+    return {k: int(d[k]) for k in OPT_KEYS}
+  except (ValueError, KeyError):
+    return None
 
 
 DIAG_FILE = os.path.join(LOG_DIR, "diag.txt")
@@ -80,6 +96,60 @@ class DriveLog:
     self.proc_sock = messaging.sub_sock("procLog", conflate=True)
     self.proc_prev = None  # (time, {pid: (name, cpu seconds)})
     self.next_cpu_event = time.monotonic() + 30.
+    # car SCC / cluster / buttons (parse_opt)
+    self.prev_car_scc = None
+    self.prev_disp = None
+    self.prev_cw = None
+    self.prev_btn = None       # button counts at the last check
+    self.line_btn = None       # button counts at the last status line
+    self.res_off_n = 0         # RES sent while the car's SCC was off, in the current run
+    self.res_off_last = None   # time of the last such RES
+
+  def context(self, cs, cc, ctl):
+    """Short state for an event line: what the driver and openpilot were doing at that moment."""
+    hud = cc.hudControl
+    rs = self.last.get("radarState")
+    lead = f"{rs.leadOne.dRel:.0f}m" if rs is not None and rs.leadOne.status else "-"
+    vset = f"{ctl.vCruise:.0f}" if ctl is not None else "-"
+    return (f"[v {cs.vEgo * 3.6:.0f} set {vset} oplong {b(cc.longActive)} brk {b(cs.brakePressed)} "
+            f"brkLight {b(cs.brakeLights)} gas {b(cs.gasPressed)} lane {b(hud.leftLaneVisible)}{b(hud.rightLaneVisible)} "
+            f"lead {lead} angle {cs.steeringAngleDeg:.0f}]")
+
+  def scc_events(self, cs, cc, ctl, opt, now):
+    ctx = self.context(cs, cc, ctl)
+    car_scc = (cs.cruiseState.available, cs.cruiseState.enabled)
+    if self.prev_car_scc is not None and car_scc != self.prev_car_scc:
+      what = "on" if car_scc[1] else ("off" if car_scc[0] else "main off")
+      self.event(f"car SCC {what} (mode {opt['m']}, cluster info {opt['i']}) {ctx}")
+    self.prev_car_scc = car_scc
+
+    disp = (opt["i"], opt["a"], opt["f"])
+    if self.prev_disp is not None and disp != self.prev_disp:
+      p = self.prev_disp
+      self.event(f"cluster SCC info {p[0]}->{disp[0]} alert {p[1]}->{disp[1]} fail {p[2]}->{disp[2]} {ctx}")
+    self.prev_disp = disp
+
+    if self.prev_cw is not None and opt["cw"] != self.prev_cw:
+      self.event(f"stock camera warning {self.prev_cw}->{opt['cw']} (camera lane state {opt['cl']}) {ctx}")
+    self.prev_cw = opt["cw"]
+
+    btn = [opt[k] for k in BTN_KEYS]
+    if self.prev_btn is not None and all(n >= o for n, o in zip(btn, self.prev_btn)):
+      d = [n - o for n, o in zip(btn, self.prev_btn)]
+      if d[0] > 0:  # RES while the car's SCC is off: the car may answer with 'SCC 작동조건이 아님'
+        if self.res_off_last is None:
+          self.event(f"RES sent while car SCC off: start {ctx}")
+          self.res_off_n = 0
+        self.res_off_n += d[0]
+        self.res_off_last = now
+      if d[4] > 0:
+        self.event(f"CANCEL sent {ctx}")
+    elif self.prev_btn is not None:  # counts went back: controlsd restarted
+      self.line_btn = None
+    self.prev_btn = btn
+    if self.res_off_last is not None and now - self.res_off_last > 2.:
+      self.event(f"RES sent while car SCC off: stop ({self.res_off_n} sent, car SCC {'on' if car_scc[1] else 'off'}) {ctx}")
+      self.res_off_last = None
 
   def event(self, text):
     self.out.write(f"{datetime.datetime.now():%H:%M:%S} ** {text}\n")
@@ -147,6 +217,10 @@ class DriveLog:
       self.events = names
 
     now = time.monotonic()
+    opt = parse_opt(cc.debugTextCC) if cc is not None else None
+    if opt is not None and cs is not None:
+      self.scc_events(cs, cc, ctl, opt, now)
+
     if ctl is not None and ctl.cumLagMs > LAG_EVENT_MS and now >= self.next_lag_event:
       self.event(f"controlsd lag {ctl.cumLagMs:.0f} ms")
       self.next_lag_event = now + 10.
@@ -188,6 +262,21 @@ class DriveLog:
     md = messaging.recv_one_or_none(self.model_sock)
     rs_lag = f"{rs.cumLagMs:5.0f}" if rs is not None else "-"
     parts.append((f"{md.modelV2.frameDropPerc:4.1f} " if md is not None else "- ") + rs_lag)
+    parts.append(f"{b(cs.cruiseState.available)} {b(cs.cruiseState.enabled)} {opt['m']}" if opt is not None else
+                 f"{b(cs.cruiseState.available)} {b(cs.cruiseState.enabled)} -")
+    if opt is not None:
+      hud = cc.hudControl
+      parts.append(f"{opt['i']} {opt['a']} {opt['f']}")
+      parts.append(f"{b(hud.leftLaneVisible)} {b(hud.rightLaneVisible)} {opt['cl']} {opt['cw']}")
+    else:
+      parts += ["- - -", "- - - -"]
+    parts.append(b(cs.brakeLights))
+    btn = [opt[k] for k in BTN_KEYS] if opt is not None else None
+    if btn is not None and self.line_btn is not None:
+      parts.append(" ".join(str(n - o) for n, o in zip(btn, self.line_btn)))
+    else:
+      parts.append("- - - - -")
+    self.line_btn = btn
     self.out.write(" | ".join(parts) + "\n")
     self.cpu_top(now)
 
