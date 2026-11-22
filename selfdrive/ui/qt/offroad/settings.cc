@@ -968,6 +968,28 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   // ---- 화면 ----
   dispToggles = new ListWidget(this);
   dispToggles->addItem(new CValueControl("ScreenAlwaysOn", "화면 항상 켜기", "시동이 꺼져 있을 때 아무것도 만지지 않아도 화면이 꺼지지 않게 합니다. 기본은 30초 뒤 꺼집니다. 켜 두면 차 배터리를 조금 더 쓰고 기기 발열이 늘 수 있습니다. 0:기본(30초 뒤 꺼짐), 1:항상 켜기", SHELL_ICON, 0, 1, 1));
+  // OptechSettingsTimeout (ui.cc Device::resetInteractiveTimout): how long the settings window stays open untouched
+  {
+    auto keep_btn = new ButtonControl("", "선택",
+      "설정 화면을 만지지 않고 둘 때, 몇 분 뒤에 저절로 닫힐지 고릅니다. 설명을 천천히 읽을 때 길게 두세요. "
+      "화면을 만질 때마다 처음부터 다시 셉니다. 기본: 시동이 켜져 있으면 10초, 꺼져 있으면 30초 뒤 닫힘. "
+      "주행 화면에는 영향이 없습니다.");
+    const QStringList keep_names = {"기본", "1분", "3분", "5분", "10분"};
+    const QList<int> keep_secs = {0, 60, 180, 300, 600};
+    auto keep_name = [=]() {
+      const std::string v = Params().get("OptechSettingsTimeout");
+      const int i = keep_secs.indexOf(v.empty() ? 180 : std::atoi(v.c_str()));
+      return "설정 화면 유지 시간: " + keep_names[i < 0 ? 2 : i];
+    };
+    keep_btn->setTitle(keep_name());
+    QObject::connect(keep_btn, &ButtonControl::clicked, [=]() {
+      const QString sel = MultiOptionDialog::getSelection("설정 화면 유지 시간", keep_names, keep_name().section(": ", 1), this);
+      if (sel.isEmpty()) return;
+      Params().put("OptechSettingsTimeout", std::to_string(keep_secs[keep_names.indexOf(sel)]));
+      keep_btn->setTitle(keep_name());
+    });
+    dispToggles->addItem(keep_btn);
+  }
   dispToggles->addItem(new CValueControl("ShowTpms", "타이어 공기압", "타이어 공기압을 주행 화면에 보여줍니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
   dispToggles->addItem(new CValueControl("ShowDateTime", "시간 표시", "주행 화면에 시간과 날짜를 보여줍니다. 0:안 보임, 1:시간+날짜, 2:시간만, 3:날짜만", SHELL_ICON, 0, 3, 1));
   dispToggles->addItem(new CValueControl("ShowGpsInfo", "GPS 상태", "주행 화면 오른쪽 아래에 GPS가 잡혔는지, 신호 세기(막대 4칸), 보이는 위성 수, 위치 오차(m)를 보여줍니다. GPS는 시동이 켜져 있을 때만 동작합니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
