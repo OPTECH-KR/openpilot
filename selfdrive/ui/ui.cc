@@ -674,8 +674,6 @@ void ui_update_params(UIState *s) {
       s->show_path_color_cruise_off = std::atoi(params.get("ShowPathColorCruiseOff").c_str());;
       break;
   case 90:
-      s->screen_always_on = std::atoi(params.get("ScreenAlwaysOn").c_str());
-      s->settings_timeout_s = std::atoi(params.get("OptechSettingsTimeout").c_str());
       break;
   }
  }
@@ -743,11 +741,11 @@ void UIState::update() {
 
   if (sm->frame % UI_FREQ == 0) {
     watchdog_kick();
-    // ui_update_params() only runs while the onroad camera view is drawn, so with the car off these two
-    // were never read ('화면 항상 켜기' did nothing after a reboot). Read them here once a second.
+    // read here once a second, not in ui_update_params(): that only runs while the onroad camera view is drawn,
+    // so with the car off the values were never read
     Params params;
-    screen_always_on = std::atoi(params.get("ScreenAlwaysOn").c_str());
     settings_timeout_s = std::atoi(params.get("OptechSettingsTimeout").c_str());
+    drive_dim = std::atoi(params.get("OptechDriveDim").c_str());
   }
   emit uiUpdate(*this);
 }
@@ -760,6 +758,7 @@ Device::Device(QObject *parent) : brightness_filter(BACKLIGHT_OFFROAD, BACKLIGHT
 }
 
 void Device::update(const UIState &s) {
+  if (idle_frames < 1000000) idle_frames++;
   updateBrightness(s);
   updateWakefulness(s);
 
@@ -776,16 +775,24 @@ void Device::setAwake(bool on) {
   }
 }
 
+// optech '화면 유지 시간' (화면 탭): untouched, the settings window stays open and the screen stays on with the car
+// off this long (-1 '항상': never). Replaces '화면 항상 켜기'. A value not in the menu (empty / 0) counts as 3 minutes
+static int keepSeconds() {
+  const int s = uiState()->settings_timeout_s;
+  return s == 0 ? 180 : s;
+}
+
+bool Device::keepApplies() const {
+  return settings_open || !ignition_on;
+}
+
 void Device::resetInteractiveTimout() {
-  // optech '설정 화면 유지 시간' (화면 탭, tester feedback: the menu closed while reading it): while the settings
-  // window is open, untouched it stays this long (-1 '항상': never, see updateWakefulness); elsewhere 10 s with the
-  // car on, 30 s off as before. A value not in the menu (empty / 0) counts as 3 minutes
-  int settings_s = uiState()->settings_timeout_s;
-  if (settings_s == 0) settings_s = 180;
-  if (settings_open && settings_s > 0) {
-    interactive_timeout = settings_s * UI_FREQ;
+  idle_frames = 0;  // '주행 중 밝기': a touch brings the brightness back
+  const int keep_s = keepSeconds();
+  if (keep_s > 0 && keepApplies()) {
+    interactive_timeout = keep_s * UI_FREQ;
   } else {
-    interactive_timeout = (ignition_on ? 10 : 30) * UI_FREQ;
+    interactive_timeout = (ignition_on ? 10 : 30) * UI_FREQ;  // stock: settings close after 10 s with the car on
   }
 }
 
@@ -805,6 +812,17 @@ void Device::updateBrightness(const UIState &s) {
     // Scale back to 10% to 100%
     clipped_brightness = std::clamp(100.0f * clipped_brightness, 10.0f, 100.0f);
   }
+
+  // optech '주행 중 밝기' (화면 탭): while driving, after 30 s without a touch fade down to this % (never brighter
+  // than the auto brightness). A touch or a warning brings it back at once
+  const bool want_dim = s.scene.started && s.drive_dim > 0 && idle_frames >= 30 * UI_FREQ &&
+                        s.status != STATUS_WARNING && s.status != STATUS_ALERT;
+  if (want_dim) {
+    clipped_brightness = std::min(clipped_brightness, (float)s.drive_dim);
+  } else if (dimmed) {
+    brightness_filter.reset(clipped_brightness);
+  }
+  dimmed = want_dim;
 
   int brightness = brightness_filter.update(clipped_brightness);
   if (!awake) {
@@ -838,10 +856,8 @@ void Device::updateWakefulness(const UIState &s) {
 
   if (ignition_just_turned_off || motionTriggered(s)) {
     resetInteractiveTimout();
-  } else if (s.screen_always_on > 0 || (settings_open && s.settings_timeout_s < 0)) {
-    // (also '설정 화면 유지 시간: 항상' while the settings window is open)
-    // ScreenAlwaysOn: never time out while the car is off (and don't fire interactiveTimout,
-    // which would keep closing the settings window)
+  } else if (keepSeconds() < 0 && keepApplies()) {
+    // '화면 유지 시간: 항상': never time out (and don't fire interactiveTimout, which closes the settings window)
     if (interactive_timeout <= 0) interactive_timeout = 1;
   } else if (interactive_timeout > 0 && --interactive_timeout == 0) {
     emit interactiveTimout();

@@ -127,7 +127,8 @@ def manager_init() -> None:
     ("OptechBrakeResumeMode", "1"),
     ("OptechGasResume", "0"),    # 주행 > 브레이크 > 악셀로 다시 켜기 (off: the driver turns it on)
     ("OptechOffShutdown", "0"),  # 고급 > 시동 끈 뒤 꺼짐 (seconds, 0 off)
-    ("OptechSettingsTimeout", "180"),  # 화면 > 설정 화면 유지 시간 (seconds, -1 항상)
+    ("OptechSettingsTimeout", "180"),  # 화면 > 화면 유지 시간 (seconds, -1 항상)
+    ("OptechDriveDim", "0"),  # 화면 > 주행 중 밝기 (%, 0 off)
     ("AutoNaviSpeedDecelRate", "80"),
     ("AutoRoadLimitCtrl", "0"),
     ("AutoResumeFromBrakeRelease", "1"),
