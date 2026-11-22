@@ -26,6 +26,10 @@ def dpmonitoringd_thread(sm=None, pm=None):
     sm = messaging.SubMaster(['carState', 'controlsState'])
 
   driver_status = DriverStatus()
+  # optech 화면 '운전자 모니터링: 사용 안 함' (OptechDmMode 2, applied at reboot): send no driver warnings at all.
+  # Still publish driverMonitoringState so controlsd keeps getting it
+  from common.params import Params
+  no_warnings = (Params().get("OptechDmMode", encoding="utf8") or "") == "2"
 
   sm['carState'].buttonEvents = []
   sm['carState'].standstill = True
@@ -54,6 +58,11 @@ def dpmonitoringd_thread(sm=None, pm=None):
 
     # Update events from driver state
     driver_status.update_events(events, driver_engaged, sm['controlsState'].enabled, sm['carState'].standstill)
+    if no_warnings:
+      events = Events()
+      driver_status.awareness = 1.
+      driver_status.terminal_alert_cnt = 0
+      driver_status.terminal_time = 0
     # driver_status.update_events(events, driver_engaged, True, False)
 
     # build driverMonitoringState packet

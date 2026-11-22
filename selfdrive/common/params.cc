@@ -265,6 +265,7 @@ std::unordered_map<std::string, uint32_t> keys = {
     { "OptechSettingsTimeout", PERSISTENT },
     { "OptechDriveDim", PERSISTENT },
     { "OptechShowRecordBtn", PERSISTENT },
+    { "OptechDmMode", PERSISTENT },
     { "AutoCurveSpeedFactor", PERSISTENT },
     { "AutoCurveSpeedFactorIn", PERSISTENT },
     { "AutoTurnControl", PERSISTENT },
