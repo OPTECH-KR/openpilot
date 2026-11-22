@@ -972,14 +972,14 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   {
     auto keep_btn = new ButtonControl("", "선택",
       "설정 화면을 만지지 않고 둘 때, 몇 분 뒤에 저절로 닫힐지 고릅니다. 설명을 천천히 읽을 때 길게 두세요. "
-      "화면을 만질 때마다 처음부터 다시 셉니다. 기본: 시동이 켜져 있으면 10초, 꺼져 있으면 30초 뒤 닫힘. "
+      "화면을 만질 때마다 처음부터 다시 셉니다. 항상: 설정 화면을 직접 닫을 때까지 열려 있고 화면도 꺼지지 않습니다. "
       "주행 화면에는 영향이 없습니다.");
-    const QStringList keep_names = {"기본", "1분", "3분", "5분", "10분"};
-    const QList<int> keep_secs = {0, 60, 180, 300, 600};
+    const QStringList keep_names = {"1분", "3분", "5분", "10분", "항상"};
+    const QList<int> keep_secs = {60, 180, 300, 600, -1};  // -1: never (ui.cc updateWakefulness)
     auto keep_name = [=]() {
       const std::string v = Params().get("OptechSettingsTimeout");
       const int i = keep_secs.indexOf(v.empty() ? 180 : std::atoi(v.c_str()));
-      return "설정 화면 유지 시간: " + keep_names[i < 0 ? 2 : i];
+      return "설정 화면 유지 시간: " + keep_names[i < 0 ? 1 : i];
     };
     keep_btn->setTitle(keep_name());
     QObject::connect(keep_btn, &ButtonControl::clicked, [=]() {
