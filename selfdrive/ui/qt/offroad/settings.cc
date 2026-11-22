@@ -1038,7 +1038,9 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     auto keep_btn = new ButtonControl("", "선택",
       "설정을 천천히 보고 만질 수 있게 시간 여유를 둡니다. "
       "설정한 시간이 지나면 자동으로 메인 화면으로 돌아갑니다. 차량에 연결되어 있으면 주행 화면으로 돌아갑니다. "
-      "항상: 돌아가지 않습니다.");
+      "화면을 만지면 시간을 처음부터 다시 셉니다. 항상: 돌아가지 않습니다. "
+      "차량에 연결하지 않고 켜 두었을 때는 메인 화면으로 돌아가면서 화면도 꺼지고, 화면을 누르면 다시 켜집니다. "
+      "설정 화면을 보다가 주행이 시작되면 시간과 상관없이 바로 주행 화면으로 바뀝니다.");
     const QStringList keep_names = {"1분", "3분", "5분", "10분", "항상"};
     const QList<int> keep_secs = {60, 180, 300, 600, -1};  // -1: never (ui.cc updateWakefulness)
     auto keep_name = [=]() {
