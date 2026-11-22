@@ -957,9 +957,9 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
                       "100이면 제한 속도 그대로(단속 100km/h → 100km/h), 105면 5% 더 빠르게 (100km/h → 105km/h). "
                       "단속 기준을 넘지 않게 주의하세요. 처음 값 100.", ROAD_ICON, 90, 120, 1),
   };
-  // 1. 카메라 알림  2. 내비 연동 방식  3. 내장 카메라 DB: with the note and the tuning values they are shown only
+  // 1. 과속 단속 알림  2. 내비 연동 방식  3. 내장 카메라 DB: with the note and the tuning values they are shown only
   // while '카메라 감속' is on; when it is off only '카메라 감속' is left in this section
-  CValueControl *cam_haptic = new CValueControl("HapticFeedbackWhenSpeedCamera", "카메라 알림", "과속카메라가 가까워질 때 알려 주는 방법입니다. 0:사용 안 함, 1:핸들 진동, 2:계기판 표시, 3:HUD 표시", ROAD_ICON, 0, 3, 1);
+  CValueControl *cam_haptic = new CValueControl("HapticFeedbackWhenSpeedCamera", "과속 단속 알림", "과속 단속 카메라가 가까워질 때 알려 주는 방법입니다. 0:사용 안 함, 1:핸들 진동, 2:계기판 표시, 3:HUD 표시", ROAD_ICON, 0, 3, 1);
   CValueControl *navi_mode = new CValueControl("OptechNaviLinkMode", "내비 연동 방식", "카메라 정보를 어디서 받을지 정합니다.\n0:내비 안 씀 (내장 카메라 DB만, 내비 앱이 보내는 정보는 무시)\n1:APM(내비 앱)\n2:APM + 순정 내비게이션\n3:NDA\n'카메라 감속'이 켜져 있을 때 적용되고, 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 3, 1);
   QObject::connect(navi_mode, &CValueControl::valueChanged, [=](int cam_v) {
     Params cam_params;
@@ -988,7 +988,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   speedToggles->addItem(new CValueControl("AutoSyncCruiseSpeedMax", "가속페달 속도 맞춤 상한", "크루즈(가감속)가 켜진 상태에서 악셀로 설정 속도보다 빨리 달리면, 설정 속도도 지금 속도로 따라 올라갑니다 (예: 설정 50km/h에서 악셀로 80km/h까지 가면 설정 속도 80km/h). 이 값(km/h)까지만 올립니다. 0:사용 안 함", ROAD_ICON, 0, 200, 10));
   speedToggles->addItem(new CValueControl("AutoSpeedUptoRoadSpeedLimit", "제한속도까지 자동 올림", "앞차를 따라갈 때 도로 제한속도의 이 비율(%)까지 설정 속도를 자동으로 올립니다. 0:사용 안 함, 100:제한속도까지", ROAD_ICON, 0, 200, 10));
   speedToggles->addItem(carrot_section("출발·정지 (출발이 굼뜨거나 정지가 거칠 때)"));
-  speedToggles->addItem(new CValueControl("JerkStartLimit", "출발 저크", "정차 후 출발할 때 가속이 얼마나 빨리 붙을지 정합니다(0.1 단위). 높이면 빠르게, 낮추면 부드럽게 출발합니다.", ROAD_ICON, 1, 50, 1));
+  speedToggles->addItem(new CValueControl("JerkStartLimit", "재출발 가속", "멈췄다가 다시 출발할 때 얼마나 빨리 속도를 붙일지 정합니다(0.1 단위). 높이면 빠르게, 낮추면 부드럽게 출발합니다. 출발 전에 기다리는 시간과는 상관없습니다.", ROAD_ICON, 1, 50, 1));
   speedToggles->addItem(new CValueControl("StartAccelApply", "출발 가속", "정차 후 출발할 때 처음 가속을 몇 % 더 줄지 정합니다. 출발이 굼뜨면 올려 보세요. 0:사용 안 함", ROAD_ICON, 0, 100, 10));
   speedToggles->addItem(new CValueControl("StopAccelApply", "정지 유지 힘", "멈춰 있을 때 브레이크를 얼마나 세게 잡을지 정합니다(%). 정차 중 차가 밀리면 올려 보세요. 0:사용 안 함", ROAD_ICON, 0, 100, 10));
   speedToggles->addItem(new CValueControl("StopDistance", "앞차 뒤 정지 거리", "앞차 뒤에 멈출 때의 거리(cm)입니다. 600이면 약 6m 뒤에 멈춥니다.", ROAD_ICON, 200, 1000, 50));
