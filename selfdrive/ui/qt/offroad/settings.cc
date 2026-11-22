@@ -149,7 +149,7 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
   // 운전자 모니터링: 기본 사용 / 경도 사용 / 사용 안 함 (the icon switch stays on OPTECH > 화면)
   {
     const QStringList dm_names = {"기본 사용", "경도 사용", "사용 안 함"};
-    auto dm_btn = new ButtonControl("", "선택",
+    const QString dm_desc =
       "운전자가 운전에 집중하는지 확인하는 방식입니다.\n"
       "바꾼 뒤 기기를 다시 켜야 적용됩니다.\n"
       "\n"
@@ -167,11 +167,18 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
       "\n"
       "[감속에 대해]\n"
       "· 롱컨 차량: 완전히 멈출 때까지 천천히 감속합니다\n"
-      "· 순정 크루즈(SCC) 차량: 감속이 안 됩니다. 경고만 나옵니다\n"
-      "· 비상등은 켜지지 않습니다");
+      "· 순정 크루즈(SCC) 차량: 설정 속도를 시속 30km까지 낮춥니다\n"
+      "  순정 크루즈는 30km 아래로 설정할 수 없어 완전히 멈추지는 않습니다\n"
+      "  경고가 풀려도 설정 속도는 낮춘 그대로이니 직접 다시 올리세요\n"
+      "· 비상등은 켜지지 않습니다";
+    auto dm_btn = new ButtonControl("", "선택", dm_desc);
     auto dm_title = [=]() { dm_btn->setTitle("운전자 모니터링: " + dm_names[optech_dm_mode()]); };
     dm_title();
     QObject::connect(dm_btn, &ButtonControl::clicked, [=]() {
+      // show the explanation first, then the choice
+      ConfirmationDialog info("<b>운전자 모니터링</b><br><br>" + dm_desc.toHtmlEscaped().replace("\n", "<br>"),
+                              "선택하기", "취소", true, this);
+      if (!info.exec()) return;
       const QString cur = dm_names[optech_dm_mode()];
       const QString sel = MultiOptionDialog::getSelection("운전자 모니터링", dm_names, cur, this);
       if (sel.isEmpty() || sel == cur) return;

@@ -828,6 +828,16 @@ class Controls:
       #hudControl.setSpeed = float(max(1, min(self.pcmLongSpeed, self.cruise_helper.v_cruise_kph_apply) * CV.KPH_TO_MS)) #float(self.v_cruise_helper.v_cruise_cluster_kph * CV.KPH_TO_MS)
       hudControl.setSpeed = self.cruise_helper.v_cruise_kph_apply * CV.KPH_TO_MS #float(self.v_cruise_helper.v_cruise_cluster_kph * CV.KPH_TO_MS)
 
+    # optech '운전자 모니터링' red alert (awareness < 0, 기본 사용 / 경도 사용): forceDecel only reaches the openpilot
+    # longitudinal planner, so stock SCC cars kept their speed. Lower the set speed to the cruise minimum (30 km/h):
+    # carcontroller then presses SET- until the car's set speed is there. It stays low after the alert; the driver
+    # raises it again. Stock SCC can't go below its minimum, so this does not stop the car
+    if self.CP.pcmCruise and self.enabled and self.sm['driverMonitoringState'].awarenessStatus < 0.:
+      v_min = self.cruise_helper.cruiseSpeedMin
+      self.v_cruise_helper.v_cruise_kph = v_min
+      self.v_cruise_helper.v_cruise_cluster_kph = v_min
+      hudControl.setSpeed = v_min * CV.KPH_TO_MS
+
     #hudControl.softHold = True if self.sm['longitudinalPlan'].xState == XState.softHold and self.cruise_helper.longActiveUser>0 else False
     hudControl.radarAlarm = True if self.cruise_helper.radarAlarmCount > 1000 else False
     #C2#hudControl.speedVisible = self.enabled
