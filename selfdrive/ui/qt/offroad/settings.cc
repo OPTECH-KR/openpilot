@@ -971,10 +971,10 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   // open and the screen stays on with the car off, untouched (replaces '화면 항상 켜기')
   {
     auto keep_btn = new ButtonControl("", "선택",
-      "화면을 만지지 않고 둘 때 얼마 동안 그대로 둘지 고릅니다. 설정 화면은 이 시간이 지나면 저절로 닫히고, "
-      "시동이 꺼져 있을 때는 이 시간이 지나면 화면이 꺼집니다. 화면을 만질 때마다 처음부터 다시 셉니다. "
-      "항상: 설정 화면은 직접 닫을 때까지 열려 있고, 시동이 꺼져 있어도 화면이 꺼지지 않습니다. "
-      "주행 중에는 화면이 항상 켜져 있습니다.");
+      "[화면을 끄는 시간] 화면을 만지지 않을 때 얼마 뒤에 화면을 끌지 정합니다. 기기 전원은 꺼지지 않습니다. "
+      "시동이 꺼져 있으면 이 시간 뒤 화면이 꺼지고, 열어 둔 설정 화면도 이 시간 뒤 닫힙니다. "
+      "화면을 만지면 처음부터 다시 셉니다. 항상: 화면이 꺼지지 않습니다. "
+      "주행 중에는 이 설정과 상관없이 화면이 늘 켜져 있습니다.");
     const QStringList keep_names = {"1분", "3분", "5분", "10분", "항상"};
     const QList<int> keep_secs = {60, 180, 300, 600, -1};  // -1: never (ui.cc updateWakefulness)
     auto keep_name = [=]() {
@@ -994,9 +994,9 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   // OptechDriveDim '주행 중 밝기' (ui.cc Device::updateBrightness): while driving, 30 s without a touch -> this %
   {
     auto dim_btn = new ButtonControl("", "선택",
-      "주행 중에 화면을 30초 동안 만지지 않으면 화면 밝기를 고른 만큼 낮춥니다. 밤에 화면이 눈부시지 않게 할 때 쓰세요. "
-      "화면을 만지거나 경고가 뜨면 바로 원래 밝기로 돌아옵니다. 주변이 이미 어두워 화면이 더 어두우면 그대로 둡니다. "
-      "끔(처음 값)이면 지금처럼 밝기를 낮추지 않습니다.");
+      "[주행 중 화면 어둡게] 주행 중에만 동작합니다. 화면을 30초 동안 만지지 않으면 화면을 고른 밝기로 어둡게 합니다. "
+      "화면은 꺼지지 않습니다. 밤에 화면이 눈부실 때 쓰세요. "
+      "화면을 만지거나 경고가 뜨면 바로 원래 밝기로 돌아옵니다. 끔(처음 값): 밝기를 낮추지 않습니다.");
     const QStringList dim_names = {"끔", "10%", "20%", "30%", "40%", "50%", "70%"};
     const QList<int> dim_pcts = {0, 10, 20, 30, 40, 50, 70};
     auto dim_name = [=]() {
@@ -1027,10 +1027,11 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   // OptechOffShutdown (autoshutdownd): after a drive, turn the device off this long after the car is off (tester feedback)
   {
     auto off_btn = new ButtonControl("", "선택",
-      "상시 전원(시동을 꺼도 전기가 계속 들어오는 곳)에 연결한 차량에서 쓰는 설정입니다. "
-      "주행을 마치고 시동을 끈 뒤 고른 시간이 지나면 기기가 스스로 꺼져 차 배터리가 닳지 않게 합니다. "
-      "시동을 끄면 전기가 끊기는 곳에 연결했다면 기기도 함께 꺼지므로 끔으로 두면 됩니다. "
-      "끔(처음 값)이면 꺼지지 않고 계속 켜져 있습니다. 기기를 켠 뒤 한 번도 시동을 걸지 않았으면 (집에서 업데이트·설정할 때) 꺼지지 않습니다.");
+      "[기기 전원을 끄는 시간] 상시 전원(시동을 꺼도 전기가 계속 들어오는 곳)에 연결한 차량용입니다. "
+      "주행 후 시동을 끄고 고른 시간이 지나면 판다가 기기로 가는 전기를 끊어 기기가 꺼지고, 차 배터리를 아낍니다. "
+      "다음에 시동을 걸면 판다가 전기를 다시 보내 기기가 켜지도록 합니다. "
+      "시동을 끄면 전기도 끊기는 곳에 연결했다면 끔으로 두세요. 끔(처음 값): 꺼지지 않습니다. "
+      "기기를 켠 뒤 한 번도 시동을 걸지 않았으면 (집에서 업데이트·설정할 때) 꺼지지 않습니다.");
     const QStringList off_names = {"끔", "30초", "1분", "3분", "5분", "10분"};
     const QList<int> off_secs = {0, 30, 60, 180, 300, 600};
     auto off_name = [=]() {
