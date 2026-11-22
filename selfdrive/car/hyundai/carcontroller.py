@@ -27,7 +27,12 @@ def process_hud_alert(enabled, fingerprint, hud_control):
   # initialize to no line visible
   # TODO: this is not accurate for all cars
   sys_state = 1
-  if hud_control.leftLaneVisible and hud_control.rightLaneVisible or sys_warning:  # HUD alert only display when LKAS status is active
+  # optech (K7 HEV HUD feedback, like OPKR which always sends both lanes visible): while openpilot is on show both
+  # lane lines all the time, so the HUD lines just mean 'on'. The model's lane visibility flips around 50 % on faded
+  # lines / intersections and made the lines come and go every second (drivelog still records the real values)
+  if enabled:
+    sys_state = 3
+  elif hud_control.leftLaneVisible and hud_control.rightLaneVisible or sys_warning:  # HUD alert only display when LKAS status is active
     sys_state = 3 if enabled or sys_warning else 4
   elif hud_control.leftLaneVisible:
     sys_state = 5
@@ -253,7 +258,7 @@ class CarController:
     else:
       can_sends.append(hyundaican.create_lkas11(self.packer, self.frame, self.car_fingerprint, self.send_lfa_mfa_lkas, apply_steer, lat_active,
                                                 torque_fault, CS.lkas11, sys_warning, sys_state, CC.enabled,
-                                                hud_control.leftLaneVisible, hud_control.rightLaneVisible,
+                                                hud_control.leftLaneVisible or CC.enabled, hud_control.rightLaneVisible or CC.enabled,
                                                 left_lane_warning, right_lane_warning))
 
       if not self.CP.openpilotLongitudinalControl:
