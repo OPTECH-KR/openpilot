@@ -1082,7 +1082,30 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   dispToggles->addItem(new CValueControl("ShowDeviceState", "기기 상태", "기기 상태(CPU 온도, 메모리, 저장공간)를 보여줍니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
   dispToggles->addItem(new CValueControl("ShowBlindSpot", "후측방(BSD) 경고", "후측방 감지(BSD) 경고를 화면에 표시합니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
   dispToggles->addItem(new CValueControl("ShowConnInfo", "APM 연결 표시", "내비(APM/NDA) 연결 상태 아이콘을 보여줍니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
-  dispToggles->addItem(new CValueControl("ShowDmInfo", "운전자 모니터링", "운전자 모니터링(얼굴 인식) 아이콘을 보여줍니다. 0:안 보임, 1:보임, -1:기능 끄기(재부팅 필요)", SHELL_ICON, -1, 1, 1));
+  // ShowDmInfo: -1 기능 끄기 (process_config / boardd, applied at reboot), 0 아이콘 안 보임, 1 아이콘 보임.
+  // Split into two switches: '운전자 모니터링 사용' and '운전자 모니터링 아이콘'
+  {
+    const int dm = std::atoi(Params().get("ShowDmInfo").c_str());
+    auto dm_use = new ToggleControl("운전자 모니터링 사용",
+      "운전자 모니터링은 기기 앞쪽 카메라로 운전자의 얼굴을 보고, 앞을 보지 않거나 졸면 경고하는 기능입니다. "
+      "끄면 카메라로 얼굴을 보지 않고, 대신 오래(약 5분) 핸들을 만지지 않을 때만 경고합니다. "
+      "바꾼 뒤 기기를 다시 켜야 적용됩니다.", SHELL_ICON, dm >= 0, this);
+    auto dm_icon = new ToggleControl("운전자 모니터링 아이콘",
+      "주행 화면에 운전자 모니터링 아이콘(얼굴 모양)을 보여 줍니다. 운전자 모니터링 사용이 켜져 있을 때만 쓸 수 있습니다.",
+      SHELL_ICON, dm >= 1, this);
+    dm_icon->setEnabled(dm >= 0);
+    QObject::connect(dm_use, &ToggleControl::toggleFlipped, [=](bool on) {
+      Params().put("ShowDmInfo", on ? "1" : "-1");
+      dm_icon->setEnabled(on);
+      dm_icon->setToggled(on);
+      ConfirmationDialog::alert("기기를 다시 켜야 적용됩니다.", this);
+    });
+    QObject::connect(dm_icon, &ToggleControl::toggleFlipped, [=](bool on) {
+      Params().put("ShowDmInfo", on ? "1" : "0");
+    });
+    dispToggles->addItem(dm_use);
+    dispToggles->addItem(dm_icon);
+  }
 
   // ---- 고급: experimental / developer ----
   advancedToggles = new ListWidget(this);
