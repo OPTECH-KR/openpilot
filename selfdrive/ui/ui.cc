@@ -743,6 +743,11 @@ void UIState::update() {
 
   if (sm->frame % UI_FREQ == 0) {
     watchdog_kick();
+    // ui_update_params() only runs while the onroad camera view is drawn, so with the car off these two
+    // were never read ('화면 항상 켜기' did nothing after a reboot). Read them here once a second.
+    Params params;
+    screen_always_on = std::atoi(params.get("ScreenAlwaysOn").c_str());
+    settings_timeout_s = std::atoi(params.get("OptechSettingsTimeout").c_str());
   }
   emit uiUpdate(*this);
 }
