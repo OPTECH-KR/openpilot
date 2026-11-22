@@ -38,6 +38,11 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent) {
       closeSettings();
     }
   });
+  // optech '설정 화면 유지 시간': the screen timeout knows when the settings window is shown
+  QObject::connect(main_layout, &QStackedLayout::currentChanged, [=](int) {
+    device.settings_open = main_layout->currentWidget() == settingsWindow;
+    device.resetInteractiveTimout();
+  });
   QObject::connect(&device, &Device::interactiveTimout, [=]() {
     if (main_layout->currentWidget() == settingsWindow) {
       closeSettings();

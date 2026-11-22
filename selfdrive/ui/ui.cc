@@ -675,6 +675,7 @@ void ui_update_params(UIState *s) {
       break;
   case 90:
       s->screen_always_on = std::atoi(params.get("ScreenAlwaysOn").c_str());
+      s->settings_timeout_s = std::atoi(params.get("OptechSettingsTimeout").c_str());
       break;
   }
  }
@@ -771,7 +772,14 @@ void Device::setAwake(bool on) {
 }
 
 void Device::resetInteractiveTimout() {
-  interactive_timeout = (ignition_on ? 10 : 30) * UI_FREQ;
+  // optech '설정 화면 유지 시간' (화면 탭, tester feedback: the menu closed while reading it): while the settings
+  // window is open, untouched it stays this long; elsewhere 10 s with the car on, 30 s off as before
+  const int settings_s = uiState()->settings_timeout_s;
+  if (settings_open && settings_s > 0) {
+    interactive_timeout = settings_s * UI_FREQ;
+  } else {
+    interactive_timeout = (ignition_on ? 10 : 30) * UI_FREQ;
+  }
 }
 
 void Device::updateBrightness(const UIState &s) {

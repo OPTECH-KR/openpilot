@@ -216,6 +216,7 @@ public:
   float show_path_width = 1.0;
   int show_plot_mode = 0;
   int screen_always_on = 0;
+  int settings_timeout_s = 180;  // optech '설정 화면 유지 시간' (OptechSettingsTimeout, 0: 10 s / 30 s as before)
 
 signals:
   void uiUpdate(const UIState &s);
@@ -240,6 +241,7 @@ class Device : public QObject {
 
 public:
   Device(QObject *parent = 0);
+  bool settings_open = false;  // the settings window is shown (MainWindow sets it)
 
 private:
   // auto brightness
