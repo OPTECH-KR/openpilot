@@ -1008,7 +1008,6 @@ static void drawOptechHud(const UIState* s) {
     SubMaster& sm = *(s->sm);
     const UIScene& scene = s->scene;
     const auto controls_state = sm["controlsState"].getControlsState();
-    const auto car_control = sm["carControl"].getCarControl();
     const auto car_state = sm["carState"].getCarState();
     const auto lp = sm["longitudinalPlan"].getLongitudinalPlan();
     const auto road = sm["roadLimitSpeed"].getRoadLimitSpeed();
