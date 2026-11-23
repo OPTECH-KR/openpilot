@@ -31,7 +31,7 @@ ScreenRecoder::ScreenRecoder(QWidget *parent) : QPushButton(parent)
   started = 0;
   frame = 0;
 
-  const int size = 190;
+  const int size = 140;  // as wide as the optech '차량 주의' mark it sits under
   setFixedSize(size, size);
   setFocusPolicy(Qt::NoFocus);
   connect(this, SIGNAL(pressed()),this,SLOT(btnPressed()));
@@ -78,21 +78,22 @@ void ScreenRecoder::applyColor() {
 
 void ScreenRecoder::paintEvent(QPaintEvent *event) {
 
+    // OPKR style (user 2026-11-23): a round button with "REC", filled red while recording
     QRect r = QRect(0, 0, width(), height());
-    r -= QMargins(5, 5, 5, 5);
+    r -= QMargins(4, 4, 4, 4);
     QPainter p(this);
+    p.setRenderHint(QPainter::Antialiasing);
     p.setCompositionMode(QPainter::CompositionMode_SourceOver);
-    p.setPen(QPen(QColor::fromRgbF(1, 1, 1, 0.4), 10, Qt::SolidLine, Qt::FlatCap));
-
-    p.setBrush(QBrush(QColor::fromRgbF(0, 0, 0, 0)));
-    //p.drawEllipse(r);
-
-    r -= QMargins(40, 40, 40, 40);
-    p.setPen(Qt::NoPen);
-
-    QColor bg = recording ? recording_color : QColor::fromRgbF(0, 0, 0, 0.3);
-    p.setBrush(QBrush(bg));
+    p.setPen(QPen(QColor(255, 255, 255, 80), 6));
+    p.setBrush(QBrush(recording ? QColor(255, 0, 0, 110) : QColor(0, 0, 0, 70)));
     p.drawEllipse(r);
+
+    QFont f = p.font();
+    f.setPixelSize(48);
+    f.setBold(true);
+    p.setFont(f);
+    p.setPen(QColor(255, 255, 255, 220));
+    p.drawText(r, Qt::AlignCenter, "REC");
 }
 
 void ScreenRecoder::btnReleased(void) {
