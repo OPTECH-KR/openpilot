@@ -1,5 +1,6 @@
 #include "selfdrive/ui/qt/onroad.h"
 
+#include <algorithm>
 #include <cmath>
 
 #include <QDebug>
@@ -116,6 +117,25 @@ void OnroadWindow::updateState(const UIState &s) {
 }
 
 void OnroadWindow::mousePressEvent(QMouseEvent* e) {
+  // optech 주행 화면: the steering wheel (top right) opens a small panel to move the path left / right
+  UIState* s = uiState();
+  if (s->scene.started && s->show_mode == 7) {
+    const QPoint p = e->pos() - nvg->pos();
+    const int w = nvg->width(), h = nvg->height();
+    if (optech_wheel_rect(w, h).contains(p)) {
+      s->optech_tune_open = !s->optech_tune_open;
+      return;
+    }
+    if (s->optech_tune_open) {
+      int step = optech_tune_minus_rect(w, h).contains(p) ? -5 : optech_tune_plus_rect(w, h).contains(p) ? 5 : 0;
+      if (step != 0) {
+        s->path_offset = std::clamp(s->path_offset + step, -200, 200);
+        Params().put("PathOffset", std::to_string(s->path_offset));
+        return;
+      }
+      if (optech_tune_panel_rect(w, h).contains(p)) return;
+    }
+  }
   if (false && map != nullptr) {
     bool sidebarVisible = geometry().x() > 0;
     map->setVisible(!sidebarVisible && !map->isVisible());

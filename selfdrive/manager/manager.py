@@ -47,7 +47,7 @@ def manager_init() -> None:
     ("ShowDebugUI", "0"),
     ("OPKRServer", "0"),
     ("ShowDateTime", "0"),
-    ("ShowHudMode", "6"),
+    ("ShowHudMode", "7"),
     ("ShowSteerRotate", "1"),
     ("ShowPathEnd", "1"),
     ("ShowAccelRpm", "1"),
@@ -198,6 +198,12 @@ def manager_init() -> None:
     if params.get(k) is None:
       params.put(k, v)
 
+  # optech 주행 화면 (ShowHudMode 7, 2026-11): switch every device to it once; 화면 탭 '화면 표시 방식' brings the
+  # old carrot screen (6) back
+  if not params.get_bool("OptechHud7Set"):
+    params.put("ShowHudMode", "7")
+    params.put_bool("OptechHud7Set", True)
+
   # Korean by default: once per install, switch to Korean even if an older install left English behind.
   # After that the language chosen in the menu is kept (the marker is removed only by a fresh install).
   langMarker = '/data/openpilot/.lang_ko_default'
@@ -229,7 +235,7 @@ def manager_init() -> None:
                ("LateralMotionCost", "11"), ("LateralJerkCost", "5"), ("MaxAngleFrames", "89"),
                ("SteerDeltaUp", "3"), ("SteerDeltaDown", "7"), ("UseLaneLineSpeed", "0"),
                ("CruiseButtonMode", "0"), ("CruiseSpeedMin", "10"),
-               ("ShowHudMode", "6"),
+               ("ShowHudMode", "7"),
                ("GpsSource", "1"),
                # brake release resume is done by cruise_helper (EngageWithLong): the old apilot conditions are off
                ("AutoResumeFromBrakeRelease", "0"), ("BrakeResumeSpeedMode", "1")):  # GPS is always the phone built-in one; the selector is removed  # screen mode fixed to the carrot HUD box; the selector is removed

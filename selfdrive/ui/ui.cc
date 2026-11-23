@@ -467,7 +467,7 @@ void update_model(UIState *s,
   if (longActiveUser <= 0) show_path_mode = s->show_path_mode_cruise_off;
 
   max_idx = get_path_length_idx(plan_position, max_distance);
-  if (show_path_mode == 0 || s->show_mode == 0) {
+  if (show_path_mode == 0 || s->show_mode == 0 || s->show_mode == 7) {  // optech HUD draws one solid polygon
       //update_line_data(s, plan_position, s->show_path_width, s->show_z_offset, s->show_z_offset, &scene.track_vertices, max_idx, false);
       update_line_data2(s, plan_position, s->show_path_width, 0.8, s->show_z_offset, &scene.track_vertices, max_idx);
   }
@@ -747,6 +747,8 @@ void UIState::update() {
     settings_timeout_s = std::atoi(params.get("OptechSettingsTimeout").c_str());
     drive_dim = std::atoi(params.get("OptechDriveDim").c_str());
     show_record_btn = params.getBool("OptechShowRecordBtn");
+    radar_tracks = params.getBool("EnableRadarTracks");
+    path_offset = std::atoi(params.get("PathOffset").c_str());
   }
   emit uiUpdate(*this);
 }

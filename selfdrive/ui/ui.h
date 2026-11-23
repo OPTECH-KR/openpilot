@@ -7,6 +7,7 @@
 #include <QObject>
 #include <QTimer>
 #include <QColor>
+#include <QRect>
 #include <QFuture>
 #include <QPolygonF>
 #include <QTransform>
@@ -218,6 +219,9 @@ public:
   int settings_timeout_s = 180;  // optech '화면 유지 시간' (OptechSettingsTimeout seconds, -1: never)
   int drive_dim = 0;             // optech '주행 중 밝기' (OptechDriveDim %, 0: off)
   bool show_record_btn = false;  // optech '녹화 버튼' (OptechShowRecordBtn)
+  bool radar_tracks = false;     // EnableRadarTracks (badge)
+  int path_offset = 0;           // PathOffset cm (optech wheel panel)
+  bool optech_tune_open = false; // optech wheel panel shown
 
 signals:
   void uiUpdate(const UIState &s);
@@ -281,3 +285,9 @@ void update_dmonitoring(UIState *s, const cereal::DriverState::Reader &driversta
 void update_leads(UIState *s, const cereal::RadarState::Reader &radar_state, const cereal::XYZTData::Reader &line);
 void update_line_data(const UIState *s, const cereal::XYZTData::Reader &line,
                       float y_off, float z_off, QPolygonF *pvd, int max_idx, bool allow_invert);
+
+// optech 주행 화면 (ShowHudMode 7): tap areas shared by the drawing (paint.cc) and the touch handler (onroad.cc)
+inline QRect optech_wheel_rect(int w, int h) { (void)h; return QRect(w - 30 - 210 + 105 - 80, 18, 160, 160); }
+inline QRect optech_tune_panel_rect(int w, int h) { (void)h; return QRect(w - 30 - 210 - 20 - 440, 30, 440, 300); }
+inline QRect optech_tune_minus_rect(int w, int h) { QRect p = optech_tune_panel_rect(w, h); return QRect(p.x() + 30, p.y() + 90, 120, 120); }
+inline QRect optech_tune_plus_rect(int w, int h) { QRect p = optech_tune_panel_rect(w, h); return QRect(p.right() - 150, p.y() + 90, 120, 120); }
