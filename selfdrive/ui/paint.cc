@@ -1067,15 +1067,15 @@ static void drawOptechHud(const UIState* s) {
     const bool sign_row = road_limit > 0 || limit_speed > 0;
     if (sign_row) {
         if (road_limit > 0) {
-            const float ccx = lx + cellw / 2, cy = y2 + 42 + sg / 2;
+            const float ccx = lx + cellw / 2, cy = y2 + 50 + sg / 2, d = sg + 8;  // as big as the camera sign + outline
             optech_text(s, ccx, y2 + 32, "도로 제한", 32, label_c, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
-            nvgBeginPath(s->vg); nvgCircle(s->vg, ccx, cy, sg / 2); nvgFillColor(s->vg, nvgRGBA(226, 75, 74, 255)); nvgFill(s->vg);
-            nvgBeginPath(s->vg); nvgCircle(s->vg, ccx, cy, sg / 2 - 13); nvgFillColor(s->vg, COLOR_WHITE); nvgFill(s->vg);
+            nvgBeginPath(s->vg); nvgCircle(s->vg, ccx, cy, d / 2); nvgFillColor(s->vg, nvgRGBA(226, 75, 74, 255)); nvgFill(s->vg);
+            nvgBeginPath(s->vg); nvgCircle(s->vg, ccx, cy, d / 2 - 14); nvgFillColor(s->vg, COLOR_WHITE); nvgFill(s->vg);
             snprintf(str, sizeof(str), "%d", metric ? road_limit : (int)(road_limit * KM_TO_MILE + 0.5));
             optech_text(s, ccx, cy + 3, str, 54, nvgRGBA(44, 44, 42, 255), NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
         }
         if (limit_speed > 0) {
-            const float cellx = lx + cellw + 20, ccx = cellx + cellw / 2, top = y2 + 42, sx = ccx - sg / 2;
+            const float cellx = lx + cellw + 20, ccx = cellx + cellw / 2, top = y2 + 50, sx = ccx - sg / 2;
             optech_text(s, ccx, y2 + 32, bump ? "방지턱" : section ? "구간 단속" : "단속 속도", 32, COLOR_WHITE, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
             if (bump) {
                 ui_draw_image(s, {(int)sx, (int)top, (int)sg, (int)sg}, "ic_speed_bump", 1.0f);
@@ -1092,7 +1092,7 @@ static void drawOptechHud(const UIState* s) {
                 const float bw = sg + 8, bh = 44, btop = top + sg + 12;  // same width as the sign with its outline
                 const float a = std::clamp((600.f - left_dist) / 600.f, 0.25f, 1.f);  // fills redder as it gets close
                 carrot_round_box(s, ccx - bw / 2, btop, bw, bh, nvgRGBA(226, 75, 74, (int)(255 * a)), COLOR_WHITE, 10, 3);
-                optech_text(s, ccx, btop + bh / 2 + 2, str, 23, COLOR_WHITE, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+                optech_text(s, ccx, btop + bh / 2 - 5, str, 23, COLOR_WHITE, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
             }
         }
     }
@@ -1100,7 +1100,7 @@ static void drawOptechHud(const UIState* s) {
     // 4) set speed box (moves up when there is no navigation sign row)
     const float applyMaxSpeed = controls_state.getVCruiseOut();
     const float cruiseMaxSpeed = controls_state.getVCruiseCluster();
-    float y3 = sign_row ? y2 + 42 + sg + 12 + 44 + 18 : y2;
+    float y3 = sign_row ? y2 + 50 + sg + 12 + 44 + 18 : y2;
     {
         const float w = CW, h = 124;
         NVGcolor fill = nvgRGBA(95, 94, 90, 230), line = nvgRGBA(136, 135, 128, 255);
@@ -1152,7 +1152,7 @@ static void drawOptechHud(const UIState* s) {
         snprintf(str, sizeof(str), "%.0f", cur_speed);
         optech_text(s, cx, 190, str, 190, c, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
         // unit + GPS speed (green; the dashboard speed reads a few % high) as one line centred under the number
-        const char* unit_str = metric ? "km" : "mi";
+        const char* unit_str = metric ? "km/h" : "mph";  // like OPKR
         const bool gps_ok = sm.alive("gpsLocationExternal") && (sm["gpsLocationExternal"].getGpsLocationExternal().getFlags() & 1);
         if (gps_ok) snprintf(str, sizeof(str), "GPS %d", (int)(std::max(sm["gpsLocationExternal"].getGpsLocationExternal().getSpeed() * unit, 0.f) + 0.5f));
         else snprintf(str, sizeof(str), "GPS --");
@@ -1166,18 +1166,23 @@ static void drawOptechHud(const UIState* s) {
         optech_text(s, x0 + uw + sp, 236, str, 40, gps_ok ? nvgRGBA(151, 196, 89, 255) : nvgRGBA(136, 135, 128, 255), NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
     }
     {
-        // traffic light (openpilot's own stop / go guess), right next to the speed on the left
+        // traffic light (openpilot's own stop / go guess): horizontal red / yellow / green, right under the
+        // unit + GPS line (user 2026-11-23)
         const int ts = lp.getTrafficState();
         int mode = 0;
         if (longActiveUser > 0) mode = ts >= 100 ? 3 : (ts % 100);
         if (mode >= 1 && mode <= 3) {
-            const float w = 70, h = 150, x = cx - 165 - w, y = 84;  // below the top-left row
-            carrot_round_box(s, x, y, w, h, nvgRGBA(44, 44, 42, 240), COLOR_WHITE, 12, 3);
+            const float w = 186, h = 64, x = cx - w / 2, y = 250, r = 22;
+            carrot_round_box(s, x, y, w, h, nvgRGBA(44, 44, 42, 240), COLOR_WHITE, 14, 3);
             const NVGcolor off = nvgRGBA(95, 94, 90, 255);
-            nvgBeginPath(s->vg); nvgCircle(s->vg, x + w / 2, y + 40, 24);
-            nvgFillColor(s->vg, mode == 1 ? nvgRGBA(226, 75, 74, 255) : mode == 3 ? nvgRGBA(239, 159, 39, 255) : off); nvgFill(s->vg);
-            nvgBeginPath(s->vg); nvgCircle(s->vg, x + w / 2, y + 110, 24);
-            nvgFillColor(s->vg, mode == 2 ? nvgRGBA(99, 153, 34, 255) : off); nvgFill(s->vg);
+            const NVGcolor on[3] = {nvgRGBA(226, 75, 74, 255), nvgRGBA(239, 159, 39, 255), nvgRGBA(99, 153, 34, 255)};
+            const int lit = mode == 1 ? 0 : mode == 3 ? 1 : 2;  // 1 red, 3 yellow, 2 green
+            for (int i = 0; i < 3; i++) {
+                nvgBeginPath(s->vg);
+                nvgCircle(s->vg, x + w / 2 + (i - 1) * 58, y + h / 2, r);
+                nvgFillColor(s->vg, i == lit ? on[i] : off);
+                nvgFill(s->vg);
+            }
         }
     }
     {
@@ -1217,7 +1222,7 @@ static void drawOptechHud(const UIState* s) {
                 else snprintf(str, sizeof(str), "%s", label);
                 nvgFontSize(s->vg, 44);
                 float b[4]; nvgTextBounds(s->vg, 0, 0, str, NULL, b);
-                const float tw = b[2] - b[0], iw = img ? 80 : 0, w = tw + iw + 50, h = 84, x = cx - w / 2, y = 254;
+                const float tw = b[2] - b[0], iw = img ? 80 : 0, w = tw + iw + 50, h = 84, x = cx - w / 2, y = 328;  // under the traffic light
                 carrot_round_box(s, x, y, w, h, nvgRGBA(0, 0, 0, 120), nvgRGBA(0, 0, 0, 0), 12, 0);
                 if (img) ui_draw_image(s, {(int)(x + 16), (int)(y + 2), 80, 80}, img, 1.0f);
                 optech_text(s, x + 25 + iw, y + h / 2 + 2, str, 44, COLOR_WHITE, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
