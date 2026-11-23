@@ -1197,13 +1197,14 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     dispToggles->addItem(dim_btn);
   }
   dispToggles->addItem(new ParamControl("OptechShowRecordBtn", "녹화 버튼",
-    "켜 두면(초록색) 주행 화면 오른쪽 아래에 화면 녹화 버튼이 보입니다. 누르면 기기 화면을 동영상으로 녹화하고, "
-    "다시 누르면 멈춥니다. 주행 영상을 남기고 싶을 때만 켜세요. 끄면 버튼이 사라지고 하던 녹화도 멈춥니다.", SHELL_ICON, this));
-  dispToggles->addItem(new CValueControl("ShowTpms", "타이어 공기압", "타이어 공기압을 주행 화면에 보여줍니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
-  dispToggles->addItem(new CValueControl("ShowDateTime", "시간 표시", "주행 화면에 시간과 날짜를 보여줍니다. 0:안 보임, 1:시간+날짜, 2:시간만, 3:날짜만", SHELL_ICON, 0, 3, 1));
-  dispToggles->addItem(new CValueControl("ShowGpsInfo", "GPS 상태", "주행 화면 오른쪽 아래에 GPS가 잡혔는지, 신호 세기(막대 4칸), 보이는 위성 수, 위치 오차(m)를 보여줍니다. GPS는 시동이 켜져 있을 때만 동작합니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
-  dispToggles->addItem(new CValueControl("ShowDeviceState", "기기 상태", "기기 상태(CPU 온도, 메모리, 저장공간)를 보여줍니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
-  dispToggles->addItem(new CValueControl("ShowBlindSpot", "후측방(BSD) 경고", "후측방 감지(BSD) 경고를 화면에 표시합니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
+    "켜 두면(초록색) 주행 화면 오른쪽 아래에 동그란 'REC' 녹화 버튼이 보입니다. 누르면 기기 화면을 동영상으로 녹화하고 "
+    "(녹화 중에는 버튼이 빨개집니다), 다시 누르면 멈춥니다. 영상은 3분마다 나뉘어 기기 저장공간(videos 폴더)에 남습니다. "
+    "주행 영상을 남기고 싶을 때만 켜세요. 끄면 버튼이 사라지고 하던 녹화도 멈춥니다.", SHELL_ICON, this));
+  // (no '시간 표시' (ShowDateTime): the optech 주행 화면 has no clock, user 2026-11-23)
+  dispToggles->addItem(new CValueControl("ShowTpms", "타이어 공기압", "주행 화면 오른쪽 맨 아래 칸에 네 바퀴의 타이어 공기압(psi)을 보여 줍니다. 위 줄이 앞바퀴(왼쪽·오른쪽), 아래 줄이 뒷바퀴입니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
+  dispToggles->addItem(new CValueControl("ShowGpsInfo", "GPS 상태", "주행 화면 왼쪽 위(내비 연결 표시 옆)에 GPS가 잡혔는지와 신호 세기(막대 4칸)를 보여 줍니다. 초록: 잘 잡힘, 주황: 찾는 중·약함. GPS는 시동이 켜져 있을 때만 동작합니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
+  dispToggles->addItem(new CValueControl("ShowDeviceState", "기기 상태", "주행 화면 오른쪽 가운데 칸에 기기의 CPU 온도와 CPU 사용률을 보여 줍니다. 80°C를 넘거나 사용률이 90%를 넘으면 빨갛게 깜빡입니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
+  dispToggles->addItem(new CValueControl("ShowBlindSpot", "후측방(BSD) 경고", "옆 차로 뒤쪽에 차가 있으면 화면 양옆에 노란 '차량 주의' 표시가 뜹니다. 그쪽으로 방향지시등을 켜면 빨간 표시와 '왼쪽/오른쪽 차량 주의' 글이 깜빡입니다. 시속 30km 이상에서만 보이고, 차에 후측방 감지(BSD)가 있어야 합니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
   // ShowRadarInfo '레이더 물체 표시' (paint.cc ui_draw_radar_info): 0 off, 1 moving objects + speed,
   // 2 also how far to the side, 3 also stopped objects (amber "정지")
   {
@@ -1228,10 +1229,10 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     });
     dispToggles->addItem(radar_btn);
   }
-  dispToggles->addItem(new CValueControl("ShowConnInfo", "APM 연결 표시", "내비(APM/NDA) 연결 상태 아이콘을 보여줍니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
+  dispToggles->addItem(new CValueControl("ShowConnInfo", "APM 연결 표시", "주행 화면 왼쪽 위에 연결 상태 표시를 보여 줍니다. APN·APM: 내비 앱 연결, NDA·HDA: 차의 고속도로 주행 보조 연결, SCC2: SCC 버스2(롱컨) 차량, 레이더 트랙 표시. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
   // '운전자 모니터링 아이콘' (ShowDmInfo 0 / 1); the mode itself is chosen on the 토글 page (optech_dm_mode)
   dmIcon = new ToggleControl("운전자 모니터링 아이콘",
-    "주행 화면에 운전자 모니터링 아이콘(얼굴 모양)을 보여 줍니다. 토글 화면의 운전자 모니터링이 '기본 사용'일 때만 쓸 수 있습니다.",
+    "주행 화면 왼쪽 아래에 운전자 모니터링 아이콘(얼굴 모양)을 보여 줍니다. 얼굴을 잘 보고 있으면 선명하게, 아니면 흐리게 보입니다. 토글 화면의 운전자 모니터링이 '기본 사용'일 때만 쓸 수 있습니다.",
     SHELL_ICON, std::atoi(Params().get("ShowDmInfo").c_str()) >= 1, this);
   QObject::connect(dmIcon, &ToggleControl::toggleFlipped, [=](bool on) {
     if (optech_dm_mode() == 0) Params().put("ShowDmInfo", on ? "1" : "0");
