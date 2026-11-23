@@ -81,19 +81,6 @@ reboot
 * 설치 화면의 Continue 버튼이 안 뜨는 경우가 있어서 SSH로 설치합니다.
 * 기기 설정값(`/data/params`)은 지우지 마세요. SSH 키도 거기에 들어 있어서, 지우면 다시 접속할 수 없습니다.
 
-### 1-5. 예전 `optech`에서 옮기기 (한 번만)
-
-2026-11-20 전에 예전 이름(`optech`)으로 설치한 기기는 업데이트가 오지 않습니다. SSH로 접속해서 아래 명령을 붙여 넣으세요. 설정은 그대로 남습니다.
-
-```
-cd /data/openpilot && export GIT_SSL_NO_VERIFY=true &&
-git config remote.origin.fetch "+refs/heads/optech-hkg:refs/remotes/origin/optech-hkg" &&
-git fetch --depth=1 origin optech-hkg &&
-git checkout -f -B optech-hkg origin/optech-hkg &&
-git branch -u origin/optech-hkg &&
-reboot
-```
-
 ## 2. 업데이트
 
 * **화면에서:** 설정 → 소프트웨어 → **최신 업데이트 → 확인**. 새 버전이 있으면 바뀐 내용을 보여 주고, **업데이트**를 누르면 받은 뒤 자동으로 재부팅합니다. 업데이트는 시동을 끈 상태에서 하세요.
@@ -102,8 +89,6 @@ reboot
 ```
 cd /data/openpilot && GIT_SSL_NO_VERIFY=true git pull && reboot
 ```
-
-> 예전 브랜치 이름(`apilot-c2-port`, `apilot-c2-canfd`)으로 설치했다면 업데이트가 안 됩니다. 위 **1-4 설치 명령**으로 다시 설치해 주세요.
 
 ## 3. 처음 설정 (이것만 하면 됩니다)
 
