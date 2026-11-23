@@ -2032,40 +2032,47 @@ static void ui_draw_gps_info(const UIState* s) {
 // there; red and blinking with '왼쪽/오른쪽 차량 주의' once the turn signal is on towards it. Hidden below 30 km/h
 // (parking lots, queues) where the sensor fires all the time
 static void ui_draw_bsd_mark(const UIState* s, bool right, bool danger) {
-    // warning triangle like a road sign: yellow with a black rim while a car is there, white with a red rim
-    // (blinking) once the turn signal is on towards it
-    const float w = 170, h = 150;
+    // rounded box with a car seen from above and an exclamation mark under it: yellow and steady while a car is
+    // there, red and blinking with '왼쪽/오른쪽 차량 주의' once the turn signal is on towards it
+    const float w = 140, h = 170;
     const float x = right ? s->fb_w - w - 20 : 20;
     const float y = s->fb_h / 2.0f - h;
     const bool blink_on = (s->sm->frame % 12) < 7;
     if (danger && !blink_on) return;
 
-    const NVGcolor fill = danger ? COLOR_WHITE : nvgRGBA(250, 184, 0, 245);
-    const NVGcolor rim = danger ? nvgRGBA(226, 0, 0, 255) : nvgRGBA(20, 20, 20, 255);
+    const NVGcolor bg = danger ? nvgRGBA(226, 75, 74, 235) : nvgRGBA(239, 159, 39, 235);
+    const NVGcolor fg = danger ? COLOR_WHITE : nvgRGBA(65, 36, 2, 255);
     nvgBeginPath(s->vg);
-    nvgMoveTo(s->vg, x + w / 2, y);
-    nvgLineTo(s->vg, x + w, y + h);
-    nvgLineTo(s->vg, x, y + h);
-    nvgClosePath(s->vg);
-    nvgLineJoin(s->vg, NVG_ROUND);
-    nvgFillColor(s->vg, fill);
+    nvgRoundedRect(s->vg, x, y, w, h, 20);
+    nvgFillColor(s->vg, bg);
     nvgFill(s->vg);
-    nvgStrokeColor(s->vg, rim);
-    nvgStrokeWidth(s->vg, danger ? 18 : 10);
+    nvgStrokeColor(s->vg, COLOR_WHITE);
+    nvgStrokeWidth(s->vg, 5);
     nvgStroke(s->vg);
 
-    // exclamation mark
-    const float cx = x + w / 2;
+    // car seen from above
+    const float cx = x + w / 2, cw = 58, ch = 82, cy = y + 16;
     nvgBeginPath(s->vg);
-    nvgRoundedRect(s->vg, cx - 9, y + 42, 18, 58, 9);
-    nvgCircle(s->vg, cx, y + 118, 11);
-    nvgFillColor(s->vg, nvgRGBA(20, 20, 20, 255));
+    nvgRoundedRect(s->vg, cx - cw / 2, cy, cw, ch, 16);
+    nvgFillColor(s->vg, fg);
+    nvgFill(s->vg);
+    nvgBeginPath(s->vg);
+    nvgRoundedRect(s->vg, cx - cw / 2 + 9, cy + 14, cw - 18, 18, 5);   // windscreen
+    nvgRoundedRect(s->vg, cx - cw / 2 + 9, cy + ch - 26, cw - 18, 13, 4);  // rear window
+    nvgFillColor(s->vg, bg);
+    nvgFill(s->vg);
+
+    // exclamation mark under the car
+    nvgBeginPath(s->vg);
+    nvgRoundedRect(s->vg, cx - 7, y + 108, 14, 34, 7);
+    nvgCircle(s->vg, cx, y + 154, 8);
+    nvgFillColor(s->vg, fg);
     nvgFill(s->vg);
 
     if (danger) {
         const char* txt = right ? "오른쪽 차량 주의" : "왼쪽 차량 주의";
         const float tw = 360, th = 80;
-        const float tx = right ? x - tw - 16 : x + w + 16, ty = y + h / 2 - th / 2 + 20;
+        const float tx = right ? x - tw - 16 : x + w + 16, ty = y + h / 2 - th / 2;
         nvgBeginPath(s->vg);
         nvgRoundedRect(s->vg, tx, ty, tw, th, 14);
         nvgFillColor(s->vg, nvgRGBA(162, 45, 45, 235));
