@@ -92,7 +92,7 @@ void OnroadWindow::updateState(const UIState &s) {
   if (recorder && recorder->isVisible()) {
     // optech HUD: bottom right corner, under the red '차량 주의' mark (paint.cc ui_draw_bsd_mark: right 20, 140 wide)
     QWidget* rw = recorder->parentWidget();
-    const QMargins m = s.show_mode == 7 ? QMargins(0, 0, 20, 12) : QMargins(35, 35, 35, 35);
+    const QMargins m = s.show_mode == 7 ? QMargins(0, 0, 20, 40) : QMargins(35, 35, 35, 35);
     if (rw->layout() && rw->layout()->contentsMargins() != m) rw->layout()->setContentsMargins(m);
   }
 
@@ -639,10 +639,10 @@ void AnnotatedCameraWidget::drawDriverState(QPainter &painter, const UIState *s)
   int x = rightHandDM ? rect().right() -  (btn_size - 24) / 2 - (bdr_s * 2) : (btn_size - 24) / 2 + (bdr_s * 2);
   int y = rect().bottom() - footer_h / 2;
   if (s->show_mode == 7) {
-    // optech HUD: bottom left corner, under the yellow '차량 주의' mark (paint.cc ui_draw_bsd_mark: x 20, 140 wide),
-    // shrunk to that mark's width (user 2026-11-23)
-    const float k = 140.f / btn_size;
-    painter.translate(20 + 70, height() - 12 - 70);
+    // optech HUD: bottom left corner, centred under the yellow '차량 주의' mark (paint.cc ui_draw_bsd_mark: x 20,
+    // 140 wide), 170 across, its centre level with the REC button's (user 2026-11-23)
+    const float k = 170.f / btn_size;
+    painter.translate(20 + 70, height() - 40 - 70);
     painter.scale(k, k);
     x = 0;
     y = 0;
