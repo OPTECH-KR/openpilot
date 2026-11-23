@@ -1130,28 +1130,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
 
   // ---- 화면 ----
   dispToggles = new ListWidget(this);
-  // ShowHudMode: 7 optech 주행 화면 (default), 6 the earlier carrot screen
-  {
-    const QStringList hud_names = {"OPTECH (새 화면)", "당근 (예전 화면)"};
-    const QList<int> hud_vals = {7, 6};
-    auto hud_name = [=]() {
-      const int i = hud_vals.indexOf(std::atoi(Params().get("ShowHudMode").c_str()));
-      return "화면 표시 방식: " + hud_names[i < 0 ? 0 : i];
-    };
-    auto hud_btn = new ButtonControl("", "선택",
-      "주행 화면 모양을 고릅니다.\n"
-      "OPTECH (새 화면): 왼쪽 위에 도로 제한·단속 표지판과 설정 속도, 가운데 위에 큰 속도, 오른쪽에 핸들·CPU·공기압. "
-      "핸들 그림을 누르면 경로 좌우 보정을 바로 바꿀 수 있습니다.\n"
-      "당근 (예전 화면): 왼쪽 아래 정보 상자가 있는 예전 화면입니다.");
-    hud_btn->setTitle(hud_name());
-    QObject::connect(hud_btn, &ButtonControl::clicked, [=]() {
-      const QString sel = MultiOptionDialog::getSelection("화면 표시 방식", hud_names, hud_name().section(": ", 1), this);
-      if (sel.isEmpty()) return;
-      Params().put("ShowHudMode", std::to_string(hud_vals[hud_names.indexOf(sel)]));
-      hud_btn->setTitle(hud_name());
-    });
-    dispToggles->addItem(hud_btn);
-  }
+  // (no '화면 표시 방식' menu: every device uses the optech 주행 화면, ShowHudMode 7, forced by manager.py; user 2026-11-23)
   // OptechSettingsTimeout '화면 유지 시간' (ui.cc Device::resetInteractiveTimout): how long the settings window stays
   // open and the screen stays on with the car off, untouched (replaces '화면 항상 켜기')
   {
