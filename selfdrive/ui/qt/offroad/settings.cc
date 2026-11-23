@@ -1206,6 +1206,30 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   dispToggles->addItem(new CValueControl("ShowGpsInfo", "GPS 상태", "주행 화면 오른쪽 아래에 GPS가 잡혔는지, 신호 세기(막대 4칸), 보이는 위성 수, 위치 오차(m)를 보여줍니다. GPS는 시동이 켜져 있을 때만 동작합니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
   dispToggles->addItem(new CValueControl("ShowDeviceState", "기기 상태", "기기 상태(CPU 온도, 메모리, 저장공간)를 보여줍니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
   dispToggles->addItem(new CValueControl("ShowBlindSpot", "후측방(BSD) 경고", "후측방 감지(BSD) 경고를 화면에 표시합니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
+  // ShowRadarInfo '레이더 물체 표시' (paint.cc ui_draw_radar_info): 0 off, 1 moving objects + speed,
+  // 2 also how far to the side, 3 also stopped objects (amber "정지")
+  {
+    auto radar_btn = new ButtonControl("", "선택",
+      "앞 레이더가 잡은 주변 물체를 주행 화면에 네모로 보여 줍니다. 네모 안 숫자는 그 물체의 속도(km/h)입니다.\n"
+      "초록: 같은 방향으로 가는 물체, 빨강: 마주 오는 물체, 주황 '정지': 서 있는 물체.\n"
+      "사람·차·오토바이 같은 종류는 구별하지 못합니다. "
+      "여러 물체를 보려면 차가 레이더 트랙을 지원해야 하고, 토글 화면의 '레이더 트랙 사용'을 켜야 합니다. "
+      "지원하지 않는 차는 앞차 하나만 나옵니다.\n"
+      "서 있는 물체까지 보이게 하면 가드레일·표지판도 잡혀서 화면이 복잡해질 수 있습니다.");
+    const QStringList radar_names = {"안 보임", "움직이는 물체", "움직이는 물체 + 옆 거리", "전부 (서 있는 물체까지)"};
+    auto radar_name = [=]() {
+      const int v = std::atoi(Params().get("ShowRadarInfo").c_str());
+      return "레이더 물체 표시: " + radar_names[std::clamp(v, 0, 3)];
+    };
+    radar_btn->setTitle(radar_name());
+    QObject::connect(radar_btn, &ButtonControl::clicked, [=]() {
+      const QString sel = MultiOptionDialog::getSelection("레이더 물체 표시", radar_names, radar_name().section(": ", 1), this);
+      if (sel.isEmpty()) return;
+      Params().put("ShowRadarInfo", std::to_string(radar_names.indexOf(sel)));
+      radar_btn->setTitle(radar_name());
+    });
+    dispToggles->addItem(radar_btn);
+  }
   dispToggles->addItem(new CValueControl("ShowConnInfo", "APM 연결 표시", "내비(APM/NDA) 연결 상태 아이콘을 보여줍니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
   // '운전자 모니터링 아이콘' (ShowDmInfo 0 / 1); the mode itself is chosen on the 토글 page (optech_dm_mode)
   dmIcon = new ToggleControl("운전자 모니터링 아이콘",
