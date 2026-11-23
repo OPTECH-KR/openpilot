@@ -328,6 +328,11 @@ void UIState::update() {
 
   if (sm->frame % UI_FREQ == 0) {
     watchdog_kick(nanos_since_boot());
+    // optech 화면 탭 (optech-hkg): read once a second, also while the car is off
+    Params params;
+    const std::string keep = params.get("OptechSettingsTimeout");
+    settings_timeout_s = keep.empty() ? 180 : std::atoi(keep.c_str());
+    drive_dim = std::atoi(params.get("OptechDriveDim").c_str());
   }
   emit uiUpdate(*this);
 }
@@ -348,6 +353,7 @@ Device::Device(QObject *parent) : brightness_filter(BACKLIGHT_OFFROAD, BACKLIGHT
 }
 
 void Device::update(const UIState &s) {
+  if (idle_frames < 1000000) idle_frames++;
   updateBrightness(s);
   updateWakefulness(s);
 }
@@ -361,9 +367,22 @@ void Device::setAwake(bool on) {
   }
 }
 
+// optech '화면 유지 시간' (화면 탭, optech-hkg): untouched, the settings window stays open and the screen stays on with
+// the car off this long (-1 '항상': never). A value not in the menu (0) counts as 3 minutes
+static int keepSeconds() {
+  const int s = uiState()->settings_timeout_s;
+  return s == 0 ? 180 : s;
+}
+
+bool Device::keepApplies() const {
+  return settings_open || !ignition_on;
+}
+
 void Device::resetInteractiveTimeout(int timeout) {
+  idle_frames = 0;  // '주행 중 밝기': a touch brings the brightness back
   if (timeout == -1) {
-    timeout = (ignition_on ? 10 : 30);
+    const int keep_s = keepSeconds();
+    timeout = (keep_s > 0 && keepApplies()) ? keep_s : (ignition_on ? 10 : 30);
   }
   interactive_timeout = timeout * UI_FREQ;
 }
@@ -383,6 +402,19 @@ void Device::updateBrightness(const UIState &s) {
     // Scale back to 10% to 100%
     clipped_brightness = std::clamp(100.0f * clipped_brightness, 10.0f, 100.0f);
   }
+
+  // optech '주행 중 밝기' (화면 탭, optech-hkg): while driving, after 30 s without a touch fade down to this %
+  // (never brighter than the auto brightness). A touch or a warning brings it back at once
+  const auto cs = (*s.sm)["controlsState"].getControlsState();
+  const bool alerting = cs.getAlertSize() != cereal::ControlsState::AlertSize::NONE &&
+                        cs.getAlertStatus() != cereal::ControlsState::AlertStatus::NORMAL;
+  const bool want_dim = s.scene.started && s.drive_dim > 0 && idle_frames >= 30 * UI_FREQ && !alerting;
+  if (want_dim) {
+    clipped_brightness = std::min(clipped_brightness, (float)s.drive_dim);
+  } else if (dimmed) {
+    brightness_filter.reset(clipped_brightness);
+  }
+  dimmed = want_dim;
 
   int brightness = brightness_filter.update(clipped_brightness);
   if (!awake) {
@@ -421,6 +453,9 @@ void Device::updateWakefulness(const UIState &s) {
   if (ignition_just_turned_off) {
   #endif
     resetInteractiveTimeout();
+  } else if (keepSeconds() < 0 && keepApplies()) {
+    // '화면 유지 시간: 항상': never time out (and do not fire interactiveTimeout, which closes the settings window)
+    if (interactive_timeout <= 0) interactive_timeout = 1;
   } else if (interactive_timeout > 0 && --interactive_timeout == 0) {
     emit interactiveTimeout();
   }

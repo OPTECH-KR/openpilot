@@ -7,6 +7,8 @@ from openpilot.selfdrive.manager.process import PythonProcess, NativeProcess, Da
 
 # optech: driver monitoring off (OPTECH > 화면 > 운전자 모니터링 '기능 끄기' = dp_device_no_ir_ctrl) stops its processes too
 NO_IR_CTRL = os.path.isfile('/data/media/0/no_ir_ctrl') or Params().get_bool('dp_device_no_ir_ctrl')
+# optech 토글 > 운전자 모니터링 '경도 사용' (OptechDmMode 1): no camera, dragonpilot's steering / pedal check instead
+DM_LITE = NO_IR_CTRL and Params().get("OptechDmMode", encoding="utf8") == "1"
 
 WEBCAM = os.getenv("USE_WEBCAM") is not None
 
@@ -67,6 +69,7 @@ procs = [
   PythonProcess("controlsd", "selfdrive.controls.controlsd"),
   PythonProcess("deleter", "selfdrive.loggerd.deleter", offroad=True),
   PythonProcess("dmonitoringd", "selfdrive.legacy_monitoring.dmonitoringd", enabled=(not PC or WEBCAM) and not NO_IR_CTRL, callback=driverview),
+  PythonProcess("dpmonitoringd", "selfdrive.dragonpilot.dpmonitoringd", enabled=DM_LITE),
   # PythonProcess("laikad", "selfdrive.locationd.laikad"),
   # PythonProcess("rawgpsd", "system.sensord.rawgps.rawgpsd", enabled=TICI, onroad=False, callback=qcomgps),
   # PythonProcess("navd", "selfdrive.navd.navd"),

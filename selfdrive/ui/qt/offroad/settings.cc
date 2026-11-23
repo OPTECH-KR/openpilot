@@ -68,39 +68,37 @@ CarSelectionPanel::CarSelectionPanel(SettingsWindow *parent) : QWidget(parent) {
   setLayout(layout);
 }
 
+// 토글 page in the same order, names and texts as optech-hkg. The spst-only switches moved to the OPTECH tabs
+// (옛 주행 모델 / openpilot 가감속 / 실험 모드 -> 고급, 주행 기록 저장 -> 고급, 가속 페달 -> 주행, 주행 성향 -> 속도).
+// 실험 모드 and openpilot 가감속 stay here hidden (the home screen's mode button opens this page at 실험 모드).
+static int optech_dm_mode() {
+  const int m = std::atoi(Params().get("OptechDmMode").c_str());
+  return (m < 0 || m > 2) ? 0 : m;
+}
+
+static bool optech_hkg_car() {
+  Params params;
+  const QString assigned = QString::fromStdString(params.get("dp_car_assigned")).trimmed();
+  if (!assigned.isEmpty()) {
+    const QString brand = assigned.section(' ', 0, 0);
+    return brand == "HYUNDAI" || brand == "KIA" || brand == "GENESIS";
+  }
+  const std::string cp_bytes = params.get("CarParamsPersistent");
+  if (cp_bytes.empty()) return false;
+  AlignedBuffer aligned_buf;
+  capnp::FlatArrayMessageReader cmsg(aligned_buf.align(cp_bytes.data(), cp_bytes.size()));
+  return QString::fromStdString(cmsg.getRoot<cereal::CarParams>().getCarName()) == "hyundai";
+}
+
 TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
   // param, title, desc, icon
   std::vector<std::tuple<QString, QString, QString, QString>> toggle_defs{
     {
       "OpenpilotEnabledToggle",
       "openpilot 사용",
-      "openpilot의 크루즈(앞차 따라가기)와 차선 유지 보조를 사용합니다. 쓰는 동안에도 운전자는 항상 앞을 보고 핸들을 잡고 있어야 합니다. "
-      "바꾼 설정은 시동을 끈 뒤에 적용됩니다.",
+      "어댑티브 크루즈 컨트롤 및 차선 유지 운전자 보조를 위해 openpilot 시스템을 사용하십시오. 이 기능을 사용하려면 항상 주의를 기울여야 합니다. "
+      "설정변경은 장치 재부팅후 적용됩니다.",
       "../assets/offroad/icon_openpilot.png",
-    },
-    {
-      "dp_0813",
-      "옛 주행 모델 사용 (0.8.13.1)",
-      "C2에서 가볍게 도는 예전 주행 모델(0.8.13.1)을 씁니다. C2에서는 켜 두는 것을 추천합니다(처음 값: 켜짐).\n"
-      "켜 두면 실험 모드와 openpilot 가감속(알파)은 쓸 수 없습니다.\n"
-      "끄면 새 주행 모델을 쓰지만, C2에는 버거워서 느려질 수 있습니다.\n재부팅해야 적용됩니다.",
-      "../assets/offroad/icon_ai.png",
-    },
-    {
-      "dp_logging",
-      "주행 기록 저장",
-      "주행 중 차량 정보와 카메라 영상을 기기에 저장합니다. 문제가 생겼을 때 원인을 찾는 데 꼭 필요합니다.\n"
-      "새 주행 모델(위의 옛 모델 끔)과 함께 쓰면 기기가 느려질 수 있습니다.\n재부팅해야 적용됩니다.",
-      "../assets/offroad/icon_database.png",
-    },
-    {
-      "ExperimentalLongitudinalEnabled",
-      "openpilot 가감속 제어 (알파)",
-      QString("<b>%1</b><br><br>%2")
-      .arg("주의: 이 차에서는 아직 시험 단계이고, 켜면 차의 자동 긴급 제동(AEB)이 꺼집니다.")
-      .arg("처음에는 차의 순정 크루즈(ACC)가 속도를 맡습니다. 이것을 켜면 openpilot이 가속과 감속을 직접 맡습니다. "
-           "켤 때는 실험 모드도 함께 켜는 것을 추천합니다."),
-      "../assets/offroad/icon_speed_limit.png",
     },
     {
       "ExperimentalMode",
@@ -109,35 +107,39 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
       "../assets/img_experimental_white.svg",
     },
     {
-      "DisengageOnAccelerator",
-      "가속 페달을 밟으면 끄기",
-      "켜면 가속 페달을 밟는 순간 openpilot이 꺼집니다.\n"
-      "끄면 페달을 밟는 동안만 운전자가 가속하고, 페달을 떼면 openpilot이 이어서 운전을 돕습니다.",
-      "../assets/offroad/icon_disengage_on_accelerator.svg",
+      "ExperimentalLongitudinalEnabled",
+      "openpilot 가감속 제어 (알파)",
+      QString("<b>%1</b><br><br>%2")
+      .arg("주의: 이 차에서는 아직 시험 단계이고, 켜면 차의 자동 긴급 제동(AEB)이 꺼집니다.")
+      .arg("처음에는 차의 순정 크루즈(ACC)가 속도를 맡습니다. 이것을 켜면 openpilot이 가속과 감속을 직접 맡습니다."),
+      "../assets/offroad/icon_speed_limit.png",
     },
     {
-      "IsLdwEnabled",
-      "차선 이탈 경고",
-      "시속 50km 이상에서 방향지시등 없이 차선을 넘어가면 알림으로 알려 줍니다.",
+      // OPKR 'LDWS 차량 설정' (LdwsCarFix): hyundaican.create_lkas11 sends CF_Lkas_LdwsOpt_USM = 3
+      "OptechLdwsCar",
+      "LDWS 차량 (차로 유지 보조 없음)",
+      "차선 이탈 경고(LDWS)만 있고 차로 유지 보조(LKAS)가 없는 차만 켜세요. "
+      "이런 차에서 조향이 안 되거나 계기판에 차로 유지 관련 오류가 뜰 때 씁니다 (OPKR의 'LDWS 차량 설정'과 같습니다). "
+      "LKAS가 있는 차는 켜지 마세요. 현대·기아·제네시스에서만 보입니다. 재부팅해야 적용됩니다.",
       "../assets/offroad/icon_warning.png",
     },
     {
-      "IsRhdDetected",
-      "우핸들 차량",
-      "운전석이 오른쪽에 있는 차(일본·영국 등)용입니다. 한국 차는 끈 채로 두세요.",
-      "../assets/offroad/icon_openpilot_mirrored.png",
-    },
-    {
-      "RecordFront",
-      "운전자 카메라 녹화",
-      "운전자를 보는 카메라 영상도 주행 기록에 함께 저장합니다. (이 버전은 부팅할 때 자동으로 켜지고, 서버로 올리지는 않습니다.)",
-      "../assets/offroad/icon_monitoring.png",
+      "IsLdwEnabled",
+      "차선 이탈 경고 사용",
+      "차량이 50km/h(31mph) 이상의 속도로 주행하는 동안 방향지시등 없이 감지된 차선 위를 주행할 경우 차선이탈 경고를 표시합니다.",
+      "../assets/offroad/icon_warning.png",
     },
     {
       "IsMetric",
-      "km/h 사용",
-      "속도를 mph(마일) 대신 km/h로 표시합니다. 한국에서는 켜 두세요.",
+      "미터법 사용",
+      "mph 대신 km/h로 속도를 표시합니다.",
       "../assets/offroad/icon_metric.png",
+    },
+    {
+      "RecordFront",
+      "운전자 카메라 녹화 및 업로드",
+      "운전자를 보는 카메라 영상도 주행 기록에 함께 저장합니다. (이 버전은 부팅할 때 자동으로 켜지고, 서버로 올리지는 않습니다.)",
+      "../assets/offroad/icon_monitoring.png",
     },
 #ifdef ENABLE_MAPS
     {
@@ -155,13 +157,6 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
 #endif
   };
 
-  std::vector<QString> longi_button_texts{"가깝게", "보통", "멀리"};
-  long_personality_setting = new ButtonParamControl("LongitudinalPersonality", "주행 성향 (차간거리)",
-                                          "보통을 추천합니다.\n가깝게: 앞차를 더 가까이 따라가고, 가속·감속이 빠릅니다.\n"
-                                          "멀리: 앞차와 거리를 더 두고 부드럽게 움직입니다.\n"
-                                          "openpilot이 가감속을 맡는 차량에서만 동작합니다.",
-                                          "../assets/offroad/icon_speed_limit.png",
-                                          longi_button_texts);
   for (auto &[param, title, desc, icon] : toggle_defs) {
     auto toggle = new ParamControl(param, title, desc, icon, this);
 
@@ -170,11 +165,6 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
 
     addItem(toggle);
     toggles[param.toStdString()] = toggle;
-
-    // insert longitudinal personality after NDOG toggle
-    if (param == "DisengageOnAccelerator") {
-      addItem(long_personality_setting);
-    }
   }
 
   // Toggles with confirmation dialogs
@@ -186,10 +176,53 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
     updateToggles();
   });
 
-  // rick - reflect model toggle change
-  connect(toggles["dp_0813"], &ToggleControl::toggleFlipped, [=]() {
-    updateToggles();
-  });
+  // 운전자 모니터링: 기본 사용 / 경도 사용 / 사용 안 함 (optech-hkg; the icon switch is on OPTECH > 화면).
+  // 경도 사용 and 사용 안 함 turn the driver camera off (dp_device_no_ir_ctrl); 경도 사용 runs dpmonitoringd instead
+  {
+    const QStringList dm_names = {"기본 사용", "경도 사용", "사용 안 함"};
+    const QString dm_desc =
+      "운전자가 운전에 집중하는지 확인하는 방식입니다.\n"
+      "바꾼 뒤 기기를 다시 켜야 적용됩니다.\n"
+      "\n"
+      "[기본 사용] 운전자 카메라로 얼굴을 봅니다.\n"
+      "· 앞을 안 보거나 졸면 경고하고, 계속되면 크게 경고합니다\n"
+      "\n"
+      "[경도 사용] 카메라를 쓰지 않습니다. (기기 발열이 줄어듭니다)\n"
+      "· 핸들·페달·크루즈 버튼을 5분 동안 전혀 안 쓰면 경고합니다 (15초 전부터 알림)\n"
+      "· 하나라도 쓰면 처음부터 다시 셉니다\n"
+      "\n"
+      "[사용 안 함] 카메라도, 경고도 없습니다.\n"
+      "· 운전자가 반응이 없어도 계속 운전하므로 사용을 추천하지 않습니다\n"
+      "\n"
+      "[경고가 계속되면]\n"
+      "· openpilot이 가감속을 맡는 차량: 천천히 감속합니다\n"
+      "· 차의 순정 크루즈를 쓰는 차량: 감속하지 않으니 직접 운전해 주세요\n"
+      "· 비상등은 켜지지 않습니다";
+    auto dm_btn = new ButtonControl("", "선택", dm_desc);
+    auto dm_title = [=]() { dm_btn->setTitle("운전자 모니터링: " + dm_names[optech_dm_mode()]); };
+    dm_title();
+    QObject::connect(dm_btn, &ButtonControl::clicked, [=]() {
+      // show the explanation first, then the choice
+      ConfirmationDialog info("<b>운전자 모니터링</b><br><br>" + dm_desc.toHtmlEscaped().replace("\n", "<br>"),
+                              "선택하기", "취소", true, this);
+      if (!info.exec()) return;
+      const QString cur = dm_names[optech_dm_mode()];
+      const QString sel = MultiOptionDialog::getSelection("운전자 모니터링", dm_names, cur, this);
+      if (sel.isEmpty() || sel == cur) return;
+      const int m = dm_names.indexOf(sel);
+      Params p;
+      p.put("OptechDmMode", std::to_string(m));
+      p.putBool("dp_device_no_ir_ctrl", m != 0);
+      if (m != 0) {
+        p.put("ShowDmInfo", "-1");
+      } else if (std::atoi(p.get("ShowDmInfo").c_str()) < 0) {
+        p.put("ShowDmInfo", "1");
+      }
+      dm_title();
+      ConfirmationDialog::alert("기기를 다시 켜야 적용됩니다.", this);
+    });
+    addItem(dm_btn);
+  }
 }
 
 void TogglesPanel::expandToggleDescription(const QString &param) {
@@ -202,25 +235,22 @@ void TogglesPanel::showEvent(QShowEvent *event) {
 
 void TogglesPanel::updateToggles() {
   auto experimental_mode_toggle = toggles["ExperimentalMode"];
-  if (params.getBool("dp_0813"))  {
-    experimental_mode_toggle->setVisible(false);
-    params.putBool("ExperimentalMode", false);
-  }
   auto op_long_toggle = toggles["ExperimentalLongitudinalEnabled"];
-  const QString e2e_description = QString("%1<br><h4>%2</h4><br>%3<br><br>%4")
+  // set on OPTECH > 고급 > 실험 모드 (as on optech-hkg); kept here hidden
+  experimental_mode_toggle->setVisible(false);
+  op_long_toggle->setVisible(false);
+  toggles["OptechLdwsCar"]->setVisible(optech_hkg_car());
+
+  const QString e2e_description = QString("%1<br><h4>%2</h4><br>%3")
                                   .arg("openpilot은 처음에 <b>편안한 모드</b>로 달립니다. 실험 모드를 켜면 아직 시험 중인 기능을 씁니다:")
                                   .arg("카메라 판단 가감속 (E2E)")
                                   .arg("주행 모델이 직접 가속과 감속을 정합니다. 사람처럼 판단해서 빨간불이나 정지 표지판 앞에서 멈추기도 합니다. "
-                                       "설정 속도는 '최고 속도'로만 쓰입니다. 시험 기능이라 실수할 수 있으니 항상 주의하세요.")
-                                  .arg("내비 연동 주행과 넓은 화각 카메라 화면은 C2에서 쓸 수 없습니다.");
+                                       "설정 속도는 '최고 속도'로만 쓰입니다. 시험 기능이라 실수할 수 있으니 항상 주의하세요.");
 
   const bool is_release = params.getBool("IsReleaseBranch");
   const bool is_old_model = params.getBool("dp_0813");
   auto cp_bytes = params.get("CarParamsPersistent");
   if (is_old_model) {
-    // rick - we should hide and remove experimental long related toggles
-    experimental_mode_toggle->setVisible(false);
-    op_long_toggle->setVisible(false);
     params.remove("ExperimentalMode");
     params.remove("ExperimentalLongitudinalEnabled");
   } else if (!cp_bytes.empty()) {
@@ -231,38 +261,18 @@ void TogglesPanel::updateToggles() {
     if (!CP.getExperimentalLongitudinalAvailable() || is_release) {
       params.remove("ExperimentalLongitudinalEnabled");
     }
-    op_long_toggle->setVisible(CP.getExperimentalLongitudinalAvailable() && !is_release);
     if (hasLongitudinalControl(CP)) {
-      // normal description and toggle
       experimental_mode_toggle->setEnabled(true);
       experimental_mode_toggle->setDescription(e2e_description);
-      long_personality_setting->setEnabled(true);
     } else {
-      // no long for now
       experimental_mode_toggle->setEnabled(false);
-      long_personality_setting->setEnabled(false);
       params.remove("ExperimentalMode");
-
-      const QString unavailable = "이 차는 순정 크루즈(ACC)가 속도를 맡고 있어서, 지금은 실험 모드를 쓸 수 없습니다.";
-
-      QString long_desc = unavailable + " " + \
-                          "openpilot 가감속은 앞으로 업데이트에서 지원될 수 있습니다.";
-      if (CP.getExperimentalLongitudinalAvailable()) {
-        if (is_release) {
-          long_desc = unavailable + " " + "개발(-dev) 브랜치에서는 openpilot 가감속(알파)과 실험 모드를 함께 시험해 볼 수 있습니다.";
-        } else {
-          long_desc = "위의 'openpilot 가감속 제어 (알파)'를 켜면 실험 모드를 쓸 수 있습니다.";
-        }
-      }
-      experimental_mode_toggle->setDescription("<b>" + long_desc + "</b><br><br>" + e2e_description);
+      experimental_mode_toggle->setDescription("<b>이 차는 순정 크루즈(ACC)가 속도를 맡고 있어서, 지금은 실험 모드를 쓸 수 없습니다.</b><br><br>" + e2e_description);
     }
-
     experimental_mode_toggle->refresh();
   } else {
     experimental_mode_toggle->setDescription(e2e_description);
-    op_long_toggle->setVisible(false);
   }
-  long_personality_setting->refreshControl();
 }
 
 DevicePanel::DevicePanel(SettingsWindow *parent) : ListWidget(parent) {

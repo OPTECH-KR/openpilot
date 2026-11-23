@@ -73,9 +73,12 @@ private:
   QList<QPushButton *> tab_btns;
   QList<ListWidget *> tab_lists;
   QList<OptechValueControl *> values;
-  OptechValueControl *auto_shutdown_timer = nullptr;
   OptechValueControl *lane_priority_speed = nullptr;
   QList<QWidget *> toyota_items, vag_items, bolt_items, hkg_items;
+  QList<QWidget *> cam_group;      // 과속카메라: shown while 카메라 감속 is on
+  QList<QWidget *> torque_values;  // 토크 가속 / 마찰 계수: shown while 토크 사용자 설정 is on
+  ToggleControl *dm_icon = nullptr;
+  ParamControl *op_long_toggle = nullptr, *e2e_toggle = nullptr;
   QLabel *brand_note = nullptr;
 
   ParamControl *toggle(ListWidget *list, const QString &param, const QString &title, const QString &desc);

@@ -6,7 +6,7 @@ hyundai_checksum = crcmod.mkCrcFun(0x11D, initCrc=0xFD, rev=False, xorOut=0xdf)
 def create_lkas11(packer, frame, car_fingerprint, apply_steer, steer_req,
                   torque_fault, lkas11, sys_warning, sys_state, enabled,
                   left_lane, right_lane,
-                  left_lane_depart, right_lane_depart):
+                  left_lane_depart, right_lane_depart, ldws_car=False):
   values = {s: lkas11[s] for s in [
     "CF_Lkas_LdwsActivemode",
     "CF_Lkas_LdwsSysState",
@@ -77,6 +77,10 @@ def create_lkas11(packer, frame, car_fingerprint, apply_steer, steer_req,
     # This field is actually LdwsActivemode
     # Genesis and Optima fault when forwarding while engaged
     values["CF_Lkas_LdwsActivemode"] = 2
+
+  # optech 토글 'LDWS 차량' (OPKR LdwsCarFix, optech-hkg): a car with lane departure warning only, no LKAS
+  if ldws_car:
+    values["CF_Lkas_LdwsOpt_USM"] = 3
 
   dat = packer.make_can_msg("LKAS11", 0, values)[2]
 

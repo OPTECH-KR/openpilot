@@ -61,6 +61,7 @@ class CarController:
 
     # optech: set speed sync after engaging (set_speed_sync)
     self.set_current_speed = Params().get_bool("OptechCruiseSetCurrent")
+    self.ldws_car = Params().get_bool("OptechLdwsCar")  # 토글 > LDWS 차량 (read at start: reboot to apply)
     self.cruise_on_prev = False
     self.sync_target = 0  # set speed to reach, in the cluster unit; 0 = nothing to do
     self.sync_start_frame = 0
@@ -150,7 +151,7 @@ class CarController:
       can_sends.append(hyundaican.create_lkas11(self.packer, self.frame, self.car_fingerprint, apply_steer, apply_steer_req,
                                                 torque_fault, CS.lkas11, sys_warning, sys_state, CC.enabled,
                                                 hud_control.leftLaneVisible, hud_control.rightLaneVisible,
-                                                left_lane_warning, right_lane_warning))
+                                                left_lane_warning, right_lane_warning, ldws_car=self.ldws_car))
 
       if not self.CP.openpilotLongitudinalControl:
         buttons = self.create_button_messages(CC, CS, use_clu11=True)

@@ -42,8 +42,11 @@ NOSENSOR = "NOSENSOR" in os.environ
 IGNORE_PROCESSES = {"loggerd", "encoderd", "statsd", "mapd", "gpxd"}
 
 NO_IR_CTRL = Params().get_bool("dp_device_no_ir_ctrl")
+# optech 토글 > 운전자 모니터링 '경도 사용' (OptechDmMode 1): no driver camera, but dpmonitoringd (steering / pedal /
+# button interaction, dragonpilot) still sends driverMonitoringState, so it is used like the camera monitoring
+DM_LITE = NO_IR_CTRL and Params().get("OptechDmMode", encoding="utf8") == "1"
 if NO_IR_CTRL:
-  IGNORE_PROCESSES |= {'driverCameraState', 'driverMonitoringState'}
+  IGNORE_PROCESSES |= {'driverCameraState'} if DM_LITE else {'driverCameraState', 'driverMonitoringState'}
 
 ThermalStatus = log.DeviceState.ThermalStatus
 State = log.ControlsState.OpenpilotState
@@ -91,6 +94,7 @@ class Controls:
     self.log_sock = messaging.sub_sock('androidLog')
 
     self.params = Params()
+    self.read_optech_steer_params()  # optech 조향 세부 / 토크 사용자 설정 (state_control reads them again every 5 s)
     self.dp_no_gps_ctrl = self.params.get_bool("dp_no_gps_ctrl")
     self.dp_no_fan_ctrl = self.params.get_bool("dp_no_fan_ctrl")
     self.dp_0813 = self.params.get_bool("dp_0813")
@@ -109,7 +113,7 @@ class Controls:
       if SIMULATION:
         ignore += ['driverCameraState', 'managerState']
       if NO_IR_CTRL:
-        ignore += ['driverCameraState', 'driverMonitoringState']
+        ignore += ['driverCameraState'] if DM_LITE else ['driverCameraState', 'driverMonitoringState']
       self.sm = messaging.SubMaster(['deviceState', 'pandaStates', 'peripheralState', 'modelV2', 'liveCalibration',
                                      'driverMonitoringState', 'longitudinalPlan', 'lateralPlan', 'liveLocationKalman',
                                      'managerState', 'liveParameters', 'radarState', 'liveTorqueParameters', 'testJoystick'] + self.camera_packets,
@@ -307,7 +311,7 @@ class Controls:
     if CS.gasPressed:
       self.events.add(EventName.gasPressedOverride)
 
-    if not self.CP.notCar and not NO_IR_CTRL:
+    if not self.CP.notCar and (not NO_IR_CTRL or DM_LITE):
       self.events.add_from_msg(self.sm['driverMonitoringState'].events)
 
     # Add car events, ignore if CAN isn't valid
@@ -621,6 +625,18 @@ class Controls:
     if self.active or (self._dp_alka and self._dp_alka_active):
       self.current_alert_types.append(ET.WARNING)
 
+  def read_optech_steer_params(self):
+    def num(key, default):
+      try:
+        return int(self.params.get(key, encoding="utf8") or default)
+      except ValueError:
+        return default
+    self.optech_sr_fixed = num("SteerRatioApply", 0) / 10.
+    self.optech_sr_live = min(max(num("LiveSteerRatioApply", 100), 50), 110) / 100.
+    self.optech_torque_custom = num("LateralTorqueCustom", 0) > 0
+    self.optech_torque_accel = max(num("LateralTorqueAccelFactor", 2500), 100) / 1000.
+    self.optech_torque_friction = max(num("LateralTorqueFriction", 100), 0) / 1000.
+
   def state_control(self, CS):
     """Given the state, this function returns a CarControl packet"""
 
@@ -628,12 +644,23 @@ class Controls:
     lp = self.sm['liveParameters']
     x = max(lp.stiffnessFactor, 0.1)
     sr = max(lp.steerRatio, 0.1)
+    # optech 조향 탭 '조향 세부' (optech-hkg): '조향비 고정' (SteerRatioApply, 0.1 units) replaces the learned steer
+    # ratio, else '실시간 조향비 적용' (LiveSteerRatioApply %) scales it. Read every 5 s, so changes apply while driving
+    if self.sm.frame % 500 == 0:
+      self.read_optech_steer_params()
+    if self.optech_sr_fixed > 0.:
+      sr = self.optech_sr_fixed
+    else:
+      sr *= self.optech_sr_live
     self.VM.update_params(x, sr)
 
     # Update Torque Params
     if self.CP.lateralTuning.which() == 'torque':
       torque_params = self.sm['liveTorqueParameters']
-      if self.sm.all_checks(['liveTorqueParameters']) and torque_params.useParams:
+      if self.optech_torque_custom:
+        # '토크 사용자 설정': the menu's 토크 가속 계수 / 토크 마찰 계수 instead of the learned values
+        self.LaC.update_live_torque_params(self.optech_torque_accel, 0.0, self.optech_torque_friction)
+      elif self.sm.all_checks(['liveTorqueParameters']) and torque_params.useParams:
         self.LaC.update_live_torque_params(torque_params.latAccelFactorFiltered, torque_params.latAccelOffsetFiltered,
                                            torque_params.frictionCoefficientFiltered)
 
@@ -863,7 +890,8 @@ class Controls:
       else:
         self.steer_limited = abs(CC.actuators.steer - CC.actuatorsOutput.steer) > 1e-2
 
-    force_decel = (not NO_IR_CTRL and self.sm['driverMonitoringState'].awarenessStatus < 0.) or (self.state == State.softDisabling)
+    dm_decel = (not NO_IR_CTRL or DM_LITE) and self.sm['driverMonitoringState'].awarenessStatus < 0.
+    force_decel = dm_decel or (self.state == State.softDisabling)
 
     # Curvature & Steering angle
     lp = self.sm['liveParameters']

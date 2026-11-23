@@ -91,9 +91,45 @@ def manager_init() -> None:
     ("dp_long_accel_btn", "0"),
     ("dp_long_personality_btn", "0"),
     ("dp_lat_lane_change_assist_speed", "20"),
+    # optech-hkg menu items (same keys and first values as optech-hkg)
+    ("OptechLdwsCar", "0"),             # 토글 > LDWS 차량 (LKAS11 CF_Lkas_LdwsOpt_USM = 3)
+    ("OptechSettingsTimeout", "180"),   # 화면 > 화면 유지 시간 (seconds, -1 항상)
+    ("OptechDriveDim", "0"),            # 화면 > 주행 중 밝기 (%, 0 off)
+    ("OpkrHotspotOnBoot", "0"),         # 고급 > 부팅 시 핫스팟 켜기
+    ("OptechLatMethod", "0"),           # 조향 > 조향 방식 (0 기본, 1 PID, 2 INDI, 3 LQR) and their values
+    ("OptechPidKp", "25"),
+    ("OptechPidKi", "40"),
+    ("OptechPidKf", "7"),
+    ("OptechIndiInner", "35"),
+    ("OptechIndiOuter", "20"),
+    ("OptechIndiTime", "14"),
+    ("OptechIndiAct", "20"),
+    ("OptechLqrScale", "1500"),
+    ("OptechLqrKi", "16"),
+    ("OptechLqrDcGain", "265"),
+    ("SteerRatioApply", "0"),           # 조향 > 조향 세부 (0.1 units, 0 = learned value)
+    ("LiveSteerRatioApply", "100"),     # % of the learned steer ratio
+    ("SteerActuatorDelay", "0"),        # 0.01 s, 0 = the car's own value
+    ("LateralTorqueCustom", "0"),
+    ("LateralTorqueAccelFactor", "2500"),
+    ("LateralTorqueFriction", "100"),
   ]
   if not PC:
     default_params.append(("LastUpdateTime", datetime.datetime.utcnow().isoformat().encode('utf8')))
+
+  # optech: settings that replaced dragonpilot ones keep the old choice the first time
+  if params.get("OptechDmMode") is None:  # 토글 > 운전자 모니터링: 0 기본 사용, 1 경도 사용, 2 사용 안 함
+    params.put("OptechDmMode", "2" if params.get_bool("dp_device_no_ir_ctrl") else "0")
+  if params.get("OptechOffShutdown") is None:  # 고급 > 시동 끈 뒤 꺼짐 (seconds, 0 off)
+    off_s = 0
+    if params.get_bool("dp_device_auto_shutdown"):
+      try:
+        mins = int(params.get("dp_device_auto_shutdown_in", encoding="utf8") or 0)
+      except ValueError:
+        mins = 0
+      off_s = min((30, 60, 180, 300, 600), key=lambda s: abs(s - mins * 60))
+    params.put("OptechOffShutdown", str(off_s))
+  params.put_bool("OptechHud", True)  # the OPTECH 주행 화면 is always on, as on optech-hkg (no menu item)
 
   params.put("dp_car_list", get_support_car_list())
 

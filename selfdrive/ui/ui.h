@@ -198,6 +198,9 @@ public:
 
   QTransform car_space_transform;
 
+  int settings_timeout_s = 180;  // optech '화면 유지 시간' (OptechSettingsTimeout seconds, -1: never)
+  int drive_dim = 0;             // optech '주행 중 밝기' (OptechDriveDim %, 0: off)
+
 signals:
   void uiUpdate(const UIState &s);
   void offroadTransition(bool offroad);
@@ -224,8 +227,12 @@ public:
   void setOffroadBrightness(int brightness) {
     offroad_brightness = std::clamp(brightness, 0, 100);
   }
+  bool settings_open = false;  // the settings window is shown (MainWindow sets it; '화면 유지 시간')
 
 private:
+  int idle_frames = 0;  // frames since the last touch ('주행 중 밝기')
+  bool dimmed = false;
+  bool keepApplies() const;
   #ifdef QCOM
   const float accel_samples = 5*UI_FREQ;
   bool motionTriggered(const UIState &s);
