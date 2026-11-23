@@ -68,9 +68,9 @@ CarSelectionPanel::CarSelectionPanel(SettingsWindow *parent) : QWidget(parent) {
   setLayout(layout);
 }
 
-// 토글 page in the same order, names and texts as optech-hkg. The spst-only switches moved to the OPTECH tabs
-// (옛 주행 모델 / openpilot 가감속 / 실험 모드 -> 고급, 주행 기록 저장 -> 고급, 가속 페달 -> 주행, 주행 성향 -> 속도).
-// 실험 모드 and openpilot 가감속 stay here hidden (the home screen's mode button opens this page at 실험 모드).
+// 토글 page in the same order, names and texts as optech-hkg. 실험 모드 / openpilot 가감속 sit 2nd and 3rd as on hkg,
+// followed by the spst-only 옛 주행 모델 and 자동 E2E (user 2026-11-23: these belong here, not in OPTECH 고급).
+// Other spst-only switches live in the OPTECH tabs (주행 기록 저장 -> 고급, 가속 페달 -> 주행, 주행 성향 -> 속도).
 static int optech_dm_mode() {
   const int m = std::atoi(Params().get("OptechDmMode").c_str());
   return (m < 0 || m > 2) ? 0 : m;
@@ -111,8 +111,23 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
       "openpilot 가감속 제어 (알파)",
       QString("<b>%1</b><br><br>%2")
       .arg("주의: 이 차에서는 아직 시험 단계이고, 켜면 차의 자동 긴급 제동(AEB)이 꺼집니다.")
-      .arg("처음에는 차의 순정 크루즈(ACC)가 속도를 맡습니다. 이것을 켜면 openpilot이 가속과 감속을 직접 맡습니다."),
+      .arg("처음에는 차의 순정 크루즈(ACC)가 속도를 맡습니다. 이것을 켜면 openpilot이 가속과 감속을 직접 맡습니다. "
+           "이 차가 지원할 때만 보이고, 시동을 다시 걸면 적용됩니다."),
       "../assets/offroad/icon_speed_limit.png",
+    },
+    {
+      "dp_0813",
+      "옛 주행 모델 사용 (0.8.13.1)",
+      "C2에서 가볍게 도는 예전 주행 모델(0.8.13.1)을 씁니다. C2에서는 켜 두는 것을 추천합니다(처음 값: 켜짐).\n"
+      "켜 두면 실험 모드와 openpilot 가감속(알파)은 쓸 수 없습니다.\n"
+      "끄면 새 주행 모델을 쓰지만, C2에는 버거워서 느려질 수 있습니다.\n재부팅해야 적용됩니다.",
+      "../assets/offroad/icon_road.png",
+    },
+    {
+      "dp_long_de2e",
+      "자동 E2E / ACC 전환",
+      "상황에 따라 E2E(카메라 판단) 가감속과 ACC(앞차 기준) 가감속을 자동으로 바꿉니다.\nopenpilot이 가감속을 맡는 차량만 해당됩니다.",
+      "../assets/img_experimental_grey.svg",
     },
     {
       // OPKR 'LDWS 차량 설정' (LdwsCarFix): hyundaican.create_lkas11 sends CF_Lkas_LdwsOpt_USM = 3
@@ -173,6 +188,9 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
   toggles["ExperimentalLongitudinalEnabled"]->setConfirmation(true, false);
 
   connect(toggles["ExperimentalLongitudinalEnabled"], &ToggleControl::toggleFlipped, [=]() {
+    updateToggles();
+  });
+  connect(toggles["dp_0813"], &ToggleControl::toggleFlipped, [=]() {
     updateToggles();
   });
 
@@ -236,9 +254,6 @@ void TogglesPanel::showEvent(QShowEvent *event) {
 void TogglesPanel::updateToggles() {
   auto experimental_mode_toggle = toggles["ExperimentalMode"];
   auto op_long_toggle = toggles["ExperimentalLongitudinalEnabled"];
-  // set on OPTECH > 고급 > 실험 모드 (as on optech-hkg); kept here hidden
-  experimental_mode_toggle->setVisible(false);
-  op_long_toggle->setVisible(false);
   toggles["OptechLdwsCar"]->setVisible(optech_hkg_car());
 
   const QString e2e_description = QString("%1<br><h4>%2</h4><br>%3")
@@ -250,17 +265,25 @@ void TogglesPanel::updateToggles() {
   const bool is_release = params.getBool("IsReleaseBranch");
   const bool is_old_model = params.getBool("dp_0813");
   auto cp_bytes = params.get("CarParamsPersistent");
+  // the old 0.8.13.1 model cannot use 실험 모드 / openpilot 가감속; openpilot 가감속 only shows when the car offers it
   if (is_old_model) {
     params.remove("ExperimentalMode");
     params.remove("ExperimentalLongitudinalEnabled");
+    op_long_toggle->setVisible(false);
+    experimental_mode_toggle->setEnabled(false);
+    experimental_mode_toggle->setDescription("<b>옛 주행 모델을 켜 두면 실험 모드를 쓸 수 없습니다.</b><br><br>" + e2e_description);
+    experimental_mode_toggle->refresh();
   } else if (!cp_bytes.empty()) {
     AlignedBuffer aligned_buf;
     capnp::FlatArrayMessageReader cmsg(aligned_buf.align(cp_bytes.data(), cp_bytes.size()));
     cereal::CarParams::Reader CP = cmsg.getRoot<cereal::CarParams>();
 
-    if (!CP.getExperimentalLongitudinalAvailable() || is_release) {
+    const bool long_available = CP.getExperimentalLongitudinalAvailable() && !is_release;
+    if (!long_available) {
       params.remove("ExperimentalLongitudinalEnabled");
     }
+    op_long_toggle->setVisible(long_available);
+    op_long_toggle->refresh();
     if (hasLongitudinalControl(CP)) {
       experimental_mode_toggle->setEnabled(true);
       experimental_mode_toggle->setDescription(e2e_description);
@@ -271,6 +294,9 @@ void TogglesPanel::updateToggles() {
     }
     experimental_mode_toggle->refresh();
   } else {
+    // no car seen yet: 실험 모드 can be set ahead, openpilot 가감속 waits until the car says it is available
+    op_long_toggle->setVisible(false);
+    experimental_mode_toggle->setEnabled(true);
     experimental_mode_toggle->setDescription(e2e_description);
   }
 }

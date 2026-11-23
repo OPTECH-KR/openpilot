@@ -860,24 +860,7 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
   });
   adv->addItem(drivelog_get_btn);
 
-  adv->addItem(optech_section("실험 모드"));
-  op_long_toggle = toggle(adv, "ExperimentalLongitudinalEnabled", "openpilot 가감속 제어 (알파)",
-         "처음에는 차의 순정 크루즈(ACC)가 속도를 맡습니다. 이것을 켜면 openpilot이 가속과 감속을 직접 맡습니다. "
-         "켜면 차의 자동 긴급 제동(AEB)이 꺼질 수 있습니다. 이 차가 지원할 때만 보입니다. 시동을 다시 걸면 적용됩니다.");
-  op_long_toggle->setConfirmation(true, false);
-  QObject::connect(op_long_toggle, &ToggleControl::toggleFlipped, [=]() { updateToggles(); });
-  e2e_toggle = toggle(adv, "ExperimentalMode", "실험 모드",
-         "주행 모델이 직접 가속과 감속을 정합니다(카메라 판단 E2E). 빨간불이나 정지 표지판 앞에서 멈추기도 합니다. "
-         "설정 속도는 '최고 속도'로만 쓰입니다. openpilot이 가감속을 맡을 때만 쓸 수 있고, 알파 단계 기능이라 실수가 있을 수 있습니다.");
-  e2e_toggle->setConfirmation(true, true);
-  ParamControl *old_model = toggle(adv, "dp_0813", "옛 주행 모델 사용 (0.8.13.1)",
-         "C2에서 가볍게 도는 예전 주행 모델(0.8.13.1)을 씁니다. C2에서는 켜 두는 것을 추천합니다(처음 값: 켜짐).\n"
-         "켜 두면 실험 모드와 openpilot 가감속(알파)은 쓸 수 없습니다.\n"
-         "끄면 새 주행 모델을 쓰지만, C2에는 버거워서 느려질 수 있습니다.\n재부팅해야 적용됩니다.");
-  QObject::connect(old_model, &ToggleControl::toggleFlipped, [=]() { updateToggles(); });
-  toggle(adv, "dp_long_de2e", "자동 E2E / ACC 전환",
-         "상황에 따라 E2E(카메라 판단) 가감속과 ACC(앞차 기준) 가감속을 자동으로 바꿉니다.\nopenpilot이 가감속을 맡는 차량만 해당됩니다.");
-
+  // 실험 모드 / openpilot 가감속 / 옛 주행 모델 / 자동 E2E are on the 토글 page (user 2026-11-23)
   adv->addItem(optech_section("개발용"));
   toggle(adv, "dp_car_dashcam_mode_removal", "대시캠 모드 해제 (위험)",
          "주행 중 '대시캠 모드'가 뜨면 이것을 켜서 openpilot 제어를 강제로 켭니다. 대시캠 모드는 보통 완전히 지원되지 않는 차량이라는 뜻입니다.\n본인 책임으로 사용하세요. 재부팅해야 적용됩니다.");
@@ -988,27 +971,6 @@ void OptechPanel::updateToggles() {
 
   // 운전자 모니터링 아이콘: only with 토글 > 운전자 모니터링 '기본 사용'
   if (dm_icon) dm_icon->setEnabled(QString::fromStdString(params.get("OptechDmMode")).toInt() == 0);
-
-  // 실험 모드 / openpilot 가감속 (moved here from 토글, as on optech-hkg): the old 0.8.13.1 model cannot use them;
-  // openpilot 가감속 only shows when the car offers it, 실험 모드 needs openpilot doing the speed
-  if (!op_long_toggle || !e2e_toggle) return;
-  const bool old_model = params.getBool("dp_0813");
-  const bool is_release = params.getBool("IsReleaseBranch");
-  bool long_available = false, has_long = false;
-  const std::string cp_bytes = params.get("CarParamsPersistent");
-  if (!cp_bytes.empty()) {
-    AlignedBuffer aligned_buf;
-    capnp::FlatArrayMessageReader cmsg(aligned_buf.align(cp_bytes.data(), cp_bytes.size()));
-    cereal::CarParams::Reader CP = cmsg.getRoot<cereal::CarParams>();
-    long_available = CP.getExperimentalLongitudinalAvailable() && !is_release;
-    has_long = hasLongitudinalControl(CP);
-  }
-  if (old_model || !long_available) params.remove("ExperimentalLongitudinalEnabled");
-  if (old_model || !has_long) params.remove("ExperimentalMode");
-  op_long_toggle->setVisible(!old_model && long_available);
-  e2e_toggle->setEnabled(!old_model && has_long);
-  op_long_toggle->refresh();
-  e2e_toggle->refresh();
 }
 
 void OptechPanel::showEvent(QShowEvent *event) {
