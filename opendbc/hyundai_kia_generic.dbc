@@ -1495,8 +1495,13 @@ BO_ 913 BCM_PO_11: 8 Vector__XXX
  SG_ BCM_Shift_R_MT_SW_Status : 39|2@0+ (1,0) [0|3] "" PT_ESC_ABS
  SG_ LFA_Pressed : 4|1@0+ (1,0) [0|1] "" XXX
 
+BO_ 1429 E_CRUISE_CONTROL: 8 XXX
+ SG_ CRUISE_LAMP_M : 50|1@0+ (1,0) [0|1] "" XXX
+ SG_ CRUISE_LAMP_S : 51|1@0+ (1,0) [0|1] "" XXX
+
 BO_ 1426 LABEL11: 8 XXX
  SG_ CC_React : 34|1@1+ (1,0) [0|1] "" XXX
+ SG_ CC_Engaged : 35|1@1+ (1,0) [0|1] "" XXX
 
 BO_ 910 WHL_SPD12_FS: 5 iBAU
  SG_ CRC : 0|8@1+ (1,0) [0|0] "" Vector__XXX
@@ -1519,6 +1524,7 @@ BO_ 865 ADAS_PRK_11: 8 ADAS_PRK
 BO_ 882 ELECT_GEAR: 8 XXX
  SG_ Elect_Gear_Shifter : 16|4@1+ (1,0) [0|7] ""  CLU
  SG_ Elect_Gear_Shifter_NEXO : 16|16@1+ (1,0) [0|65535] ""  CLU
+ SG_ SLC_SET_SPEED : 32|8@1+ (1,0) [0|255] "" CLU
 
 BO_ 881 E_EMS11: 8 XXX
  SG_ Brake_Pedal_Pos : 0|8@1+ (1,0) [0|127] "" XXX

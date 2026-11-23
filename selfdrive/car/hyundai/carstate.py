@@ -12,6 +12,7 @@ from openpilot.selfdrive.car.hyundai.values import HyundaiFlags, CAR, DBC, CAN_G
 from openpilot.selfdrive.car.hyundai.values import is_camera_scc, CAMERA_SCC_PARAM
 from openpilot.common.params import put_bool_nonblocking
 from openpilot.selfdrive.car.interfaces import CarStateBase
+from openpilot.selfdrive.car.hyundai import pedal as hkg_pedal
 
 PREV_BUTTON_SAMPLES = 8
 CLUSTER_SAMPLE_RATE = 20  # frames
@@ -20,6 +21,18 @@ STANDSTILL_THRESHOLD = 12 * 0.03125 * CV.KPH_TO_MS
 # optech (optech-hkg, Neokii / PolorBear): the Nexo sends its gear as one 16 bit value (ELECT_GEAR Elect_Gear_Shifter_NEXO)
 GearShifter = car.CarState.GearShifter
 NEXO_GEARS = {1546: GearShifter.drive, 2314: GearShifter.neutral, 2566: GearShifter.reverse, 2569: GearShifter.park}
+
+
+def non_scc_cruise_signals(CP):
+  """optech: cars without SCC (StarPilot get_non_scc_cruise_signals): the regular cruise control's
+  (available msg, sig, engaged msg, sig, set speed msg, sig)"""
+  if CP.carFingerprint == CAR.KIA_RAY_EV:
+    return "LABEL11", "CC_React", "LABEL11", "CC_Engaged", "E_EMS11", "Cruise_Limit_Target"
+  if CP.carFingerprint in EV_CAR:
+    return "LABEL11", "CC_React", "EMS12", "ACC_ACT", "E_EMS11", "Cruise_Limit_Target"
+  if CP.carFingerprint in HYBRID_CAR:
+    return "E_CRUISE_CONTROL", "CRUISE_LAMP_M", "E_CRUISE_CONTROL", "CRUISE_LAMP_S", "ELECT_GEAR", "SLC_SET_SPEED"
+  return "EMS16", "CRUISE_LAMP_M", "EMS16", "CRUISE_LAMP_S", "LVR12", "CF_Lvr_CruiseSet"
 
 
 class CarState(CarStateBase):
@@ -62,12 +75,15 @@ class CarState(CarStateBase):
     self.cluster_speed_counter = CLUSTER_SAMPLE_RATE
 
     self.params = CarControllerParams(CP)
+    self.pedal_valid = False  # optech: comma pedal (cars without SCC)
+    self.pedal_state = 5
 
   # optech: where does the SCC really come from? While fingerprinting (relay open) both buses show it, so this is
   # checked on the road: SCC11 fresh on one side only for 3 s -> remember it for the next start (the panda's safety
   # mode is set at start). scc_bus_changed asks for a restart (alert in interface).
   def check_scc_bus(self, cp, cp_cam):
-    if self.CP.carFingerprint in CANFD_CAR or self.CP.openpilotLongitudinalControl or self.CP.carFingerprint in CAMERA_SCC_CAR:
+    if self.CP.carFingerprint in CANFD_CAR or self.CP.openpilotLongitudinalControl or self.CP.carFingerprint in CAMERA_SCC_CAR or \
+       self.CP.flags & HyundaiFlags.NON_SCC:
       return
     now = cp.ts_nanos["WHL_SPD11"]["WHL_SPD_FL"]
     expected, other = (cp_cam, cp) if self.camera_scc else (cp, cp_cam)
@@ -128,7 +144,15 @@ class CarState(CarStateBase):
     ret.steerFaultTemporary = cp.vl["MDPS12"]["CF_Mdps_ToiUnavail"] != 0 or cp.vl["MDPS12"]["CF_Mdps_ToiFlt"] != 0
 
     # cruise state
-    if self.CP.openpilotLongitudinalControl:
+    if self.CP.flags & HyundaiFlags.NON_SCC:
+      # optech: no SCC: the car's regular cruise control (StarPilot get_non_scc_cruise_signals). With a comma pedal
+      # openpilot cancels it while engaged and keeps its own state from the buttons
+      avail_msg, avail_sig, on_msg, on_sig, speed_msg, speed_sig = non_scc_cruise_signals(self.CP)
+      ret.cruiseState.available = cp.vl[avail_msg][avail_sig] != 0
+      ret.cruiseState.enabled = cp.vl[on_msg][on_sig] != 0
+      ret.cruiseState.standstill = False
+      ret.cruiseState.speed = cp.vl[speed_msg][speed_sig] * speed_conv
+    elif self.CP.openpilotLongitudinalControl:
       # These are not used for engage/disengage since openpilot keeps track of state using the buttons
       ret.cruiseState.available = cp.vl["TCS13"]["ACCEnable"] == 0
       ret.cruiseState.enabled = cp.vl["TCS13"]["ACC_REQ"] == 1
@@ -147,6 +171,11 @@ class CarState(CarStateBase):
     ret.brakeHoldActive = cp.vl["TCS15"]["AVH_LAMP"] == 2  # 0 OFF, 1 ERROR, 2 ACTIVE, 3 READY
     ret.parkingBrake = cp.vl["TCS13"]["PBRAKE_ACT"] == 1
     ret.accFaulted = cp.vl["TCS13"]["ACCEnable"] != 0  # 0 ACC CONTROL ENABLED, 1-3 ACC CONTROL DISABLED
+    if self.CP.flags & HyundaiFlags.NON_SCC:
+      ret.accFaulted = False  # ACCEnable means nothing without SCC
+    if self.CP.flags & HyundaiFlags.NON_SCC_NO_TCS:
+      ret.brakePressed = cp.vl["E_EMS11"]["Brake_Pedal_Pos"] > 0  # no TCS13 (Porter II EV, carrot)
+      ret.parkingBrake = False
 
     if self.CP.carFingerprint in (HYBRID_CAR | EV_CAR):
       if self.CP.carFingerprint in HYBRID_CAR:
@@ -154,6 +183,16 @@ class CarState(CarStateBase):
       else:
         ret.gas = cp.vl["E_EMS11"]["Accel_Pedal_Pos"] / 254.
       ret.gasPressed = ret.gas > 0
+      if self.CP.flags & HyundaiFlags.NON_SCC_PEDAL:
+        # the pedal box sits between the pedal and the car: the car's pedal signal is openpilot's command, the
+        # driver's own pedal is in GAS_SENSOR
+        cp_pedal = getattr(self, "cp_pedal", None)
+        self.pedal_valid = cp_pedal is not None and cp_pedal.can_valid
+        self.pedal_state = int(cp_pedal.vl["GAS_SENSOR"]["STATE"]) if cp_pedal is not None else 5
+        ret.accFaulted = not self.pedal_valid or self.pedal_state != 0
+        if cp_pedal is not None:
+          ret.gasPressed = hkg_pedal.driver_pressed(cp_pedal.vl["GAS_SENSOR"]["INTERCEPTOR_GAS"],
+                                                    cp_pedal.vl["GAS_SENSOR"]["INTERCEPTOR_GAS2"])
     else:
       ret.gas = cp.vl["EMS12"]["PV_AV_CAN"] / 100.
       ret.gasPressed = bool(cp.vl["EMS16"]["CF_Ems_AclAct"])
@@ -176,7 +215,7 @@ class CarState(CarStateBase):
     else:
       ret.gearShifter = self.parse_gear_shifter(self.shifter_values.get(gear))
 
-    if not self.CP.openpilotLongitudinalControl:
+    if not self.CP.openpilotLongitudinalControl and not self.CP.flags & HyundaiFlags.NON_SCC:
       aeb_src = "FCA11" if self.CP.flags & HyundaiFlags.USE_FCA.value else "SCC12"
       aeb_sig = "FCA_CmdAct" if self.CP.flags & HyundaiFlags.USE_FCA.value else "AEB_CmdAct"
       aeb_warning = cp_cruise.vl[aeb_src]["CF_VSM_Warn"] != 0
@@ -305,7 +344,11 @@ class CarState(CarStateBase):
       ("TPMS11", 0),  # optech 주행 화면 '타이어 공기압': not checked (cars without it stay valid)
     ]
 
-    if not CP.openpilotLongitudinalControl and not is_camera_scc(CP):
+    if CP.flags & HyundaiFlags.NON_SCC:
+      # optech: no SCC; messages a cruise-control-only car may not have are read when present (optech-hkg)
+      optional = ("TCS15", "CLU15", "CGW2", "CGW4") + (("TCS13",) if CP.flags & HyundaiFlags.NON_SCC_NO_TCS else ())
+      messages = [(m, 0) if m in optional else (m, f) for m, f in messages]
+    elif not CP.openpilotLongitudinalControl and not is_camera_scc(CP):
       messages += [
         ("SCC11", 50),
         ("SCC12", 50),
@@ -335,7 +378,20 @@ class CarState(CarStateBase):
     else:
       messages.append(("LVR12", 100))
 
+    if CP.flags & HyundaiFlags.NON_SCC:  # optech: the regular cruise control's messages
+      avail_msg, _, on_msg, _, speed_msg, _ = non_scc_cruise_signals(CP)
+      for m in (avail_msg, on_msg, speed_msg):
+        if m not in [x[0] for x in messages]:
+          messages.append((m, 10))
+
     return CANParser(DBC[CP.carFingerprint]["pt"], messages, 0)
+
+  @staticmethod
+  def get_body_can_parser(CP):
+    # optech: the comma pedal's GAS_SENSOR on the cars without SCC (menu switch on and the pedal seen at the start)
+    if CP.flags & HyundaiFlags.NON_SCC_PEDAL:
+      return CANParser(hkg_pedal.PEDAL_DBC[CP.carFingerprint], [("GAS_SENSOR", 50)], 0)
+    return None
 
   @staticmethod
   def get_cam_can_parser(CP):
@@ -346,7 +402,9 @@ class CarState(CarStateBase):
       ("LKAS11", 100)
     ]
 
-    if not CP.openpilotLongitudinalControl and is_camera_scc(CP):
+    if CP.flags & HyundaiFlags.NON_SCC:
+      pass  # optech: no SCC on either side
+    elif not CP.openpilotLongitudinalControl and is_camera_scc(CP):
       messages += [
         ("SCC11", 50),
         ("SCC12", 50),

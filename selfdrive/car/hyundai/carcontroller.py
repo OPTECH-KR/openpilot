@@ -6,7 +6,8 @@ from openpilot.common.params import Params
 from openpilot.common.numpy_fast import clip, interp
 from openpilot.common.realtime import DT_CTRL
 from opendbc.can.packer import CANPacker
-from openpilot.selfdrive.car import apply_driver_steer_torque_limits, common_fault_avoidance
+from openpilot.selfdrive.car import apply_driver_steer_torque_limits, common_fault_avoidance, create_gas_interceptor_command
+from openpilot.selfdrive.car.hyundai import pedal as hkg_pedal
 from openpilot.selfdrive.car.hyundai import hyundaicanfd, hyundaican
 from openpilot.selfdrive.car.hyundai.hyundaicanfd import CanBus
 from openpilot.selfdrive.car.hyundai.values import HyundaiFlags, Buttons, CarControllerParams, CANFD_CAR, CAR
@@ -65,6 +66,13 @@ class CarController:
     self.cam_haptic = 0  # 과속 단속 알림 (read every 5 s in update)
     self.jerk_start = 1.0  # optech 속도 > 재출발 가속 (JerkStartLimit x 0.1)
     self.start_frame = -1000  # last frame the car was stopped / stopping
+    # optech: cars without SCC; with a comma pedal openpilot does the speed through the accelerator (pedal.py)
+    self.non_scc = bool(CP.flags & HyundaiFlags.NON_SCC)
+    self.pedal = bool(CP.flags & HyundaiFlags.NON_SCC_PEDAL)
+    self.pedal_packer = CANPacker(hkg_pedal.command_dbc(CP)) if self.pedal else None
+    self.pedal_gas_last = 0.
+    self.pedal_max = hkg_pedal.max_cap(CP) if self.pedal else 0.
+    self.pedal_cancel_frame = 0
     self.cruise_on_prev = False
     self.sync_target = 0  # set speed to reach, in the cluster unit; 0 = nothing to do
     self.sync_start_frame = 0
@@ -112,6 +120,8 @@ class CarController:
         self.jerk_start = min(max(int(Params().get("JerkStartLimit", encoding="utf8") or 10), 1), 50) * 0.1
       except ValueError:
         self.jerk_start = 1.0
+      if self.pedal:
+        self.pedal_max = hkg_pedal.max_cap(self.CP)
     if hud_control.leftLaneDepart and hud_control.rightLaneDepart and self.cam_haptic in (1, 2):
       left_lane_warning = right_lane_warning = self.cam_haptic
 
@@ -170,10 +180,27 @@ class CarController:
 
       if not self.CP.openpilotLongitudinalControl:
         buttons = self.create_button_messages(CC, CS, use_clu11=True)
-        sync = self.set_speed_sync(CC, CS)
+        sync = self.set_speed_sync(CC, CS) if not self.non_scc else []  # optech: SCC cars only
         can_sends.extend(buttons if (buttons or CC.cruiseControl.cancel or CC.cruiseControl.resume) else sync)
 
-      if self.frame % 2 == 0 and self.CP.openpilotLongitudinalControl:
+      # optech: comma pedal (cars without SCC): the car's own cruise control is cancelled while openpilot is engaged,
+      # and openpilot's accel becomes the accelerator (StarPilot Ray EV pedal model, 25 Hz)
+      if self.pedal:
+        if CC.enabled and CS.out.cruiseState.enabled and (self.frame - self.pedal_cancel_frame) * DT_CTRL > 0.04:
+          can_sends.append(hyundaican.create_clu11(self.packer, self.frame, CS.clu11, Buttons.CANCEL, self.CP.carFingerprint))
+          self.pedal_cancel_frame = self.frame
+        if self.frame % 4 == 0:
+          ready = CS.pedal_valid and CS.pedal_state == 0
+          active = CC.longActive and ready and not CC.cruiseControl.override and not CS.out.gasPressed and \
+                   not CS.out.brakePressed
+          if active:
+            target = hkg_pedal.pedal_target(accel, CS.out.vEgo, hud_control.setSpeed, self.pedal_max)
+            self.pedal_gas_last = hkg_pedal.next_command(target, self.pedal_gas_last)
+          else:
+            self.pedal_gas_last = 0.
+          can_sends.append(create_gas_interceptor_command(self.pedal_packer, self.pedal_gas_last, (self.frame // 4) & 0xF))
+
+      if self.frame % 2 == 0 and self.CP.openpilotLongitudinalControl and not self.non_scc:
         # optech 재출발 가속 (optech-hkg JerkStartLimit): after a stop the car's SCC may raise the accel only this
         # fast for 1.5 s, then up to the normal 3.0 by 2.5 s
         if CS.out.standstill or actuators.longControlState == LongCtrlState.stopping:
@@ -194,11 +221,11 @@ class CarController:
         can_sends.append(hyundaican.create_lfahda_mfc(self.packer, CC.enabled))
 
       # 5 Hz ACC options
-      if self.frame % 20 == 0 and self.CP.openpilotLongitudinalControl:
+      if self.frame % 20 == 0 and self.CP.openpilotLongitudinalControl and not self.non_scc:
         can_sends.extend(hyundaican.create_acc_opt(self.packer))
 
       # 2 Hz front radar options
-      if self.frame % 50 == 0 and self.CP.openpilotLongitudinalControl:
+      if self.frame % 50 == 0 and self.CP.openpilotLongitudinalControl and not self.non_scc:
         can_sends.append(hyundaican.create_frt_radar_opt(self.packer))
 
     new_actuators = actuators.copy()

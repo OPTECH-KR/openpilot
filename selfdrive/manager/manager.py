@@ -131,6 +131,13 @@ def manager_init() -> None:
     ("StartAccelApply", "0"),
     ("StopAccelApply", "0"),
     ("StopDistance", "600"),
+    # optech: Ray EV / Porter II EV (no SCC) comma pedal, under 차종 선택 when that car is chosen (optech-hkg)
+    ("RayPedal", "0"),
+    ("RayPedalMax", "70"),
+    ("RayPedalStrong", "0"),
+    ("RayPedalKi", "50"),
+    ("PorterPedal", "0"),
+    ("PorterPedalMax", "40"),
   ]
   if not PC:
     default_params.append(("LastUpdateTime", datetime.datetime.utcnow().isoformat().encode('utf8')))

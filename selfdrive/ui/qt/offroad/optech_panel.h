@@ -75,6 +75,8 @@ private:
   QList<OptechValueControl *> values;
   OptechValueControl *lane_priority_speed = nullptr;
   QList<QWidget *> toyota_items, vag_items, bolt_items, hkg_items;
+  QList<QWidget *> ray_items, porter_items;  // cars without SCC with their own settings (optech-hkg)
+  QLabel *non_scc_note = nullptr;            // the trims without SCC (… NO SCC)
   QList<QWidget *> cam_group;      // 과속카메라: shown while 카메라 감속 is on
   QList<QWidget *> torque_values;  // 토크 가속 / 마찰 계수: shown while 토크 사용자 설정 is on
   ToggleControl *dm_icon = nullptr;

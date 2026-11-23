@@ -194,6 +194,9 @@ static const QStringList BRAND_ORDER = {"HYUNDAI", "KIA", "GENESIS",
                                         "VOLKSWAGEN", "AUDI", "SKODA", "SEAT", "MAZDA", "NISSAN", "SUBARU", "FORD",
                                         "CHRYSLER", "JEEP", "RAM", "TESLA"};
 static const char *BOLT_CC_CAR = "CHEVROLET BOLT EV NO ACC";  // selfdrive/car/gm/values.py CAR.BOLT_CC
+// selfdrive/car/hyundai/values.py: cars without SCC with a comma pedal page (NON_SCC_CAR, optech-hkg)
+static const char *RAY_EV_CAR = "KIA RAY EV 2024";
+static const char *PORTER_EV_CAR = "HYUNDAI PORTER II EV 2024";
 static const QStringList BRAND_HIDDEN = {"COMMA", "mock"};
 // Hyundai / Kia / Genesis come from dp_car_list "hkg_menu" (selfdrive/car/hyundai/car_menu.py): normal CAN cars only,
 // already in menu order (model family, then year), with optech-hkg names. The cars are not sorted again here.
@@ -404,14 +407,20 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
     updateCarButton();
     updateBrandItems();
     stack->setCurrentWidget(home);
-    if (QString::fromStdString(params.get("dp_car_assigned")) == BOLT_CC_CAR) {
+    const QString chosen = QString::fromStdString(params.get("dp_car_assigned"));
+    if (chosen == BOLT_CC_CAR) {
       ConfirmationDialog::alert("이 차량은 따로 확인할 설정이 있어요.\n차종 버튼 아래의 '볼트 EV 설정'을 확인해 주세요.", this);
+    } else if (chosen == RAY_EV_CAR || chosen == PORTER_EV_CAR) {
+      ConfirmationDialog::alert(QString("이 차량은 따로 확인할 설정이 있어요.\n차종 버튼 아래의 '%1 설정'을 확인해 주세요.")
+                                .arg(chosen == RAY_EV_CAR ? "레이 EV" : "포터 II EV"), this);
     }
   });
   start->addItem(car_btn);
   start->addItem(optech_note("자동 인식이 잘 되면 '자동 인식'으로 두세요. 인식이 안 될 때만 직접 고르면 다음 시동부터 적용됩니다. "
                              "현대·기아·제네시스는 일반 CAN 차량만 있어요(CAN FD 차량은 optech-hkg-fd를 쓰세요). "
-                             "그랜저 IG · K7 · K9 · 모하비 · 캐스퍼 · 넥쏘 · EQ900 같은 국내 차종과 ACC 없는 GM 차량(… NO ACC)은 자동 인식이 안 되니 직접 고르세요."));
+                             "그랜저 IG · K7 · K9 · 모하비 · 캐스퍼 · 넥쏘 · EQ900 같은 국내 차종, 레이 EV · 포터 II EV, "
+                             "ACC 없는 GM 차량(… NO ACC)은 자동 인식이 안 되니 직접 고르세요. "
+                             "스마트 크루즈가 없는 트림(… NO SCC)은 직접 고르거나, 같은 차를 고르면 시동 때 알아서 바뀝니다."));
 
   // '볼트 EV 설정': only while the Bolt EV without ACC is the chosen car (same texts as optech-hkg)
   QLabel *bolt_section = optech_section("볼트 EV 설정");
@@ -437,6 +446,51 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
     "openpilot이 가속페달을 최대 몇 %까지 밟을지 정합니다. 처음에는 낮게 시작해 보세요. 20~100%, 기본 100%(스타파일럿 그대로). "
     "저속에서는 스타파일럿이 따로 정한 상한(정지 근처 20%부터)이 먼저 적용됩니다.",
     20, 100, 5, [](int v) { return QString("%1%").arg(v); }));
+  // Hyundai / Kia without SCC (optech-hkg texts): a note for the trims without smart cruise, and the Ray EV / Porter II EV
+  // pages with the comma pedal (selfdrive/car/hyundai/pedal.py), shown under the car button when that car is chosen
+  non_scc_note = optech_note(
+    "스마트 크루즈(SCC)가 없는 트림입니다. openpilot은 조향만 하고, 속도는 차의 크루즈 컨트롤이 유지합니다. "
+    "차의 크루즈를 켜면(SET) 조향도 함께 켜집니다. 앞차를 감지하는 레이더가 없으니 앞차와의 거리는 항상 운전자가 지켜 주세요. "
+    "아직 실제 차로 시험하지 않았으니, 처음에는 'openpilot 사용'을 끄고(읽기 전용) 짧게 달려 본 뒤 조향을 켜 주세요.");
+  start->addItem(non_scc_note);
+  const QString non_scc_intro =
+    "스마트 크루즈(SCC)가 없는 차량입니다. 페달 장치가 없으면 openpilot은 조향만 하고, 속도는 차의 크루즈 컨트롤이 유지합니다. "
+    "앞차를 감지하는 레이더가 없으니 앞차와의 거리는 항상 운전자가 지켜 주세요. "
+    "아직 실제 차로 시험하지 않았으니, 처음에는 'openpilot 사용'을 끄고(읽기 전용) 짧게 달려 본 뒤 조향을 켜 주세요.";
+  const QString non_scc_pedal =
+    "comma 페달 장치를 단 경우에만 켜세요. 켜면 openpilot이 가속페달로 가감속을 맡고, 차의 크루즈는 자동으로 꺼집니다. "
+    "크루즈 메인 버튼을 켜 두고 SET 또는 RES 버튼으로 켭니다. "
+    "브레이크 장치가 없어 감속은 회생제동만큼만 되고, 앞차 뒤에서 멈추거나 정차를 유지할 수 없습니다. "
+    "페달 장치가 인식되지 않으면 켜 두어도 조향만 합니다. 재부팅해야 적용됩니다.";
+  auto pedal_car_page = [=](QList<QWidget *> &items, const QString &title, const QString &prefix, int cap_default,
+                            const QString &note) {
+    QLabel *sec = optech_section(title + " 설정");
+    start->addItem(sec);
+    items.append(sec);
+    QLabel *intro = optech_note(non_scc_intro);
+    start->addItem(intro);
+    items.append(intro);
+    QLabel *psec = optech_section("페달 (comma 페달 장치)");
+    start->addItem(psec);
+    items.append(psec);
+    items.append(toggle(start, prefix + "Pedal", "페달 사용", non_scc_pedal));
+    items.append(value(start, prefix + "PedalMax", "페달 최대 밟는 양",
+      QString("openpilot이 가속페달을 최대 몇 %까지 밟을지 정합니다. 처음에는 낮게 시작해 보세요. 10~70%, 기본 %1%. ").arg(cap_default) + note,
+      10, 70, 5, [](int v) { return QString("%1%").arg(v); }));
+  };
+  pedal_car_page(ray_items, "레이 EV", "Ray", 70,
+    "페달 보정값은 스타파일럿이 실제 레이 EV로 맞춘 값을 씁니다(당근파일럿도 같은 값). 아래 '페달 세게'와 '속도 오차 보정'은 당근파일럿 방식입니다.");
+  ray_items.append(toggle(start, "RayPedalStrong", "페달 세게 (당근)",
+    "같은 명령에 페달을 약 2배 더 밟습니다. 당근파일럿에서 2024년식 레이 EV 차주가 '가속이 약하다'고 해서 바꾼 값입니다. "
+    "당근파일럿의 주행 기록 분석에서는 이 설정으로 감속해야 할 때 오히려 가속한 경우가 있었으니, 가속이 정말 약할 때만 켜고 처음에는 조심해서 확인하세요. "
+    "기본은 꺼짐(스타파일럿 값). 재부팅해야 적용됩니다."));
+  ray_items.append(value(start, "RayPedalKi", "속도 오차 보정 (Ki)",
+    "설정 속도와 실제 속도가 계속 어긋날 때(오르막에서 처지거나 내리막에서 빨라질 때) 조금씩 페달을 더하거나 빼서 맞춥니다(당근파일럿 방식). "
+    "값 ×0.001이 Ki입니다. 0이면 끔, 기본 50(당근파일럿 레이 추천값). 너무 크면 속도가 출렁입니다. 재부팅해야 적용됩니다.",
+    0, 200, 10, [](int v) { return QString::number(v); }));
+  pedal_car_page(porter_items, "포터 II EV", "Porter", 40,
+    "포터는 아직 실제 차로 맞춘 페달 보정값이 없어 레이 EV 값을 임시로 씁니다. 안전한 곳에서 낮은 상한으로 먼저 확인하고, 필요하면 보정값을 맞춰야 합니다.");
+
   // ======== 주행 (same order as optech-hkg: 사용 방식 at the top, then the sections) ========
   // '사용 방식' like optech-hkg (title = current choice, button 선택). Here it is dragonpilot's ALKA (dp_alka):
   // the car's own cruise does the speed once SET is pressed, so "steering only from the cruise button" is not possible
@@ -955,6 +1009,20 @@ void OptechPanel::updateBrandItems() {
   for (auto w : hkg_items) w->setVisible(brand.isEmpty() || HKG_BRANDS.contains(brand));
   const bool bolt_cc = QString::fromStdString(params.get("dp_car_assigned")).trimmed() == BOLT_CC_CAR;
   for (auto w : bolt_items) w->setVisible(bolt_cc);
+  // cars without SCC: the chosen car, else the one detected at the last start (a trim without SCC is also switched to
+  // from its SCC model when no SCC shows, selfdrive/car/hyundai/interface.py)
+  QString car = QString::fromStdString(params.get("dp_car_assigned")).trimmed();
+  if (car.isEmpty()) {
+    const std::string cp_bytes = params.get("CarParamsPersistent");
+    if (!cp_bytes.empty()) {
+      AlignedBuffer aligned_buf;
+      capnp::FlatArrayMessageReader cmsg(aligned_buf.align(cp_bytes.data(), cp_bytes.size()));
+      car = QString::fromStdString(cmsg.getRoot<cereal::CarParams>().getCarFingerprint());
+    }
+  }
+  for (auto w : ray_items) w->setVisible(car == RAY_EV_CAR);
+  for (auto w : porter_items) w->setVisible(car == PORTER_EV_CAR);
+  if (non_scc_note) non_scc_note->setVisible(car.endsWith("NON-SCC"));
   brand_note->setVisible(brand.isEmpty());  // brand known but nothing special: no note
 }
 

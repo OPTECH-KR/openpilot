@@ -5,6 +5,7 @@ family, then model year, and shown with the Korean market name (ELANTRA -> AVANT
 GRANDEUR) plus the vehicle code and years. The value saved in dp_car_assigned stays the CAR string from values.py.
 Only normal CAN cars are listed: CAN FD cars need a red panda, which this C2 build does not use for them.
 The Korean market cars (values.KOREA_CAR: Grandeur IG, K7, K9, Mohave, Casper, Nexo, EQ900, ...) come from optech-hkg.
+So do the cars without SCC (values.NON_SCC_CAR, 'NO SCC', Ray EV, Porter II EV).
 The manager puts menu_entries() into dp_car_list ("hkg_menu"); the UI keeps that order.
 """
 
@@ -20,6 +21,10 @@ MENU = {
   "HYUNDAI KONA ELECTRIC 2019": ("현대", "코나", 2018, "KONA ELECTRIC OS 2018-2021"),
   "HYUNDAI KONA ELECTRIC 2022": ("현대", "코나", 2022, "KONA ELECTRIC OS FACELIFT 2022"),
   "HYUNDAI KONA 2022": ("현대", "코나", 2022, "KONA OS FACELIFT 2022"),
+  "HYUNDAI KONA 2019 NON-SCC": ("현대", "코나", 2018, "KONA OS 2018-2021 NO SCC"),
+  "HYUNDAI KONA ELECTRIC 2019 NON-SCC": ("현대", "코나", 2018, "KONA ELECTRIC OS 2018-2021 NO SCC"),
+  "HYUNDAI VENUE 2021 NON-SCC": ("현대", "베뉴", 2020, "VENUE QX 2020~ NO SCC"),
+  "HYUNDAI PORTER II EV 2024": ("현대", "포터", 2024, "PORTER II ELECTRIC 2024"),
   "HYUNDAI GRANDEUR IG 2017": ("현대", "그랜저", 2017, "GRANDEUR IG 2017-2019"),
   "HYUNDAI GRANDEUR IG HEV 2019": ("현대", "그랜저", 2017, "GRANDEUR HYBRID IG 2017-2019"),
   "HYUNDAI GRANDEUR IG FL 2020": ("현대", "그랜저", 2020, "GRANDEUR IG FACELIFT 2020-2022"),
@@ -41,6 +46,8 @@ MENU = {
   "HYUNDAI ELANTRA 2017": ("현대", "아반떼", 2017, "AVANTE AD 2017-2019"),
   "HYUNDAI ELANTRA 2021": ("현대", "아반떼", 2021, "AVANTE CN7 2021-2022"),
   "HYUNDAI ELANTRA HYBRID 2021": ("현대", "아반떼", 2021, "AVANTE HYBRID CN7 2021-2023"),
+  "HYUNDAI ELANTRA 2022 NON-SCC": ("현대", "아반떼", 2021, "AVANTE CN7 2021~ NO SCC"),
+  "HYUNDAI ELANTRA HYBRID 2022 NON-SCC": ("현대", "아반떼", 2021, "AVANTE HYBRID CN7 2021~ NO SCC"),
   "HYUNDAI IONIQ HYBRID 2017-2019": ("현대", "아이오닉", 2017, "IONIQ HYBRID AE 2017-2019"),
   "HYUNDAI IONIQ HYBRID 2020-2022": ("현대", "아이오닉", 2020, "IONIQ HYBRID AE 2020-2022"),
   "HYUNDAI IONIQ PLUG-IN HYBRID 2019": ("현대", "아이오닉", 2019, "IONIQ PLUG-IN AE 2019"),
@@ -53,6 +60,9 @@ MENU = {
 
   # ---------------- 기아 ----------------
   "KIA FORTE E 2018 & GT 2021": ("기아", "K3", 2019, "K3 BD 2019-2021"),
+  "KIA FORTE 2019 NON-SCC": ("기아", "K3", 2019, "K3 BD 2019-2020 NO SCC"),
+  "KIA FORTE 2021 NON-SCC": ("기아", "K3", 2021, "K3 BD FACELIFT 2021~ NO SCC"),
+  "KIA RAY EV 2024": ("기아", "레이", 2024, "RAY EV TAM 2024~"),
   "KIA K5 2016-2019": ("기아", "K5", 2016, "K5 JF 2016-2019"),
   "KIA K5 HEV 2017": ("기아", "K5", 2017, "K5 HYBRID JF 2017"),
   "KIA OPTIMA 4TH GEN": ("기아", "K5", 2017, "K5 JF 2017 (USA)"),
@@ -73,6 +83,7 @@ MENU = {
   "KIA NIRO PLUG-IN HYBRID 2022": ("기아", "니로", 2021, "NIRO PLUG-IN DE FACELIFT 2021-2022"),
   "KIA NIRO EV 2020": ("기아", "니로", 2019, "NIRO EV DE 2019-2022"),
   "KIA SELTOS 2021": ("기아", "셀토스", 2021, "SELTOS SP2 2021"),
+  "KIA SELTOS 2023 NON-SCC": ("기아", "셀토스", 2023, "SELTOS SP2 2023-2024 NO SCC"),
   "KIA STINGER GT2 2018": ("기아", "스팅어", 2018, "STINGER CK 2018-2020"),
   "KIA STINGER 2022": ("기아", "스팅어", 2021, "STINGER MEISTER CK 2021-2022"),
   "KIA SORENTO GT LINE 2018": ("기아", "쏘렌토", 2018, "SORENTO UM 2018-2019"),
@@ -82,6 +93,7 @@ MENU = {
   "HYUNDAI GENESIS 2015-2016": ("제네시스", "G80", 2015, "GENESIS DH 2015-2016"),
   "GENESIS G70 2018": ("제네시스", "G70", 2018, "G70 IK 2018-2019"),
   "GENESIS G70 2020": ("제네시스", "G70", 2020, "G70 IK 2020"),
+  "GENESIS G70 2021 NON-SCC": ("제네시스", "G70", 2021, "G70 IK 2021 NO SCC"),
   "GENESIS G80 2017": ("제네시스", "G80", 2017, "G80 DH 2017-2019"),
   "GENESIS EQ900 2017": ("제네시스", "G90", 2016, "EQ900 HI 2016-2018"),
   "GENESIS EQ900 LIMOUSINE": ("제네시스", "G90", 2016, "EQ900 LIMOUSINE HI 2016-2018"),

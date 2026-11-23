@@ -247,6 +247,10 @@ class Panda:
   FLAG_HYUNDAI_CANFD_ALT_BUTTONS = 32
   FLAG_HYUNDAI_ALT_LIMITS = 64
   FLAG_HYUNDAI_CANFD_HDA2_ALT_STEERING = 128
+  FLAG_HYUNDAI_NON_SCC = 256  # optech: no SCC, regular cruise control only (legacy safety mode)
+  FLAG_HYUNDAI_NON_SCC_PEDAL = 512  # optech: ... with a comma pedal for the speed
+  FLAG_HYUNDAI_NON_SCC_PEDAL_STRONG = 1024  # optech: ... Ray EV strong pedal scaling
+  FLAG_HYUNDAI_NON_SCC_NO_TCS = 2048  # optech: ... no TCS13 (Porter II EV)
 
   FLAG_TESLA_POWERTRAIN = 1
   FLAG_TESLA_LONG_CONTROL = 2

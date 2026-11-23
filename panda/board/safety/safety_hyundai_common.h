@@ -7,6 +7,15 @@ const int HYUNDAI_PARAM_LONGITUDINAL = 4;
 const int HYUNDAI_PARAM_CAMERA_SCC = 8;
 const int HYUNDAI_PARAM_CANFD_HDA2 = 16;
 const int HYUNDAI_PARAM_ALT_LIMITS = 64; // TODO: shift this down with the rest of the common flags
+// optech (optech-hkg / StarPilot): cars without SCC, only the regular cruise control (Kia Ray EV, Porter II EV and the
+// trims without smart cruise). 32 / 128 are taken by the CAN FD modes.
+const int HYUNDAI_PARAM_NON_SCC = 256;
+// ... with a comma pedal: openpilot does the speed through GAS_COMMAND (0x200), engaged with SET / RES like op long
+const int HYUNDAI_PARAM_NON_SCC_PEDAL = 512;
+// ... Ray EV with carrot's strong pedal scaling (PR 570): command 0.70 is raw 795 / 1572 instead of 530 / 1035
+const int HYUNDAI_PARAM_NON_SCC_PEDAL_STRONG = 1024;
+// ... and no TCS13 (Porter II EV): the brake comes from E_EMS11
+const int HYUNDAI_PARAM_NON_SCC_NO_TCS = 2048;
 
 const uint8_t HYUNDAI_PREV_BUTTON_SAMPLES = 8;  // roughly 160 ms
 const uint32_t HYUNDAI_STANDSTILL_THRSLD = 12;  // 0.375 kph
@@ -25,6 +34,10 @@ bool hyundai_longitudinal = false;
 bool hyundai_camera_scc = false;
 bool hyundai_canfd_hda2 = false;
 bool hyundai_alt_limits = false;
+bool hyundai_non_scc = false;
+bool hyundai_non_scc_pedal = false;
+bool hyundai_non_scc_pedal_strong = false;
+bool hyundai_non_scc_no_tcs = false;
 uint8_t hyundai_last_button_interaction;  // button messages since the user pressed an enable button
 
 uint16_t hyundai_canfd_crc_lut[256];
@@ -35,6 +48,10 @@ void hyundai_common_init(uint16_t param) {
   hyundai_camera_scc = GET_FLAG(param, HYUNDAI_PARAM_CAMERA_SCC);
   hyundai_canfd_hda2 = GET_FLAG(param, HYUNDAI_PARAM_CANFD_HDA2);
   hyundai_alt_limits = GET_FLAG(param, HYUNDAI_PARAM_ALT_LIMITS);
+  hyundai_non_scc = GET_FLAG(param, HYUNDAI_PARAM_NON_SCC);
+  hyundai_non_scc_pedal = hyundai_non_scc && GET_FLAG(param, HYUNDAI_PARAM_NON_SCC_PEDAL);
+  hyundai_non_scc_pedal_strong = hyundai_non_scc_pedal && GET_FLAG(param, HYUNDAI_PARAM_NON_SCC_PEDAL_STRONG);
+  hyundai_non_scc_no_tcs = hyundai_non_scc && GET_FLAG(param, HYUNDAI_PARAM_NON_SCC_NO_TCS);
 
   hyundai_last_button_interaction = HYUNDAI_PREV_BUTTON_SAMPLES;
 
