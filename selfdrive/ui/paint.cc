@@ -2400,7 +2400,8 @@ static void ui_draw_gps_info(const UIState* s) {
 
     // no middle dot / degree sign: the font has neither and stops drawing the string there
     char str[96];
-    if (fixed) snprintf(str, sizeof(str), "GPS %s  %s %d%s(%s %d)  %s %.0fm", state, "위성", gps_sats, "개", "강", gps_strong, "오차", acc);
+    if (s->show_mode == 7) snprintf(str, sizeof(str), "GPS %s", state);  // optech HUD: short, the row is shared with the speed
+    else if (fixed) snprintf(str, sizeof(str), "GPS %s  %s %d%s(%s %d)  %s %.0fm", state, "위성", gps_sats, "개", "강", gps_strong, "오차", acc);
     else if (gnss_alive) snprintf(str, sizeof(str), "GPS %s  %s %d%s(%s %d)", state, "위성", gps_sats, "개", "강", gps_strong);
     else snprintf(str, sizeof(str), "GPS %s", state);
 
