@@ -958,7 +958,7 @@ static void carrot_hud_lower(const UIState* s, int bx, int by, int my_driving_mo
 }
 
 // ===================================================================================================================
-// optech 주행 화면 (화면 탭 '화면 표시 방식: OPTECH', ShowHudMode 7). Layout agreed with the user 2026-11-23
+// optech 주행 화면 (ShowHudMode 7, the only screen since 2026-11-23). Layout agreed with the user 2026-11-23
 // (D:/Workspace Claude/optech_주행화면_개편_논의.md): time + badges, road limit + camera sign, set speed box,
 // GPS/gear box on the left; big speed with traffic light, turn signal arrows and turn guidance at the top centre;
 // lead distance / lead speed / time gap under the lead; steering wheel (tap: path offset panel), CPU and tyres on

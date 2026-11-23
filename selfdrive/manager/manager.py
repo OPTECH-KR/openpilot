@@ -228,8 +228,8 @@ def manager_init() -> None:
     if params.get(k) is None:
       params.put(k, v)
 
-  # optech 주행 화면 (ShowHudMode 7, 2026-11): switch every device to it once; 화면 탭 '화면 표시 방식' brings the
-  # old carrot screen (6) back
+  # optech 주행 화면 (ShowHudMode 7, 2026-11): every device uses it (also forced below on every start; the
+  # '화면 표시 방식' menu was removed 2026-11-23). Once: tyres on, as they are part of the right column
   if not params.get_bool("OptechHud7Set"):
     params.put("ShowHudMode", "7")
     params.put("ShowTpms", "1")      # tyres are part of the right column
@@ -269,7 +269,7 @@ def manager_init() -> None:
                ("ShowHudMode", "7"),
                ("GpsSource", "1"),
                # brake release resume is done by cruise_helper (EngageWithLong): the old apilot conditions are off
-               ("AutoResumeFromBrakeRelease", "0"), ("BrakeResumeSpeedMode", "1")):  # GPS is always the phone built-in one; the selector is removed  # screen mode fixed to the carrot HUD box; the selector is removed
+               ("AutoResumeFromBrakeRelease", "0"), ("BrakeResumeSpeedMode", "1")):  # GPS is always the phone built-in one; the selector is removed  # screen mode fixed to the optech 주행 화면 (7); the selector is removed
     params.put(k, v)
 
   # optech: 감속 시작 / 감속 끝 / 목표 속도 are menu settings again (주행 > 카메라 감속); they used to be reset here on
