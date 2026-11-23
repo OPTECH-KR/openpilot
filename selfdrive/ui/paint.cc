@@ -1092,7 +1092,7 @@ static void drawOptechHud(const UIState* s) {
                 const float bw = sg + 8, bh = 44, btop = top + sg + 12;  // same width as the sign with its outline
                 const float a = std::clamp((600.f - left_dist) / 600.f, 0.25f, 1.f);  // fills redder as it gets close
                 carrot_round_box(s, ccx - bw / 2, btop, bw, bh, nvgRGBA(226, 75, 74, (int)(255 * a)), COLOR_WHITE, 10, 3);
-                optech_text(s, ccx, btop + bh / 2 + 2, str, 27, COLOR_WHITE, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+                optech_text(s, ccx, btop + bh / 2 + 2, str, 23, COLOR_WHITE, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
             }
         }
     }
