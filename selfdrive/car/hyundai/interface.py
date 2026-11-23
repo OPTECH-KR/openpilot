@@ -675,6 +675,11 @@ class CarInterface(CarInterfaceBase):
     # mass and CG position, so all cars will have approximately similar dyn behaviors
     ret.tireStiffnessFront, ret.tireStiffnessRear = scale_tire_stiffness(ret.mass, ret.wheelbase, ret.centerToFront,
                                                                          tire_stiffness_factor=tire_stiffness_factor)
+
+    # optech 조향 탭 '조향 방식' (OptechLatMethod, applied at the next start): 0 토크 (default, set above),
+    # 1 PID, 2 INDI, 3 LQR with OPKR's Hyundai/Kia default values (opkr-c2 tunes.py / manager.py), adjustable
+    if ret.steerControlType != car.CarParams.SteerControlType.angle:
+      set_optech_lat_method(ret.lateralTuning)
     return ret
 
   @staticmethod
@@ -729,3 +734,38 @@ class CarInterface(CarInterfaceBase):
 
   def apply(self, c):
     return self.CC.update(c, self.CS)
+
+def _optech_param(params, key, default, scale):
+  try:
+    return int(params.get(key, encoding="utf8") or default) * scale
+  except (TypeError, ValueError):
+    return default * scale
+
+
+def set_optech_lat_method(tune):
+  params = Params()
+  try:
+    method = int(params.get("OptechLatMethod", encoding="utf8") or 0)
+  except (TypeError, ValueError):
+    method = 0
+  if method == 1:
+    tune.init('pid')
+    tune.pid.kpBP, tune.pid.kpV = [0., 9.], [0.1, _optech_param(params, "OptechPidKp", 25, 0.01)]
+    tune.pid.kiBP, tune.pid.kiV = [0., 9.], [0.01, _optech_param(params, "OptechPidKi", 40, 0.001)]
+    tune.pid.kf = _optech_param(params, "OptechPidKf", 7, 0.00001)
+  elif method == 2:
+    tune.init('indi')
+    tune.indi.innerLoopGainBP, tune.indi.innerLoopGainV = [0.], [_optech_param(params, "OptechIndiInner", 35, 0.1)]
+    tune.indi.outerLoopGainBP, tune.indi.outerLoopGainV = [0.], [_optech_param(params, "OptechIndiOuter", 20, 0.1)]
+    tune.indi.timeConstantBP, tune.indi.timeConstantV = [0.], [_optech_param(params, "OptechIndiTime", 14, 0.1)]
+    tune.indi.actuatorEffectivenessBP, tune.indi.actuatorEffectivenessV = [0.], [_optech_param(params, "OptechIndiAct", 20, 0.1)]
+  elif method == 3:
+    tune.init('lqr')
+    tune.lqr.scale = _optech_param(params, "OptechLqrScale", 1500, 1.0)
+    tune.lqr.ki = _optech_param(params, "OptechLqrKi", 16, 0.001)
+    tune.lqr.dcGain = _optech_param(params, "OptechLqrDcGain", 265, 0.00001)
+    tune.lqr.a = [0., 1., -0.22619643, 1.21822268]
+    tune.lqr.b = [-1.92006585e-04, 3.95603032e-05]
+    tune.lqr.c = [1., 0.]
+    tune.lqr.k = [-110., 451.]
+    tune.lqr.l = [0.33, 0.318]

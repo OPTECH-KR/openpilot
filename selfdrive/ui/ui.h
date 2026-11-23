@@ -7,6 +7,7 @@
 #include <QObject>
 #include <QTimer>
 #include <QColor>
+#include <QRect>
 #include <QFuture>
 #include <QPolygonF>
 #include <QTransform>
@@ -73,17 +74,17 @@ struct Alert {
       // Handle controls timeout
       if (sm.rcv_frame("controlsState") < started_frame) {
         // car is started, but controlsState hasn't been seen at all
-        return {"openpilot Unavailable", "Waiting for controls to start",
+        return {"오픈파일럿을 켤 수 없음", "제어 프로그램 시작 대기 중",
                 "controlsWaiting", cereal::ControlsState::AlertSize::MID,
                 AudibleAlert::NONE};
       } else if (controls_missing > CONTROLS_TIMEOUT && !Hardware::PC()) {
         // car is started, but controls is lagging or died
         if (cs.getEnabled() && (controls_missing - CONTROLS_TIMEOUT) < 10) {
-          return {"TAKE CONTROL IMMEDIATELY", "Controls Unresponsive",
+          return {"즉시 운전하세요", "제어 프로그램 응답 없음",
                   "controlsUnresponsive", cereal::ControlsState::AlertSize::FULL,
                   AudibleAlert::WARNING_IMMEDIATE};
         } else {
-          return {"Controls Unresponsive", "Reboot Device",
+          return {"제어 프로그램 응답 없음", "기기를 다시 켜세요",
                   "controlsUnresponsivePermanent", cereal::ControlsState::AlertSize::MID,
                   AudibleAlert::NONE};
         }
@@ -215,7 +216,12 @@ public:
   int show_path_color_lane = 14;
   float show_path_width = 1.0;
   int show_plot_mode = 0;
-  int screen_always_on = 0;
+  int settings_timeout_s = 180;  // optech '화면 유지 시간' (OptechSettingsTimeout seconds, -1: never)
+  int drive_dim = 0;             // optech '주행 중 밝기' (OptechDriveDim %, 0: off)
+  bool show_record_btn = false;  // optech '녹화 버튼' (OptechShowRecordBtn)
+  bool radar_tracks = false;     // EnableRadarTracks (badge)
+  int path_offset = 0;           // PathOffset cm (optech wheel panel)
+  bool optech_tune_open = false; // optech wheel panel shown
 
 signals:
   void uiUpdate(const UIState &s);
@@ -240,6 +246,7 @@ class Device : public QObject {
 
 public:
   Device(QObject *parent = 0);
+  bool settings_open = false;  // the settings window is shown (MainWindow sets it)
 
 private:
   // auto brightness
@@ -249,11 +256,14 @@ private:
   int interactive_timeout = 0;
   bool ignition_on = false;
   int last_brightness = 0;
+  int idle_frames = 0;    // frames since the last touch ('주행 중 밝기')
+  bool dimmed = false;
   FirstOrderFilter brightness_filter;
   QFuture<void> brightness_future;
 
   void updateBrightness(const UIState &s);
   void updateWakefulness(const UIState &s);
+  bool keepApplies() const;
   bool motionTriggered(const UIState &s);
   void setAwake(bool on);
 
@@ -275,3 +285,9 @@ void update_dmonitoring(UIState *s, const cereal::DriverState::Reader &driversta
 void update_leads(UIState *s, const cereal::RadarState::Reader &radar_state, const cereal::XYZTData::Reader &line);
 void update_line_data(const UIState *s, const cereal::XYZTData::Reader &line,
                       float y_off, float z_off, QPolygonF *pvd, int max_idx, bool allow_invert);
+
+// optech 주행 화면 (ShowHudMode 7): tap areas shared by the drawing (paint.cc) and the touch handler (onroad.cc)
+inline QRect optech_wheel_rect(int w, int h) { (void)h; return QRect(w - 30 - 160, 20, 160, 160); }  // the wheel box (all 3 right boxes this size)
+inline QRect optech_tune_panel_rect(int w, int h) { (void)h; return QRect(w - 30 - 160 - 20 - 440, 30, 440, 300); }
+inline QRect optech_tune_minus_rect(int w, int h) { QRect p = optech_tune_panel_rect(w, h); return QRect(p.x() + 30, p.y() + 90, 120, 120); }
+inline QRect optech_tune_plus_rect(int w, int h) { QRect p = optech_tune_panel_rect(w, h); return QRect(p.right() - 150, p.y() + 90, 120, 120); }

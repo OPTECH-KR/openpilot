@@ -59,6 +59,11 @@ class CarState(CarStateBase):
 
     self.brake_error = False
     self.buttons_counter = 0
+    # optech drive record: SCC radar -> cluster codes and the stock camera's own lane state (see update)
+    self.scc_diag = None
+    self.cam_lkas_diag = None
+    self.fca_diag = None
+    self.cam_fcw_diag = None
 
     self.cruise_info = {}
 
@@ -156,7 +161,28 @@ class CarState(CarStateBase):
       ret.cruiseGap = cp_cruise.vl["SCC11"]["TauGapSet"]
 
     self.prev_pcmMode = ret.cruiseState.pcmMode
-    
+
+    # optech drive record (drivelog, through carcontroller -> carControl.debugTextCC): what the SCC radar tells the
+    # cluster - SCCInfoDisplay (its messages, e.g. 'SCC 작동조건이 아님'), DriverAlertDisplay, ACCFailInfo - and ACCMode
+    self.scc_diag = None
+    if not (self.CP.flags & HyundaiFlags.NON_SCC):
+      try:
+        self.scc_diag = (int(cp_cruise.vl["SCC11"]["SCCInfoDisplay"]), int(cp_cruise.vl["SCC11"]["DriverAlertDisplay"]),
+                         int(cp_cruise.vl["SCC12"]["ACCFailInfo"]), int(cp_cruise.vl["SCC12"]["ACCMode"]))
+      except KeyError:  # SCC module not read on this setup (openpilot long with the radar off)
+        pass
+    # ... and the forward collision-avoidance (FCA / AEB) fault and state the radar reports to the car: a fault there
+    # is the cluster's '전방 충돌방지 보조 시스템을 점검하세요' (tester + user 2026-11-23)
+    self.fca_diag = None
+    if not (self.CP.flags & HyundaiFlags.NON_SCC):
+      try:
+        if self.CP.flags & HyundaiFlags.USE_FCA.value:
+          self.fca_diag = (int(cp_cruise.vl["FCA11"]["FCA_Failinfo"]), int(cp_cruise.vl["FCA11"]["FCA_Status"]))
+        else:
+          self.fca_diag = (int(cp_cruise.vl["SCC12"]["AEB_Failinfo"]), int(cp_cruise.vl["SCC12"]["AEB_Status"]))
+      except KeyError:
+        pass
+
     # TODO: Find brake pressure
     ret.brake = 0
     ret.brakePressed = cp.vl["TCS13"]["DriverBraking"] != 0
@@ -241,6 +267,10 @@ class CarState(CarStateBase):
 
     # save the entire LKAS11 and CLU11
     self.lkas11 = copy.copy(cp_cam.vl["LKAS11"])
+    # the stock camera's own lane state and warning (before openpilot rewrites LKAS11), for the drive record
+    self.cam_lkas_diag = (int(self.lkas11.get("CF_Lkas_LdwsSysState", -1)), int(self.lkas11.get("CF_Lkas_SysWarning", -1)))
+    # the stock camera's forward collision warning state and radar fusion state (LKAS11), for the drive record
+    self.cam_fcw_diag = (int(self.lkas11.get("CF_Lkas_FcwSysState", -1)), int(self.lkas11.get("CF_Lkas_FusionState", -1)))
     self.clu11 = copy.copy(cp.vl["CLU11"])
     self.steer_state = cp.vl["MDPS12"]["CF_Mdps_ToiActive"]  # 0 NOT ACTIVE, 1 ACTIVE
     self.prev_cruise_buttons = self.cruise_buttons[-1]
@@ -474,6 +504,10 @@ class CarState(CarStateBase):
         ("ACC_ObjDist", "SCC11"),
         ("TauGapSet", "SCC11"),
         ("ACCMode", "SCC12"),
+        ("DriverAlertDisplay", "SCC11"),  # optech drive record (cluster messages from the SCC radar)
+        ("ACCFailInfo", "SCC12"),
+        ("AEB_Failinfo", "SCC12"),  # optech drive record: forward collision-avoidance fault / state
+        ("AEB_Status", "SCC12"),
       ]
       checks += [
         ("SCC11", 50),
@@ -485,6 +519,8 @@ class CarState(CarStateBase):
           ("FCA_CmdAct", "FCA11"),
           ("CF_VSM_Warn", "FCA11"),
           ("CF_VSM_DecCmdAct", "FCA11"),
+          ("FCA_Failinfo", "FCA11"),  # optech drive record
+          ("FCA_Status", "FCA11"),
         ]
         checks.append(("FCA11", 50))
       else:
@@ -688,6 +724,8 @@ class CarState(CarStateBase):
           ("FCA_CmdAct", "FCA11"),
           ("CF_VSM_Warn", "FCA11"),
           ("CF_VSM_DecCmdAct", "FCA11"),
+          ("FCA_Failinfo", "FCA11"),  # optech drive record
+          ("FCA_Status", "FCA11"),
         ]
         checks.append(("FCA11", 50))
       else:

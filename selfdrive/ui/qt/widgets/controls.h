@@ -129,6 +129,10 @@ public:
     toggle.setEnabled(enabled);
     toggle.update();
   }
+  // move the switch without emitting toggleFlipped (optech: linked switches)
+  void setToggled(bool on) {
+    if (on != toggle.on) toggle.togglePosition();
+  }
 
 signals:
   void toggleFlipped(bool state);
