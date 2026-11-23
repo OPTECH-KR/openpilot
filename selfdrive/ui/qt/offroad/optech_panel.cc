@@ -538,6 +538,20 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
   speed->addItem(optech_section("출발·정지 (출발이 굼뜨거나 정지가 거칠 때)"));
   toggle(speed, "dp_long_use_krkeegen_tune", "정체 구간 출발 보조",
          "막히는 길에서 앞차가 출발할 때 조금 더 빨리 가속을 시작합니다. (krkeegan 튠)");
+  // optech-hkg '출발·정지' (same names and ranges): controls/lib/longcontrol.py, long_mpc.py, hyundai/carcontroller.py
+  value(speed, "JerkStartLimit", "재출발 가속",
+        "멈췄다가 다시 출발할 때 얼마나 빨리 속도를 붙일지 정합니다(0.1 단위, 처음 값 1.0). 높이면 빠르게, 낮추면 부드럽게 출발합니다. "
+        "출발 뒤 1.5초 동안 적용되고 2.5초까지 평소 값으로 돌아갑니다. 현대·기아·제네시스만 해당됩니다.",
+        1, 50, 1, [](int v) { return QString::number(v / 10.0, 'f', 1); });
+  value(speed, "StartAccelApply", "출발 가속",
+        "정차 후 출발할 때 처음 가속을 몇 % 줄지 정합니다(100% = 2.0m/s²). 출발이 굼뜨면 올려 보세요. 0:차 기본값",
+        0, 100, 10, [](int v) { return v == 0 ? QString("차 기본값") : QString("%1%").arg(v); });
+  value(speed, "StopAccelApply", "정지 유지 힘",
+        "멈춰 있을 때 브레이크를 얼마나 세게 잡을지 정합니다(100% = -2.0m/s²). 정차 중 차가 밀리면 올려 보세요. 0:차 기본값",
+        0, 100, 10, [](int v) { return v == 0 ? QString("차 기본값") : QString("%1%").arg(v); });
+  value(speed, "StopDistance", "앞차 뒤 정지 거리",
+        "앞차 뒤에 멈출 때의 거리(cm)입니다. 600이면 약 6m 뒤에 멈춥니다(openpilot 기본). 주행 중에도 몇 초 안에 적용됩니다.",
+        200, 1000, 50, [](int v) { return QString("%1 cm").arg(v); });
   speed->addItem(optech_section("속도별 가속 세기 (가속이 너무 세거나 약할 때)"));
   speed->addItem(new ButtonParamControl("dp_long_accel_profile", "가속 성향",
                  "속도에 따른 가속 세기를 고릅니다.\nOP: 기본 값\nECO: 부드럽게(연비)\nNOR: 보통\nSPT: 빠르게(스포츠)", "",
@@ -865,7 +879,8 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
   toggle(adv, "dp_car_dashcam_mode_removal", "대시캠 모드 해제 (위험)",
          "주행 중 '대시캠 모드'가 뜨면 이것을 켜서 openpilot 제어를 강제로 켭니다. 대시캠 모드는 보통 완전히 지원되지 않는 차량이라는 뜻입니다.\n본인 책임으로 사용하세요. 재부팅해야 적용됩니다.");
 
-  brand_note = optech_note("차종이 정해지면(직접 고르거나 한 번 시동을 걸어 자동 인식되면) 그 브랜드 전용 설정이 여기에 나옵니다.");
+  brand_note = optech_note("차종이 정해지면(직접 고르거나 한 번 시동을 걸어 자동 인식되면) 그 브랜드 전용 설정이 여기에 나옵니다. "
+                           "차종을 모르는 동안에는 현대·기아·제네시스 설정을 보여 줍니다.");
   adv->addItem(brand_note);
   QLabel *hkg_section = optech_section("현대 / 기아 / 제네시스 전용");
   adv->addItem(hkg_section);
@@ -936,7 +951,8 @@ void OptechPanel::updateBrandItems() {
   const bool vag = brand == "VOLKSWAGEN" || brand == "AUDI" || brand == "SKODA" || brand == "SEAT";
   for (auto w : toyota_items) w->setVisible(toyota);
   for (auto w : vag_items) w->setVisible(vag);
-  for (auto w : hkg_items) w->setVisible(HKG_BRANDS.contains(brand));
+  // Hyundai / Kia / Genesis items also while the car is not known yet (as the 토글 page's LDWS 차량)
+  for (auto w : hkg_items) w->setVisible(brand.isEmpty() || HKG_BRANDS.contains(brand));
   const bool bolt_cc = QString::fromStdString(params.get("dp_car_assigned")).trimmed() == BOLT_CC_CAR;
   for (auto w : bolt_items) w->setVisible(bolt_cc);
   brand_note->setVisible(brand.isEmpty());  // brand known but nothing special: no note

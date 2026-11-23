@@ -76,6 +76,8 @@ static int optech_dm_mode() {
   return (m < 0 || m > 2) ? 0 : m;
 }
 
+// Hyundai / Kia / Genesis items: shown for those cars and while the car is not known yet (nothing chosen, never
+// started in a car); hidden only once another brand is chosen or detected (user 2026-11-23: LDWS 차량 was missing)
 static bool optech_hkg_car() {
   Params params;
   const QString assigned = QString::fromStdString(params.get("dp_car_assigned")).trimmed();
@@ -84,7 +86,7 @@ static bool optech_hkg_car() {
     return brand == "HYUNDAI" || brand == "KIA" || brand == "GENESIS";
   }
   const std::string cp_bytes = params.get("CarParamsPersistent");
-  if (cp_bytes.empty()) return false;
+  if (cp_bytes.empty()) return true;
   AlignedBuffer aligned_buf;
   capnp::FlatArrayMessageReader cmsg(aligned_buf.align(cp_bytes.data(), cp_bytes.size()));
   return QString::fromStdString(cmsg.getRoot<cereal::CarParams>().getCarName()) == "hyundai";
@@ -118,9 +120,9 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
     {
       "dp_0813",
       "옛 주행 모델 사용 (0.8.13.1)",
-      "C2에서 가볍게 도는 예전 주행 모델(0.8.13.1)을 씁니다. C2에서는 켜 두는 것을 추천합니다(처음 값: 켜짐).\n"
-      "켜 두면 실험 모드와 openpilot 가감속(알파)은 쓸 수 없습니다.\n"
-      "끄면 새 주행 모델을 쓰지만, C2에는 버거워서 느려질 수 있습니다.\n재부팅해야 적용됩니다.",
+      "C2에서 가볍게 도는 예전 주행 모델(0.8.13.1)을 씁니다(처음 값: 꺼짐).\n"
+      "켜 두면 기기 부담과 발열이 줄지만, 실험 모드, openpilot 가감속(알파), 자동 E2E / ACC 전환, 과속 카메라 감속은 동작하지 않습니다.\n"
+      "꺼 두면 새 주행 모델(0.8.16)을 씁니다. 기기가 너무 뜨거워지거나 느려지면 켜 보세요.\n재부팅해야 적용됩니다.",
       "../assets/offroad/icon_road.png",
     },
     {

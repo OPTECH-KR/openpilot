@@ -3,7 +3,7 @@ from random import randint
 from cereal import car
 from openpilot.common.conversions import Conversions as CV
 from openpilot.common.params import Params
-from openpilot.common.numpy_fast import clip
+from openpilot.common.numpy_fast import clip, interp
 from openpilot.common.realtime import DT_CTRL
 from opendbc.can.packer import CANPacker
 from openpilot.selfdrive.car import apply_driver_steer_torque_limits, common_fault_avoidance
@@ -63,6 +63,8 @@ class CarController:
     self.set_current_speed = Params().get_bool("OptechCruiseSetCurrent")
     self.ldws_car = Params().get_bool("OptechLdwsCar")  # 토글 > LDWS 차량 (read at start: reboot to apply)
     self.cam_haptic = 0  # 과속 단속 알림 (read every 5 s in update)
+    self.jerk_start = 1.0  # optech 속도 > 재출발 가속 (JerkStartLimit x 0.1)
+    self.start_frame = -1000  # last frame the car was stopped / stopping
     self.cruise_on_prev = False
     self.sync_target = 0  # set speed to reach, in the cluster unit; 0 = nothing to do
     self.sync_start_frame = 0
@@ -106,6 +108,10 @@ class CarController:
         self.cam_haptic = int(Params().get("HapticFeedbackWhenSpeedCamera", encoding="utf8") or 0)
       except ValueError:
         self.cam_haptic = 0
+      try:
+        self.jerk_start = min(max(int(Params().get("JerkStartLimit", encoding="utf8") or 10), 1), 50) * 0.1
+      except ValueError:
+        self.jerk_start = 1.0
     if hud_control.leftLaneDepart and hud_control.rightLaneDepart and self.cam_haptic in (1, 2):
       left_lane_warning = right_lane_warning = self.cam_haptic
 
@@ -168,8 +174,16 @@ class CarController:
         can_sends.extend(buttons if (buttons or CC.cruiseControl.cancel or CC.cruiseControl.resume) else sync)
 
       if self.frame % 2 == 0 and self.CP.openpilotLongitudinalControl:
-        # TODO: unclear if this is needed
-        jerk = 3.0 if actuators.longControlState == LongCtrlState.pid else 1.0
+        # optech 재출발 가속 (optech-hkg JerkStartLimit): after a stop the car's SCC may raise the accel only this
+        # fast for 1.5 s, then up to the normal 3.0 by 2.5 s
+        if CS.out.standstill or actuators.longControlState == LongCtrlState.stopping:
+          self.start_frame = self.frame
+        if actuators.longControlState == LongCtrlState.pid:
+          jerk = interp((self.frame - self.start_frame) * DT_CTRL, [0., 1.5, 2.5], [self.jerk_start, self.jerk_start, 3.0])
+        elif actuators.longControlState == LongCtrlState.starting:
+          jerk = self.jerk_start
+        else:
+          jerk = 1.0
         use_fca = self.CP.flags & HyundaiFlags.USE_FCA.value
         can_sends.extend(hyundaican.create_acc_commands(self.packer, CC.enabled, accel, jerk, int(self.frame / 2),
                                                         hud_control.leadVisible, set_speed_in_units, stopping,

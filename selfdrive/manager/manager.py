@@ -51,7 +51,7 @@ def manager_init() -> None:
     ("dp_no_gps_ctrl", "0"),
     ("dp_no_fan_ctrl", "0"),
     ("dp_logging", "1"),
-    ("dp_0813", "1"),
+    ("dp_0813", "0"),  # optech 2026-11-23: new 0.8.16 model by default (실험 모드, openpilot 가감속, 카메라 감속 need it)
     ("dp_lat_controller", "0"),
 
     # dp addition
@@ -127,6 +127,10 @@ def manager_init() -> None:
     ("PathOffset", "0"),
     ("NNFF", "0"),
     ("NNFFLite", "0"),
+    ("JerkStartLimit", "10"),
+    ("StartAccelApply", "0"),
+    ("StopAccelApply", "0"),
+    ("StopDistance", "600"),
   ]
   if not PC:
     default_params.append(("LastUpdateTime", datetime.datetime.utcnow().isoformat().encode('utf8')))

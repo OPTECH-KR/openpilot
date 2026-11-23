@@ -240,6 +240,7 @@ class LongitudinalMpc:
   def __init__(self, e2e=False):
     self.e2e = e2e
     self.solver = AcadosOcpSolverCython(MODEL_NAME, ACADOS_SOLVER_TYPE, N)
+    self.stop_distance_offset = 0.  # optech 앞차 뒤 정지 거리 - STOP_DISTANCE (m)
     self.reset()
     self.source = SOURCES[2]
 
@@ -377,6 +378,10 @@ class LongitudinalMpc:
     else:
       lead_0_obstacle = lead_xv_0[:,0] + get_stopped_equivalence_factor(lead_xv_0[:,1])
       lead_1_obstacle = lead_xv_1[:,0] + get_stopped_equivalence_factor(lead_xv_1[:,1])
+    # optech 앞차 뒤 정지 거리 (StopDistance, set by the planner): moving the lead obstacles by the difference is the
+    # same as another STOP_DISTANCE; the crash / FCW check below still uses the real lead position
+    lead_0_obstacle = lead_0_obstacle - self.stop_distance_offset
+    lead_1_obstacle = lead_1_obstacle - self.stop_distance_offset
 
     # Fake an obstacle for cruise, this ensures smooth acceleration to set speed
     # when the leads are no factor.
