@@ -57,6 +57,7 @@ class CarController:
   def __init__(self, dbc_name, CP, VM):
     self.CP = CP
     self.params = CarControllerParams(CP)
+    self.ldws_car = Params().get_bool("OptechLdwsCar")  # 토글 > LDWS 차량 (read at start: reboot to apply)
     self.packer = CANPacker(dbc_name)
     self.angle_limit_counter = 0
     self.frame = 0
@@ -248,7 +249,7 @@ class CarController:
       can_sends.append(hyundaican.create_lkas11(self.packer, self.frame, self.car_fingerprint, self.send_lfa_mfa_lkas, apply_steer, lat_active,
                                                 torque_fault, CS.lkas11, sys_warning, sys_state, CC.enabled,
                                                 hud_control.leftLaneVisible or CC.enabled, hud_control.rightLaneVisible or CC.enabled,
-                                                left_lane_warning, right_lane_warning))
+                                                left_lane_warning, right_lane_warning, ldws_car=self.ldws_car))
 
       if not self.CP.openpilotLongitudinalControl:
         if CC.cruiseControl.cancel:

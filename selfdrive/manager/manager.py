@@ -125,6 +125,7 @@ def manager_init() -> None:
     ("AutoNaviSpeedBumpSpeed", "35"),
     ("AutoNaviSpeedSafetyFactor", "100"),
     ("OptechBrakeResumeMode", "1"),
+    ("OptechLdwsCar", "0"),       # 토글 > LDWS 차량 (OPKR LdwsCarFix: LKAS11 CF_Lkas_LdwsOpt_USM = 3)
     ("OptechSignalEnable", "1"),  # 주행 > 신호등 > 신호등 사용 (HUD traffic light + green light alert)
     ("OptechGreenAlert", "1"),   # 주행 > 신호등 > 초록불 알림 (StarPilot green light alert)
     ("OptechGasResume", "0"),    # 주행 > 브레이크 > 악셀로 다시 켜기 (off: the driver turns it on)

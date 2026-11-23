@@ -95,6 +95,15 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
       "../assets/offroad/icon_warning.png",
     },
     {
+      // OPKR 'LDWS 차량 설정' (LdwsCarFix): hyundaican.create_lkas11 sends CF_Lkas_LdwsOpt_USM = 3
+      "OptechLdwsCar",
+      "LDWS 차량 (차로 유지 보조 없음)",
+      "차선 이탈 경고(LDWS)만 있고 차로 유지 보조(LKAS)가 없는 차만 켜세요. "
+      "이런 차에서 조향이 안 되거나 계기판에 차로 유지 관련 오류가 뜰 때 씁니다 (OPKR의 'LDWS 차량 설정'과 같습니다). "
+      "LKAS가 있는 차는 켜지 마세요. 재부팅해야 적용됩니다.",
+      "../assets/offroad/icon_warning.png",
+    },
+    {
       "IsLdwEnabled",
       tr("Enable Lane Departure Warnings"),
       tr("Receive alerts to steer back into the lane when your vehicle drifts over a detected lane line without a turn signal activated while driving over 31 mph (50 km/h)."),
