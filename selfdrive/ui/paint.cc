@@ -1044,24 +1044,7 @@ static void drawOptechHud(const UIState* s) {
     float ry = 20;  // badge row top (badges are 54 high)
     float bx = lx;
     nvgFontFace(s->vg, BOLD);
-    // 1) time / date first (always the first item when shown)
-    if (s->show_datetime > 0) {
-        time_t now = time(nullptr);
-        struct tm* local = localtime(&now);
-        if (s->show_datetime == 1 || s->show_datetime == 2) {
-            strftime(str, sizeof(str), "%H:%M", local);
-            optech_text(s, bx, ry + 54, str, 64, COLOR_WHITE, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
-            float b[4]; nvgTextBounds(s->vg, 0, 0, str, NULL, b);
-            bx += (b[2] - b[0]) + 16;
-        }
-        if (s->show_datetime == 1 || s->show_datetime == 3) {
-            static const char* wd[7] = {"일", "월", "화", "수", "목", "금", "토"};
-            snprintf(str, sizeof(str), "%02d-%02d %s", local->tm_mon + 1, local->tm_mday, wd[local->tm_wday]);
-            optech_text(s, bx, ry + 50, str, 38, nvgRGBA(211, 209, 199, 255), NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
-            float b[4]; nvgTextBounds(s->vg, 0, 0, str, NULL, b);
-            bx += (b[2] - b[0]) + 20;
-        }
-    }
+    // (no time / date in this HUD: user 2026-11-23)
     // 2) badges, only the ones that are on, packed from the left
     if (s->show_conn_info) {
         const int sccBus = (int)car_params.getSccBus();
@@ -1168,12 +1151,19 @@ static void drawOptechHud(const UIState* s) {
         else if (a > 0.3f) c = nvgRGBA(151, 196, 89, 255);
         snprintf(str, sizeof(str), "%.0f", cur_speed);
         optech_text(s, cx, 190, str, 190, c, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
-        optech_text(s, cx, 236, metric ? "km/h" : "mph", 40, nvgRGBA(211, 209, 199, 255), NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
-        // GPS speed right of the unit, green (the dashboard speed reads a few % high)
+        // unit + GPS speed (green; the dashboard speed reads a few % high) as one line centred under the number
+        const char* unit_str = metric ? "km" : "mi";
         const bool gps_ok = sm.alive("gpsLocationExternal") && (sm["gpsLocationExternal"].getGpsLocationExternal().getFlags() & 1);
         if (gps_ok) snprintf(str, sizeof(str), "GPS %d", (int)(std::max(sm["gpsLocationExternal"].getGpsLocationExternal().getSpeed() * unit, 0.f) + 0.5f));
         else snprintf(str, sizeof(str), "GPS --");
-        optech_text(s, cx + 70, 236, str, 40, gps_ok ? nvgRGBA(151, 196, 89, 255) : nvgRGBA(136, 135, 128, 255), NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
+        nvgFontFace(s->vg, BOLD);
+        nvgFontSize(s->vg, 40);
+        float ub[4], gb[4];
+        nvgTextBounds(s->vg, 0, 0, unit_str, NULL, ub);
+        nvgTextBounds(s->vg, 0, 0, str, NULL, gb);
+        const float uw = ub[2] - ub[0], gw = gb[2] - gb[0], sp = 24, x0 = cx - (uw + sp + gw) / 2;
+        optech_text(s, x0, 236, unit_str, 40, nvgRGBA(211, 209, 199, 255), NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
+        optech_text(s, x0 + uw + sp, 236, str, 40, gps_ok ? nvgRGBA(151, 196, 89, 255) : nvgRGBA(136, 135, 128, 255), NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
     }
     {
         // traffic light (openpilot's own stop / go guess), right next to the speed on the left
@@ -1265,13 +1255,16 @@ static void drawOptechHud(const UIState* s) {
 
     // ======================= right column =======================
     {
-        const float colw = 210, rx = s->fb_w - 30 - colw, rcx = rx + colw / 2;
-        // steering wheel: turns with the wheel, green while openpilot steers. Tap: path offset panel
-        const float r = 68, wy = 30 + r;
-        // like OPKR: the comma wheel picture on a circle in the status colour (engaged green, off dark blue)
+        // three boxes of the same size (user: make them even): wheel, CPU, tyres
+        const float colw = 210, boxh = 170, gap = 14, rx = s->fb_w - 30 - colw, rcx = rx + colw / 2;
+        const NVGcolor box_fill = nvgRGBA(0, 0, 0, 100), box_line = nvgRGBA(180, 178, 169, 255), lab = nvgRGBA(211, 209, 199, 255);
+        float top = 20;
+        // steering wheel like OPKR: the comma wheel picture on a circle in the status colour, turning with the wheel.
+        // Tap: path offset panel
+        carrot_round_box(s, rx, top, colw, boxh, box_fill, box_line, 14, 3);
         const QColor& sc = bg_colors[s->status];
         const NVGcolor wc = enabled ? nvgRGBA(sc.red(), sc.green(), sc.blue(), sc.alpha()) : nvgRGBA(0x17, 0x33, 0x49, 0xc8);
-        ui_draw_circle_image_rotation(s, rcx, wy, r, "wheel", wc, 1.0f, car_state.getSteeringAngleDeg());
+        ui_draw_circle_image_rotation(s, rcx, top + boxh / 2, 66, "wheel", wc, 1.0f, car_state.getSteeringAngleDeg());
 
         // CPU temperature / CPU use
         auto ds = sm["deviceState"].getDeviceState();
@@ -1281,26 +1274,26 @@ static void drawOptechHud(const UIState* s) {
         if (std::size(tc) > 0) temp /= std::size(tc);
         for (int i = 0; i < (int)std::size(cu); i++) use += cu[i];
         if (std::size(cu) > 0) use /= (int)std::size(cu);
-        float top = wy + r + 18;
-        carrot_round_box(s, rx, top, colw, 190, nvgRGBA(0, 0, 0, 100), nvgRGBA(180, 178, 169, 255), 14, 3);
-        optech_text(s, rcx, top + 42, "CPU 온도", 30, nvgRGBA(211, 209, 199, 255), NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+        top += boxh + gap;
+        carrot_round_box(s, rx, top, colw, boxh, box_fill, box_line, 14, 3);
+        optech_text(s, rcx, top + 38, "CPU 온도", 30, lab, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
         snprintf(str, sizeof(str), "%.0f%s", temp, "°C");
-        optech_text(s, rcx, top + 92, str, 46, temp > 80 && blink_on ? nvgRGBA(240, 149, 149, 255) : COLOR_WHITE, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
-        optech_text(s, rcx, top + 132, "CPU 사용", 30, nvgRGBA(211, 209, 199, 255), NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+        optech_text(s, rcx, top + 82, str, 44, temp > 80 && blink_on ? nvgRGBA(240, 149, 149, 255) : COLOR_WHITE, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+        optech_text(s, rcx, top + 118, "CPU 사용", 30, lab, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
         snprintf(str, sizeof(str), "%d%%", use);
-        optech_text(s, rcx, top + 180, str, 46, use > 90 && blink_on ? nvgRGBA(240, 149, 149, 255) : COLOR_WHITE, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+        optech_text(s, rcx, top + 162, str, 44, use > 90 && blink_on ? nvgRGBA(240, 149, 149, 255) : COLOR_WHITE, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
 
         // tyre pressures
         if (s->show_tpms) {
             auto tpms = car_state.getTpms();
             const float t[4] = {tpms.getFl(), tpms.getFr(), tpms.getRl(), tpms.getRr()};
-            top += 190 + 16;
-            carrot_round_box(s, rx, top, colw, 150, nvgRGBA(0, 0, 0, 100), nvgRGBA(180, 178, 169, 255), 14, 3);
-            optech_text(s, rcx, top + 40, "공기압 psi", 28, nvgRGBA(211, 209, 199, 255), NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+            top += boxh + gap;
+            carrot_round_box(s, rx, top, colw, boxh, box_fill, box_line, 14, 3);
+            optech_text(s, rcx, top + 38, "공기압 psi", 30, lab, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
             for (int i = 0; i < 4; i++) {
-                const float px = rcx + (i % 2 == 0 ? -45 : 45), py = top + (i < 2 ? 90 : 138);
+                const float px = rcx + (i % 2 == 0 ? -46 : 46), py = top + (i < 2 ? 100 : 156);
                 std::string v = get_tpms_text(t[i]);
-                optech_text(s, px, py, v.c_str(), 42, get_tpms_color(t[i]), NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+                optech_text(s, px, py, v.c_str(), 44, get_tpms_color(t[i]), NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
             }
         }
 
