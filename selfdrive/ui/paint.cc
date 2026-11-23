@@ -372,8 +372,9 @@ void DrawApilot::drawLaneLines(const UIState* s) {
         left_blindspot = right_blindspot  = true;
 #endif
         color = nvgRGBA(255, 215, 0, 150);
-        if (left_blindspot) ui_draw_bsd(s, scene.lane_barrier_vertices[0], &color, false); // ui_draw_line(s, scene.lane_barrier_vertices[0], &color, nullptr);
-        if (right_blindspot) ui_draw_bsd(s, scene.lane_barrier_vertices[1], &color, true); // ui_draw_line(s, scene.lane_barrier_vertices[1], &color, nullptr);
+        // optech: the long bands on the side lanes are replaced by the screen-edge marks (ui_draw_bsd_edge)
+        if (false && left_blindspot) ui_draw_bsd(s, scene.lane_barrier_vertices[0], &color, false); // ui_draw_line(s, scene.lane_barrier_vertices[0], &color, nullptr);
+        if (false && right_blindspot) ui_draw_bsd(s, scene.lane_barrier_vertices[1], &color, true); // ui_draw_line(s, scene.lane_barrier_vertices[1], &color, nullptr);
     }
 
     // road edges
@@ -2026,6 +2027,74 @@ static void ui_draw_gps_info(const UIState* s) {
     ui_draw_text(s, g_gps_x + 4 * (bw + gap) + 12, by, str, fsize, color, BOLD, 2.0f, 0.0f);
 }
 
+// optech 후측방 경고 (화면 탭 '후측방(BSD) 경고'): a big mark at the screen edge on the side of the car in the
+// blind spot, so it can be seen from the corner of the eye like a mirror light. Yellow and steady while a car is
+// there; red and blinking with '왼쪽/오른쪽 차량 주의' once the turn signal is on towards it. Hidden below 30 km/h
+// (parking lots, queues) where the sensor fires all the time
+static void ui_draw_bsd_mark(const UIState* s, bool right, bool danger) {
+    const float w = 140, h = 170;
+    const float x = right ? s->fb_w - w - 20 : 20;
+    const float y = s->fb_h / 2.0f - h;
+    const bool blink_on = (s->sm->frame % 12) < 7;
+    if (danger && !blink_on) return;
+
+    const NVGcolor bg = danger ? nvgRGBA(226, 75, 74, 235) : nvgRGBA(239, 159, 39, 235);
+    const NVGcolor fg = danger ? COLOR_WHITE : nvgRGBA(65, 36, 2, 255);
+    nvgBeginPath(s->vg);
+    nvgRoundedRect(s->vg, x, y, w, h, 20);
+    nvgFillColor(s->vg, bg);
+    nvgFill(s->vg);
+    nvgStrokeColor(s->vg, COLOR_WHITE);
+    nvgStrokeWidth(s->vg, 5);
+    nvgStroke(s->vg);
+
+    // car seen from above
+    const float cx = x + w / 2, cw = 58, ch = 82, cy = y + 18;
+    nvgBeginPath(s->vg);
+    nvgRoundedRect(s->vg, cx - cw / 2, cy, cw, ch, 16);
+    nvgFillColor(s->vg, fg);
+    nvgFill(s->vg);
+    nvgBeginPath(s->vg);
+    nvgRoundedRect(s->vg, cx - cw / 2 + 9, cy + 14, cw - 18, 18, 5);   // windscreen
+    nvgRoundedRect(s->vg, cx - cw / 2 + 9, cy + ch - 26, cw - 18, 13, 4);  // rear window
+    nvgFillColor(s->vg, bg);
+    nvgFill(s->vg);
+
+    // arrow towards that side
+    const float ay = y + h - 36, dir = right ? 1.0f : -1.0f;
+    nvgBeginPath(s->vg);
+    nvgMoveTo(s->vg, cx + dir * 40, ay);
+    nvgLineTo(s->vg, cx + dir * 10, ay - 22);
+    nvgLineTo(s->vg, cx + dir * 10, ay - 9);
+    nvgLineTo(s->vg, cx - dir * 38, ay - 9);
+    nvgLineTo(s->vg, cx - dir * 38, ay + 9);
+    nvgLineTo(s->vg, cx + dir * 10, ay + 9);
+    nvgLineTo(s->vg, cx + dir * 10, ay + 22);
+    nvgClosePath(s->vg);
+    nvgFillColor(s->vg, fg);
+    nvgFill(s->vg);
+
+    if (danger) {
+        const char* txt = right ? "오른쪽 차량 주의" : "왼쪽 차량 주의";
+        const float tw = 360, th = 80;
+        const float tx = right ? x - tw - 16 : x + w + 16, ty = y + h / 2 - th / 2;
+        nvgBeginPath(s->vg);
+        nvgRoundedRect(s->vg, tx, ty, tw, th, 14);
+        nvgFillColor(s->vg, nvgRGBA(162, 45, 45, 235));
+        nvgFill(s->vg);
+        nvgTextAlign(s->vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        ui_draw_text(s, tx + tw / 2, ty + th / 2 + 2, txt, 48, COLOR_WHITE, BOLD, 0.0f, 0.0f);
+    }
+}
+
+static void ui_draw_bsd_edge(const UIState* s) {
+    if (!s->show_blind_spot || !s->scene.started) return;
+    const auto cs = (*s->sm)["carState"].getCarState();
+    if (cs.getVEgo() * 3.6f < 30.0f) return;
+    if (cs.getLeftBlindspot()) ui_draw_bsd_mark(s, false, cs.getLeftBlinker());
+    if (cs.getRightBlindspot()) ui_draw_bsd_mark(s, true, cs.getRightBlinker());
+}
+
 void ui_draw(UIState *s, int w, int h) {
   // Update intrinsics matrix after possible wide camera toggle change
   if (s->fb_w != w || s->fb_h != h) {
@@ -2042,6 +2111,7 @@ void ui_draw(UIState *s, int w, int h) {
   drawApilot->drawDebugText(s, s->show_debug);
   drawApilot->drawDeviceState(s, s->show_device_stat);
   ui_draw_gps_info(s);
+  ui_draw_bsd_edge(s);
 
   ui_draw_text_a2(s);
 
