@@ -1201,11 +1201,8 @@ static void drawOptechHud(const UIState* s) {
         const int gap = car_params.getOpenpilotLongitudinalControl() ? (int)controls_state.getLongCruiseGap()
                                                                      : (int)car_state.getCruiseGap();
         const float gl = lx + 20, gr = lx + 214;  // left part
-        optech_text_vc(s, gl, top + 30, "차간 거리", 30, label_c, NVG_ALIGN_LEFT);
-        if (gap >= 1 && gap <= 4) snprintf(str, sizeof(str), "%d%s", gap, "단계");
-        else snprintf(str, sizeof(str), "--");
-        optech_text_vc(s, gr, top + 30, str, 30, COLOR_WHITE, NVG_ALIGN_RIGHT);
-        const float sgap = 8, segw = (gr - gl - 3 * sgap) / 4, segh = 22, segy = top + 56;
+        optech_text_vc(s, gl, top + 30, "차간 거리", 30, label_c, NVG_ALIGN_LEFT);  // the lit steps show the setting
+        const float sgap = 8, segw = (gr - gl - 3 * sgap) / 4, segh = 24, segy = top + 55;
         for (int i = 0; i < 4; i++) {
             nvgBeginPath(s->vg);
             nvgRoundedRect(s->vg, gl + i * (segw + sgap), segy, segw, segh, 6);
