@@ -1362,7 +1362,8 @@ static void drawOptechHud(const UIState* s) {
         const NVGcolor wc = enabled ? nvgRGBA(sc.red(), sc.green(), sc.blue(), sc.alpha()) : nvgRGBA(0x17, 0x33, 0x49, 0xc8);
         ui_draw_circle_image_rotation(s, rcx, top + boxh / 2, 66, "wheel", wc, 1.0f, car_state.getSteeringAngleDeg());
 
-        // CPU temperature / CPU use
+        // CPU temperature / CPU use (화면 탭 '기기 상태'; the tyre box moves up when it is hidden)
+        if (s->show_device_stat) {
         auto ds = sm["deviceState"].getDeviceState();
         float temp = 0.f; int use = 0;
         const auto tc = ds.getCpuTempC(); const auto cu = ds.getCpuUsagePercent();
@@ -1378,6 +1379,7 @@ static void drawOptechHud(const UIState* s) {
         optech_text_vc(s, rcx, top + 99, "CPU 사용", 30, lab, NVG_ALIGN_CENTER);
         snprintf(str, sizeof(str), "%d%%", use);
         optech_text_vc(s, rcx, top + 133, str, 44, use > 90 && blink_on ? nvgRGBA(240, 149, 149, 255) : COLOR_WHITE, NVG_ALIGN_CENTER);
+        }
 
         // tyre pressures
         if (s->show_tpms) {
