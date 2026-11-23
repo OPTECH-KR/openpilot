@@ -1004,6 +1004,50 @@ static void optech_dist_text(char* str, size_t n, int dist_m, const char* suffix
     else snprintf(str, n, "%dm%s", dist_m, suffix);
 }
 
+// big white turn arrow drawn with lines (the old turn images are mostly empty space and looked tiny, user 2026-11-23)
+// kind: 1 left turn, 2 right turn, 3 left lane, 4 right lane, 5 U-turn. (x, y) top left of an S x S square.
+static void optech_turn_arrow(const UIState* s, float x, float y, float S, int kind) {
+    const bool mirror = kind == 2 || kind == 4;
+    auto X = [&](float u) { return x + (mirror ? 1.f - u : u) * S; };
+    auto Y = [&](float v) { return y + v * S; };
+    NVGcontext* vg = s->vg;
+    nvgSave(vg);
+    nvgStrokeColor(vg, COLOR_WHITE);
+    nvgFillColor(vg, COLOR_WHITE);
+    nvgStrokeWidth(vg, S * 0.17f);
+    nvgLineCap(vg, NVG_BUTT);
+    nvgLineJoin(vg, NVG_ROUND);
+    nvgBeginPath(vg);
+    if (kind == 1 || kind == 2) {
+        nvgMoveTo(vg, X(0.66f), Y(1.0f));
+        nvgLineTo(vg, X(0.66f), Y(0.52f));
+        nvgQuadTo(vg, X(0.66f), Y(0.32f), X(0.46f), Y(0.32f));
+        nvgLineTo(vg, X(0.34f), Y(0.32f));
+        nvgStroke(vg);
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, X(0.04f), Y(0.32f)); nvgLineTo(vg, X(0.38f), Y(0.04f)); nvgLineTo(vg, X(0.38f), Y(0.60f));
+    } else if (kind == 3 || kind == 4) {
+        nvgMoveTo(vg, X(0.70f), Y(1.0f));
+        nvgLineTo(vg, X(0.70f), Y(0.78f));
+        nvgBezierTo(vg, X(0.70f), Y(0.56f), X(0.34f), Y(0.56f), X(0.34f), Y(0.36f));
+        nvgLineTo(vg, X(0.34f), Y(0.30f));
+        nvgStroke(vg);
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, X(0.34f), Y(0.0f)); nvgLineTo(vg, X(0.62f), Y(0.34f)); nvgLineTo(vg, X(0.06f), Y(0.34f));
+    } else {  // U-turn (to the left, as in Korea)
+        nvgMoveTo(vg, X(0.74f), Y(1.0f));
+        nvgLineTo(vg, X(0.74f), Y(0.42f));
+        nvgArc(vg, X(0.52f), Y(0.42f), S * 0.22f, 0, NVG_PI, NVG_CCW);
+        nvgLineTo(vg, X(0.30f), Y(0.62f));
+        nvgStroke(vg);
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, X(0.30f), Y(0.96f)); nvgLineTo(vg, X(0.04f), Y(0.62f)); nvgLineTo(vg, X(0.56f), Y(0.62f));
+    }
+    nvgClosePath(vg);
+    nvgFill(vg);
+    nvgRestore(vg);
+}
+
 static void drawOptechHud(const UIState* s) {
     SubMaster& sm = *(s->sm);
     const UIScene& scene = s->scene;
@@ -1212,14 +1256,14 @@ static void drawOptechHud(const UIState* s) {
         // navigation turn guidance right under the speed
         const int turn = road.getXTurnInfo();
         if (turn > 0 && activeNDA > 0) {
-            const char* img = nullptr;
+            int arrow = 0;
             const char* label = nullptr;
             switch (turn) {
-            case 1: img = "ic_turn_l"; label = "좌회전"; break;
-            case 2: img = "ic_turn_r"; label = "우회전"; break;
-            case 3: img = "ic_lane_change_l"; label = "왼쪽 차로"; break;
-            case 4: img = "ic_lane_change_r"; label = "오른쪽 차로"; break;
-            case 5: label = "U턴"; break;
+            case 1: arrow = 1; label = "좌회전"; break;
+            case 2: arrow = 2; label = "우회전"; break;
+            case 3: arrow = 3; label = "왼쪽 차로"; break;
+            case 4: arrow = 4; label = "오른쪽 차로"; break;
+            case 5: arrow = 5; label = "U턴"; break;
             case 35: label = "좌측 고가 진입"; break;
             case 43: label = "지하차도 우측"; break;
             case 48: label = "휴게소"; break;
@@ -1229,12 +1273,14 @@ static void drawOptechHud(const UIState* s) {
                 const int dist = road.getXDistToTurn();
                 if (dist > 0) { char d[32]; optech_dist_text(d, sizeof(d), dist, ""); snprintf(str, sizeof(str), "%s %s", label, d); }
                 else snprintf(str, sizeof(str), "%s", label);
-                nvgFontSize(s->vg, 44);
+                nvgFontFace(s->vg, BOLD);
+                nvgFontSize(s->vg, 48);
                 float b[4]; nvgTextBounds(s->vg, 0, 0, str, NULL, b);
-                const float tw = b[2] - b[0], iw = img ? 80 : 0, w = tw + iw + 50, h = 84, x = cx - w / 2, y = 352;  // under the traffic light
+                const float S = 72;  // arrow size
+                const float tw = b[2] - b[0], iw = arrow ? S + 18 : 0, w = tw + iw + 50, h = 96, x = cx - w / 2, y = 352;  // under the traffic light
                 carrot_round_box(s, x, y, w, h, nvgRGBA(0, 0, 0, 120), nvgRGBA(0, 0, 0, 0), 12, 0);
-                if (img) ui_draw_image(s, {(int)(x + 16), (int)(y + 2), 80, 80}, img, 1.0f);
-                optech_text(s, x + 25 + iw, y + h / 2 + 2, str, 44, COLOR_WHITE, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+                if (arrow) optech_turn_arrow(s, x + 22, y + (h - S) / 2, S, arrow);
+                optech_text(s, x + 25 + iw, y + h / 2 + 2, str, 48, COLOR_WHITE, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
             }
         }
     }
