@@ -111,6 +111,17 @@ def manager_init() -> None:
     ("OptechSettingsTimeout", "180"),  # 화면 > 화면 유지 시간 (seconds, -1 항상)
     ("OptechDriveDim", "0"),  # 화면 > 주행 중 밝기 (%, 0 off)
     ("OptechShowRecordBtn", "0"),  # 화면 > 녹화 버튼 (0 hidden)
+    ("OptechLatMethod", "0"),
+    ("OptechPidKp", "25"),
+    ("OptechPidKi", "40"),
+    ("OptechPidKf", "7"),
+    ("OptechIndiInner", "35"),
+    ("OptechIndiOuter", "20"),
+    ("OptechIndiTime", "14"),
+    ("OptechIndiAct", "20"),
+    ("OptechLqrScale", "1500"),
+    ("OptechLqrKi", "16"),
+    ("OptechLqrDcGain", "265"),  # 조향 > 조향 방식 (0 토크, 1 PID, 2 INDI, 3 LQR) and their values (OPKR defaults)
     ("AutoNaviSpeedDecelRate", "80"),
     ("AutoRoadLimitCtrl", "0"),
     ("AutoResumeFromBrakeRelease", "1"),

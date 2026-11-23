@@ -1057,6 +1057,55 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   // ---- 조향: steering and curves ----
   steerToggles = new ListWidget(this);
   steerToggles->addItem(carrot_section("조향"));
+  // OptechLatMethod '조향 방식' (hyundai/interface.py set_optech_lat_method, applied at the next start):
+  // 0 토크 (default), 1 PID, 2 INDI, 3 LQR with OPKR's Hyundai/Kia defaults. Each method's values show only
+  // when that method is chosen
+  {
+    const QStringList lm_names = {"토크 (기본)", "PID", "INDI", "LQR"};
+    auto lm_mode = []() { return std::clamp(std::atoi(Params().get("OptechLatMethod").c_str()), 0, 3); };
+    const QString lm_desc =
+      "핸들을 얼마나 돌릴지 계산하는 방식을 고릅니다. 바꾼 뒤 기기를 다시 켜야 적용됩니다.\n"
+      "\n"
+      "[토크 (기본)] 지금 쓰는 방식입니다. 주행하며 차에 맞게 스스로 학습합니다. 잘 모르면 그대로 두세요.\n"
+      "[PID] 오래된 기본 방식입니다. 핸들 각도 차이만큼 바로 돌립니다.\n"
+      "[INDI] 핸들 움직임을 예측해서 돌립니다. 반응이 빠른 편입니다.\n"
+      "[LQR] 핸들 각도와 움직임을 함께 보고 부드럽게 돌립니다.\n"
+      "\n"
+      "PID / INDI / LQR은 OPKR의 현대·기아 기본값으로 시작합니다. 차마다 맞는 값이 달라서 "
+      "핸들이 흔들리거나 덜 꺾이면 아래 값을 조금씩 바꾸거나 토크로 돌아가세요.";
+    auto lm_btn = new ButtonControl("", "선택", lm_desc);
+    struct LmVal { int method; CValueControl* ctl; };
+    std::vector<LmVal>* vals = new std::vector<LmVal>{
+      {1, new CValueControl("OptechPidKp", "PID 비례 (Kp, 0.01 단위)", "핸들 각도 차이에 바로 반응하는 세기입니다. 높이면 빨리 꺾고, 너무 높으면 흔들립니다. 처음 값 25.", ROAD_ICON, 5, 100, 1)},
+      {1, new CValueControl("OptechPidKi", "PID 적분 (Ki, 0.001 단위)", "오래 남은 차이를 조금씩 메우는 세기입니다. 커브에서 계속 덜 꺾이면 조금 올립니다. 처음 값 40.", ROAD_ICON, 0, 200, 1)},
+      {1, new CValueControl("OptechPidKf", "PID 앞먹임 (Kf, 0.00001 단위)", "필요한 핸들 각도를 미리 넣어 주는 세기입니다. 처음 값 7.", ROAD_ICON, 0, 50, 1)},
+      {2, new CValueControl("OptechIndiInner", "INDI 안쪽 게인 (0.1 단위)", "커브에 들어갈 때 꺾는 반응입니다. 처음 값 35.", ROAD_ICON, 10, 100, 1)},
+      {2, new CValueControl("OptechIndiOuter", "INDI 바깥 게인 (0.1 단위)", "차로 가운데를 지키는 세기입니다. 처음 값 20.", ROAD_ICON, 10, 100, 1)},
+      {2, new CValueControl("OptechIndiTime", "INDI 시간 상수 (0.1 단위)", "높이면 부드럽고 느리게, 낮추면 빠르게 움직입니다. 처음 값 14.", ROAD_ICON, 5, 50, 1)},
+      {2, new CValueControl("OptechIndiAct", "INDI 조향 효율 (0.1 단위)", "낮추면 더 많이 꺾습니다. 너무 많이 꺾이면 올립니다. 처음 값 20.", ROAD_ICON, 5, 50, 1)},
+      {3, new CValueControl("OptechLqrScale", "LQR 크기 (Scale)", "높이면 덜 꺾습니다. 처음 값 1500.", ROAD_ICON, 500, 3000, 50)},
+      {3, new CValueControl("OptechLqrKi", "LQR 적분 (Ki, 0.001 단위)", "오래 남은 차이를 메우는 세기입니다. 처음 값 16.", ROAD_ICON, 0, 100, 1)},
+      {3, new CValueControl("OptechLqrDcGain", "LQR DC 게인 (0.00001 단위)", "핸들 각도와 조향 힘의 비율입니다. 처음 값 265.", ROAD_ICON, 100, 500, 5)},
+    };
+    auto lm_refresh = [=]() {
+      const int m = lm_mode();
+      lm_btn->setTitle("조향 방식: " + lm_names[m]);
+      for (auto& v : *vals) v.ctl->setVisible(v.method == m);
+    };
+    QObject::connect(lm_btn, &ButtonControl::clicked, [=]() {
+      ConfirmationDialog info("<b>조향 방식</b><br><br>" + lm_desc.toHtmlEscaped().replace("\n", "<br>"), "선택하기", "취소", true, this);
+      if (!info.exec()) return;
+      const QString cur = lm_names[lm_mode()];
+      const QString sel = MultiOptionDialog::getSelection("조향 방식", lm_names, cur, this);
+      if (sel.isEmpty() || sel == cur) return;
+      Params().put("OptechLatMethod", std::to_string(lm_names.indexOf(sel)));
+      lm_refresh();
+      ConfirmationDialog::alert("기기를 다시 켜야 적용됩니다.", this);
+    });
+    steerToggles->addItem(lm_btn);
+    for (auto& v : *vals) steerToggles->addItem(v.ctl);
+    lm_refresh();
+  }
   steerToggles->addItem(new CValueControl("PathOffset", "경로 좌우 보정 (쏠릴 때)", "차가 차로 안에서 한쪽으로 치우쳐 달리면 보정합니다. -값:왼쪽으로, +값:오른쪽으로 옮깁니다.", ROAD_ICON, -200, 200, 1));
   steerToggles->addItem(new CValueControl("NNFF", "NNFF 조향 보정", "차종별로 미리 학습된 작은 신경망으로 커브에서 필요한 핸들 힘을 더 정확히 계산합니다(twilsonco NNFF, 당근 c3-wip에서 이식). 현대·기아·제네시스 31개 차종에만 모델이 있고, 모델이 없는 차(K7, 그랜저 IG, 볼트 등)는 켜도 기존 방식 그대로입니다. 토크 조향 차량에서만 동작합니다. 0:끄기, 1:켜기. 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 1, 1));
   steerToggles->addItem(new CValueControl("NNFFLite", "NNFF 라이트", "NNFF 모델이 없는 차(K7, 그랜저, 볼트 등)용입니다. 주행 모델이 예상한 앞쪽 커브 변화를 미리 보고, 커브에 들어가거나 나올 때 핸들 마찰 보정을 미리 넣어 늦게 꺾이거나 늦게 풀리는 느낌을 줄입니다. 보정 크기는 기존 마찰 값 안으로 제한됩니다. 모델이 있는 차에서 NNFF를 켜면 NNFF가 우선합니다. 토크 조향 차량에서만 동작합니다. 0:끄기, 1:켜기. 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 1, 1));
