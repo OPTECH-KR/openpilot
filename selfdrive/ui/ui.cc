@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <functional>
+#include <vector>
 
 #include <QtConcurrent>
 
@@ -154,9 +156,67 @@ static void update_sockets(UIState *s) {
   s->sm->update(0);
 }
 
+// optech 주행 화면 'GPS 상태' (optech-hkg update_gps): satellites, strong ones and the mean of the 4 best signals
+static void update_gps(const SubMaster &sm, UIScene &scene) {
+  if (!sm.alive("ubloxGnss")) {
+    scene.gps_sats = scene.gps_strong = scene.gps_cno = 0;
+    scene.gps_antenna_bad = false;
+    return;
+  }
+  if (!sm.updated("ubloxGnss")) return;
+  const auto gnss = sm["ubloxGnss"].getUbloxGnss();
+  if (gnss.which() == cereal::UbloxGnss::MEASUREMENT_REPORT) {
+    std::vector<int> cnos;
+    for (const auto &meas : gnss.getMeasurementReport().getMeasurements()) {
+      if (meas.getCno() > 0) cnos.push_back(meas.getCno());
+    }
+    std::sort(cnos.begin(), cnos.end(), std::greater<int>());
+    const int top = std::min<int>(4, cnos.size());
+    int sum = 0;
+    for (int i = 0; i < top; i++) sum += cnos[i];
+    scene.gps_sats = cnos.size();
+    scene.gps_strong = std::count_if(cnos.begin(), cnos.end(), [](int c) { return c >= 30; });
+    scene.gps_cno = top > 0 ? sum / top : 0;
+  } else if (gnss.which() == cereal::UbloxGnss::HW_STATUS) {
+    const auto ant = gnss.getHwStatus().getAStatus();
+    scene.gps_antenna_bad = ant == cereal::UbloxGnss::HwStatus::AntennaSupervisorState::SHORT ||
+                            ant == cereal::UbloxGnss::HwStatus::AntennaSupervisorState::OPEN;
+  }
+}
+
+// optech 주행 화면 '레이더 물체' (optech-hkg ui_draw_radar_info): every radar track on the screen with its own speed
+static void update_radar_points(UIState *s) {
+  const SubMaster &sm = *(s->sm);
+  UIScene &scene = s->scene;
+  scene.radar_points.clear();
+  if (!sm.alive("liveTracks")) return;
+  const auto line = sm["modelV2"].getModelV2().getPosition();
+  const float v_ego = sm["carState"].getCarState().getVEgo();
+  for (const auto &t : sm["liveTracks"].getLiveTracks()) {
+    const float d = t.getDRel();
+    if (d < 2.f || d > 150.f) continue;
+    float z = 0.f;
+    if (line.getX().size() > 0) z = line.getZ()[get_path_length_idx(line, d)];
+    QPointF pt;
+    if (!calib_frame_to_full_frame(s, d, -t.getYRel(), z + 1.22, &pt)) continue;
+    const float v = v_ego + t.getVRel();
+    const int kind = v < -1.f ? 1 : std::abs(v) < 1.f ? 2 : 0;
+    scene.radar_points.push_back({pt, v, t.getYRel(), kind});
+  }
+}
+
 static void update_state(UIState *s) {
   SubMaster &sm = *(s->sm);
   UIScene &scene = s->scene;
+
+  update_gps(sm, scene);
+  if (sm.updated("liveTracks")) update_radar_points(s);
+  if (sm.updated("controlsStateExt")) {
+    const auto ext = sm["controlsStateExt"].getControlsStateExt();
+    scene.tpms[0] = ext.getTpmsFl(); scene.tpms[1] = ext.getTpmsFr();
+    scene.tpms[2] = ext.getTpmsRl(); scene.tpms[3] = ext.getTpmsRr();
+    scene.traffic_state = ext.getTrafficState();
+  }
 
   if (sm.updated("liveCalibration")) {
     auto live_calib = sm["liveCalibration"].getLiveCalibration();
@@ -309,6 +369,8 @@ UIState::UIState(QObject *parent) : QObject(parent) {
     "optechSpeedCam",
     // optech - car battery voltage in the sidebar
     "peripheralState",
+    // optech 주행 화면 (optech-hkg): navigation app link, radar objects, GPS satellites
+    "roadLimitSpeed", "liveTracks", "ubloxGnss",
   });
 
   Params params;

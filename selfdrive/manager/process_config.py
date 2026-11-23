@@ -15,8 +15,19 @@ WEBCAM = os.getenv("USE_WEBCAM") is not None
 def driverview(started: bool, params: Params, CP: car.CarParams) -> bool:
   return params.get_bool("IsDriverViewEnabled")  # type: ignore
 
+def optech_navi_link(params: Params) -> int:
+  try:
+    return int(params.get("OptechNaviLinkMode", encoding="utf8") or 0)
+  except (TypeError, ValueError):
+    return 0
+
 def optech_speedcam(started: bool, params: Params, CP: car.CarParams) -> bool:
-  return started and params.get_bool("OptechSpeedCam")
+  # built-in camera DB or the navigation app's cameras (주행 > 과속카메라)
+  return started and (params.get_bool("OptechSpeedCam") or optech_navi_link(params) > 0)
+
+def optech_road_speed_limiter(started: bool, params: Params, CP: car.CarParams) -> bool:
+  # 내비 연동 방식 1-3: listen for the phone navigation app (APM / APN), also with the car off so it can pair
+  return optech_navi_link(params) > 0
 
 def notcar(started: bool, params: Params, CP: car.CarParams) -> bool:
   return CP.notCar  # type: ignore
@@ -37,7 +48,8 @@ def ublox(started, params, CP: car.CarParams) -> bool:
   use_ublox = ublox_available()
   if use_ublox != params.get_bool("UbloxAvailable"):
     params.put_bool("UbloxAvailable", use_ublox)
-  return started and use_ublox
+  # optech 고급 > 'GPS 확인' runs it with the car off too
+  return (started or params.get_bool("GpsCheck")) and use_ublox
 
 def qcomgps(started, params, CP: car.CarParams) -> bool:
   return started and not ublox_available()
@@ -100,6 +112,9 @@ procs = [
   PythonProcess("mapd", "selfdrive.mapd.mapd"),
   # optech - built-in speed camera DB
   PythonProcess("speedcamd", "selfdrive.optech.speedcamd", onroad=False, callback=optech_speedcam),
+  PythonProcess("road_speed_limiter", "selfdrive.optech.road_speed_limiter", onroad=False, callback=optech_road_speed_limiter),
+  PythonProcess("drivelog", "selfdrive.optech.drivelog"),  # optech 고급 > 주행 기록: small text log while onroad
+  PythonProcess("logserver", "selfdrive.optech.logserver", offroad=True),  # 주행 기록 내려받기 (QR page, 15 min)
   # gpxd
   # PythonProcess("gpxd", "selfdrive.dragonpilot.gpxd"),
   # PythonProcess("gpx_uploader", "selfdrive.dragonpilot.gpx_uploader", offroad=True),

@@ -655,6 +655,24 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
     ET.NO_ENTRY: NoEntryAlert("시동을 껐다가 다시 걸어 주세요 (SCC 위치 저장됨)"),
   },
 
+  # optech 주행 > 신호등 > '초록불 알림' (controlsd + optech_signal.py; a free old event number)
+  EventName.ipasOverrideDEPRECATED: {
+    ET.WARNING: Alert(
+      "초록불로 바뀌었어요",
+      "출발 전에 신호를 직접 확인하세요",
+      AlertStatus.normal, AlertSize.mid,
+      Priority.LOW, VisualAlert.none, AudibleAlert.prompt, 3.),
+  },
+
+  # optech '과속 단속 알림: 화면 표시' (controlsd, speedcamd slowdown start; a free old event number)
+  EventName.geofenceDEPRECATED: {
+    ET.PERMANENT: Alert(
+      "앞에 과속 단속 카메라가 있어요",
+      "",
+      AlertStatus.normal, AlertSize.small,
+      Priority.LOW, VisualAlert.none, AudibleAlert.prompt, 4.),
+  },
+
   EventName.brakeUnavailableDEPRECATED: {
     ET.SOFT_DISABLE: user_soft_disable_alert("페달 사용 중: 기어를 L(원페달)로 바꿔 주세요"),
     ET.NO_ENTRY: NoEntryAlert("페달 사용 중에는 기어를 L(원페달)로 두세요"),

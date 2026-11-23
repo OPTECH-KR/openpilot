@@ -29,6 +29,7 @@ from openpilot.selfdrive.controls.lib.latcontrol_torque import LatControlTorque
 from openpilot.selfdrive.controls.lib.events import Events, ET
 from openpilot.selfdrive.controls.lib.alertmanager import AlertManager, set_offroad_alert
 from openpilot.selfdrive.controls.lib.vehicle_model import VehicleModel
+from openpilot.selfdrive.controls.lib.optech_signal import OptechSignal, GREEN
 from openpilot.system.hardware import HARDWARE, TICI
 
 SOFT_DISABLE_TIME = 3  # seconds
@@ -94,6 +95,12 @@ class Controls:
     self.log_sock = messaging.sub_sock('androidLog')
 
     self.params = Params()
+    # optech (optech-hkg): traffic light guess + green light alert, speed camera alert; optional messages on their
+    # own SubMaster so a stopped speedcamd never counts as a comm issue
+    self.optech_signal = OptechSignal()
+    self.optech_sm = messaging.SubMaster(['optechSpeedCam'])
+    self.cam_active_prev = False
+    self.cam_alert_end = 0
     self.read_optech_steer_params()  # optech 조향 세부 / 토크 사용자 설정 (state_control reads them again every 5 s)
     self.dp_no_gps_ctrl = self.params.get_bool("dp_no_gps_ctrl")
     self.dp_no_fan_ctrl = self.params.get_bool("dp_no_fan_ctrl")
@@ -310,6 +317,24 @@ class Controls:
 
     if CS.gasPressed:
       self.events.add(EventName.gasPressedOverride)
+
+    # optech 주행 > 신호등 (StarPilot stop light detector, optech-hkg): HUD light; '초록불 알림' when the light the car
+    # stopped for turns green (only while openpilot is on)
+    if self.sm.updated['modelV2']:
+      if self.optech_signal_on:
+        model = self.sm['modelV2']
+        x = model.position.x
+        acc = model.acceleration.x
+        model_accel = float(sum(acc[:11]) / len(acc[:11])) if len(acc) else 0.
+        lead = self.sm['radarState'].leadOne
+        self.optech_signal.update(CS.vEgo, float(x[-1]) if len(x) else 1000., model_accel, CS.standstill,
+                                  CS.leftBlinker or CS.rightBlinker, CS.steeringAngleDeg,
+                                  bool(lead.status), lead.dRel, lead.vLead)
+        if self.optech_signal.green_event and self.optech_green_alert and self.enabled and CS.vEgo < 0.3 and \
+           not CS.gasPressed:
+          self.events.add(EventName.ipasOverrideDEPRECATED)  # '초록불로 바뀌었어요'
+      elif self.optech_signal.state != 0 or self.optech_signal.stopped_for_light:
+        self.optech_signal = OptechSignal()
 
     if not self.CP.notCar and (not NO_IR_CTRL or DM_LITE):
       self.events.add_from_msg(self.sm['driverMonitoringState'].events)
@@ -636,6 +661,9 @@ class Controls:
     self.optech_torque_custom = num("LateralTorqueCustom", 0) > 0
     self.optech_torque_accel = max(num("LateralTorqueAccelFactor", 2500), 100) / 1000.
     self.optech_torque_friction = max(num("LateralTorqueFriction", 100), 0) / 1000.
+    self.optech_signal_on = self.params.get_bool("OptechSignalEnable")
+    self.optech_green_alert = self.params.get_bool("OptechGreenAlert")
+    self.cam_haptic_mode = num("HapticFeedbackWhenSpeedCamera", 0)
 
   def state_control(self, CS):
     """Given the state, this function returns a CarControl packet"""
@@ -753,9 +781,15 @@ class Controls:
                                                                                        lat_plan.psis,
                                                                                        lat_plan.curvatures,
                                                                                        lat_plan.curvatureRates)
-      actuators.steer, actuators.steeringAngleDeg, lac_log = self.LaC.update(CC.latActive, CS, self.VM, lp,
-                                                                             self.last_actuators, self.steer_limited, self.desired_curvature,
-                                                                             self.desired_curvature_rate, self.sm['liveLocationKalman'])
+      if isinstance(self.LaC, LatControlTorque):  # torque control can use the model plan (NNFF, optech-hkg)
+        actuators.steer, actuators.steeringAngleDeg, lac_log = self.LaC.update(CC.latActive, CS, self.VM, lp,
+                                                                               self.last_actuators, self.steer_limited, self.desired_curvature,
+                                                                               self.desired_curvature_rate, self.sm['liveLocationKalman'],
+                                                                               model_data=self.sm['modelV2'])
+      else:
+        actuators.steer, actuators.steeringAngleDeg, lac_log = self.LaC.update(CC.latActive, CS, self.VM, lp,
+                                                                               self.last_actuators, self.steer_limited, self.desired_curvature,
+                                                                               self.desired_curvature_rate, self.sm['liveLocationKalman'])
       actuators.curvature = self.desired_curvature
     else:
       lac_log = log.ControlsState.LateralDebugState.new_message()
@@ -866,6 +900,24 @@ class Controls:
     if hudControl.rightLaneDepart or hudControl.leftLaneDepart:
       self.events.add(EventName.ldw)
 
+    # optech '과속 단속 알림' (HapticFeedbackWhenSpeedCamera, optech-hkg): for 8 s from the moment the camera slowdown
+    # starts (speedcamd 'active'). 1 / 2: Hyundai LKAS lane warning (steering wheel / cluster; carcontroller reads
+    # both lane departs as this), with a 2 s pause like optech-hkg. 3: an alert on the screen (every brand)
+    self.optech_sm.update(0)
+    cam = self.optech_sm['optechSpeedCam']
+    cam_age = (self.optech_sm.frame - self.optech_sm.rcv_frame['optechSpeedCam']) * DT_CTRL
+    cam_active = self.optech_sm.rcv_frame['optechSpeedCam'] > 0 and cam_age < 1.0 and bool(cam.active)
+    if cam_active and not self.cam_active_prev:
+      self.cam_alert_end = self.sm.frame + int(8.0 / DT_CTRL)
+      if self.cam_haptic_mode == 3:
+        self.events.add(EventName.geofenceDEPRECATED)  # '앞에 과속 단속 카메라가 있어요'
+    self.cam_active_prev = cam_active
+    if self.sm.frame < self.cam_alert_end and self.cam_haptic_mode in (1, 2):
+      pause = self.cam_alert_end - int(5.0 / DT_CTRL) < self.sm.frame < self.cam_alert_end - int(3.0 / DT_CTRL)
+      if not pause:
+        hudControl.leftLaneDepart = True
+        hudControl.rightLaneDepart = True
+
     clear_event_types = set()
     if ET.WARNING not in self.current_alert_types:
       clear_event_types.add(ET.WARNING)
@@ -957,6 +1009,10 @@ class Controls:
     controlsStateExt = dat.controlsStateExt
     controlsStateExt.alkaActive = self._dp_alka_active
     controlsStateExt.alkaEnabled = self._dp_alka
+    tpms = getattr(self.CI.CS, 'tpms', None) if self.CI.CS is not None else None
+    if tpms is not None:
+      controlsStateExt.tpmsFl, controlsStateExt.tpmsFr, controlsStateExt.tpmsRl, controlsStateExt.tpmsRr = [float(v) for v in tpms]
+    controlsStateExt.trafficState = int(self.optech_signal.state)
     self.pm.send('controlsStateExt', dat)
 
     # carState

@@ -145,6 +145,15 @@ typedef struct UIScene {
   // lead
   QPointF lead_vertices[2];
 
+  // optech 주행 화면 (optech-hkg): radar objects (liveTracks), GPS summary (ubloxGnss), tyres + traffic light
+  // (controlsStateExt)
+  struct OptechRadarPoint { QPointF pt; float v; float y_rel; int kind; };  // kind 0 moving, 1 oncoming, 2 stopped
+  std::vector<OptechRadarPoint> radar_points;
+  int gps_sats = 0, gps_strong = 0, gps_cno = 0;
+  bool gps_antenna_bad = false;
+  float tpms[4] = {0, 0, 0, 0};
+  int traffic_state = 0;  // 0 none, 1 red, 2 green
+
   #ifndef QCOM
   // DMoji state
   float driver_pose_vals[3];

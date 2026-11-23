@@ -113,6 +113,20 @@ def manager_init() -> None:
     ("LateralTorqueCustom", "0"),
     ("LateralTorqueAccelFactor", "2500"),
     ("LateralTorqueFriction", "100"),
+    # optech-hkg stage 2 (same first values as optech-hkg)
+    ("OptechNaviLinkMode", "1"),            # 주행 > 과속카메라 > 내비 연동 방식 (0 내비 안 씀, 1 APM, 2 APM + 순정 내비, 3 NDA)
+    ("HapticFeedbackWhenSpeedCamera", "0"), # 과속 단속 알림 (0 off, 1 핸들 진동, 2 계기판, 3 화면)
+    ("OptechSignalEnable", "1"),            # 주행 > 신호등 > 신호등 사용
+    ("OptechGreenAlert", "1"),              # 주행 > 신호등 > 초록불 알림
+    ("ShowTpms", "1"),
+    ("ShowGpsInfo", "1"),
+    ("ShowBlindSpot", "1"),
+    ("ShowRadarInfo", "1"),
+    ("ShowConnInfo", "1"),
+    ("OptechShowRecordBtn", "0"),
+    ("PathOffset", "0"),
+    ("NNFF", "0"),
+    ("NNFFLite", "0"),
   ]
   if not PC:
     default_params.append(("LastUpdateTime", datetime.datetime.utcnow().isoformat().encode('utf8')))

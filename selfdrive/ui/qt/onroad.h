@@ -7,6 +7,7 @@
 #include <QWidget>
 
 #include "common/util.h"
+#include "selfdrive/ui/qt/screenrecorder/screenrecorder.h"
 #include "selfdrive/ui/ui.h"
 #ifdef QCOM
 #include "selfdrive/ui/qt/widgets/cameraview_qcom.h"
@@ -207,6 +208,24 @@ protected:
   bool optech_cam_section = false;
   float optech_cam_target = 0;   // km/h while slowing down for it
   QPixmap speed_bg_img;
+  // optech-hkg 주행 화면 (2026-11-23 design): what the new layout shows
+  QPixmap wheel_img;
+  bool optech_enabled = false;
+  int optech_status = 0;
+  bool optech_show_tpms = true, optech_show_gps = true, optech_show_bsd = true, optech_show_conn = true;
+  int optech_show_radar = 1;
+  float optech_a_ego = 0, optech_steer_deg = 0, optech_v_ego = 0;
+  bool optech_brake = false, optech_left_blinker = false, optech_right_blinker = false;
+  bool optech_left_bsd = false, optech_right_bsd = false;
+  bool optech_lead = false;
+  float optech_lead_d = 0, optech_lead_v = 0;
+  int optech_navi_active = 0, optech_road_limit = 0, optech_turn = 0, optech_turn_dist = 0;
+  bool optech_radar_tracks = false;
+  bool optech_scc2 = false;
+  void drawOptechRight(QPainter &p);
+  void drawOptechBsd(QPainter &p, bool right, bool danger);
+  void drawOptechRadar(QPainter &p);
+  void drawOptechGps(QPainter &p, float x);
 
   //dp
   void drawKnightScanner(QPainter &p);
@@ -229,6 +248,9 @@ private:
   void mousePressEvent(QMouseEvent* e) override;
   OnroadAlerts *alerts;
   AnnotatedCameraWidget *nvg;
+  ScreenRecorder *recorder = nullptr;  // optech 화면 > 녹화 버튼
+  QTimer *record_timer = nullptr;
+  bool show_record_btn = false;
   QColor bg = bg_colors[STATUS_DISENGAGED];
   QWidget *map = nullptr;
   QHBoxLayout* split;

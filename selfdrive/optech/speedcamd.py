@@ -7,8 +7,11 @@ The slowdown profile is the one optech-hkg uses (road_speed_limiter.get_max_spee
 OptechCamDecelStart seconds before the camera, reaches limit x OptechCamSafetyFactor % at
 OptechCamDecelEnd seconds before it, and holds the limit inside an average-speed section.
 The planner only uses targetSpeed when OptechSpeedCamDecel is on and openpilot controls the speed.
+With a navigation app linked (OptechNaviLinkMode 1-3, selfdrive/optech/road_speed_limiter.py -> roadLimitSpeed) its
+camera is used first, the built-in DB (OptechSpeedCam) only while the app gives none, as on optech-hkg.
 """
 import time
+from collections import namedtuple
 
 import cereal.messaging as messaging
 from openpilot.common.params import Params
@@ -17,6 +20,22 @@ from openpilot.selfdrive.optech.speedcam_db import SpeedCamFinder
 
 MIN_LIMIT, MAX_LIMIT = 10, 120  # km/h; other values in the data are ignored
 GPS_MAX_ACCURACY = 50.0  # m
+NAVI_TIMEOUT = 3.0  # s without roadLimitSpeed -> the app is gone
+
+NaviCam = namedtuple("NaviCam", ["limit", "dist", "section"])
+
+
+def navi_camera(road):
+  """the camera the navigation app reports (same order as the optech-hkg HUD), None without one; bumps are skipped"""
+  if road.xSignType == 124 or road.camType == 22:
+    return None
+  if road.camLimitSpeed > 0 and road.camLimitSpeedLeftDist > 0:
+    return NaviCam(road.camLimitSpeed, road.camLimitSpeedLeftDist, False)
+  if road.sectionLimitSpeed > 0 and road.sectionLeftDist > 0:
+    return NaviCam(road.sectionLimitSpeed, road.sectionLeftDist, True)
+  if road.xSpdLimit > 0 and road.xSpdDist > 0:
+    return NaviCam(road.xSpdLimit, road.xSpdDist, road.xSignType == 165 or road.camType == 4)
+  return None
 
 
 class SlowdownProfile:
@@ -56,28 +75,39 @@ def main():
   params = Params()
   finder = SpeedCamFinder()
   profile = SlowdownProfile()
-  sm = messaging.SubMaster(['gpsLocationExternal', 'carState'])
+  sm = messaging.SubMaster(['gpsLocationExternal', 'carState', 'roadLimitSpeed'])
   pm = messaging.PubMaster(['optechSpeedCam'])
   rk = Ratekeeper(5, print_delay_threshold=None)
 
   start_s, end_s, factor = 22., 6., 1.05
+  use_db, navi_mode = True, 0
+  navi_seen = 0.
   frame = 0
   while True:
     sm.update(0)
+    now = time.monotonic()
     if frame % 25 == 0:  # settings every 5 s
       try:
         start_s = float(params.get("OptechCamDecelStart", encoding="utf8") or 22)
         end_s = float(params.get("OptechCamDecelEnd", encoding="utf8") or 6)
         factor = float(params.get("OptechCamSafetyFactor", encoding="utf8") or 105) / 100.
+        use_db = params.get_bool("OptechSpeedCam")
+        navi_mode = int(params.get("OptechNaviLinkMode", encoding="utf8") or 0)
       except (TypeError, ValueError):
         pass
     frame += 1
 
     cam = None
+    if sm.updated['roadLimitSpeed']:
+      navi_seen = now
+    if navi_mode > 0 and now - navi_seen < NAVI_TIMEOUT:
+      cam = navi_camera(sm['roadLimitSpeed'])
     gps = sm['gpsLocationExternal']
-    if sm.alive['gpsLocationExternal'] and (gps.flags & 1) and 0 < gps.accuracy < GPS_MAX_ACCURACY:
+    if cam is not None or not use_db:
+      finder.reset()
+    elif sm.alive['gpsLocationExternal'] and (gps.flags & 1) and 0 < gps.accuracy < GPS_MAX_ACCURACY:
       try:
-        cam = finder.update(gps.latitude, gps.longitude, gps.bearingDeg, gps.speed, time.monotonic())
+        cam = finder.update(gps.latitude, gps.longitude, gps.bearingDeg, gps.speed, now)
       except Exception:
         finder.reset()
     else:

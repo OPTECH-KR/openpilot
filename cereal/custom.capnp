@@ -84,6 +84,12 @@ struct LateralPlanExt @0xf35cc4560bbf6ec2 {
 struct ControlsStateExt @0xda96579883444c35 {
   alkaActive @0 :Bool;
   alkaEnabled @1 :Bool;
+  # optech (optech-hkg 주행 화면): tyre pressures (psi, Hyundai TPMS11; 0 = none) and the traffic light guess
+  tpmsFl @2 :Float32;
+  tpmsFr @3 :Float32;
+  tpmsRl @4 :Float32;
+  tpmsRr @5 :Float32;
+  trafficState @6 :Int8;  # selfdrive/controls/lib/optech_signal.py: 0 none, 1 red, 2 green
 }
 
 # OPTECH speed camera ahead (selfdrive/optech/speedcamd.py, built-in Korean camera DB)
@@ -98,7 +104,32 @@ struct OptechSpeedCam @0x80ae746ee2596b11 {
 struct CustomReserved5 @0xa5cd762cd951a455 {
 }
 
-struct CustomReserved6 @0xf98d843bfd7004a3 {
+# OPTECH navigation app link (APM / APN on the phone, selfdrive/optech/road_speed_limiter.py; same fields as optech-hkg)
+struct RoadLimitSpeed @0xf98d843bfd7004a3 {
+  active @0 :Int16;
+  roadLimitSpeed @1 :Int16;
+  isHighway @2 :Bool;
+  camType @3 :Int16;
+  camLimitSpeedLeftDist @4 :Int16;
+  camLimitSpeed @5 :Int16;
+  sectionLimitSpeed @6 :Int16;
+  sectionLeftDist @7 :Int16;
+  sectionAvgSpeed @8 :Int16;
+  sectionLeftTime @9 :Int16;
+  sectionAdjustSpeed @10 :Bool;
+  camSpeedFactor @11 :Float32;
+
+  xTurnInfo @12 :Int32;
+  xDistToTurn @13 :Int32;
+  xSpdDist @14 :Int16;
+  xSpdLimit @15 :Int16;
+  xSignType @16 :Int16;
+  xRoadSignType @17 :Int16;
+  xRoadLimitSpeed @18 :Int16;
+  xRoadName @19 :Text;
+  xCmd @20 :Text;
+  xArg @21 :Text;
+  xIndex @22 :Int16;
 }
 
 struct CustomReserved7 @0xb86e6369214c01c8 {

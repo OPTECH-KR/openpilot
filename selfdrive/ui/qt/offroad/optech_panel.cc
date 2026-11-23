@@ -7,8 +7,16 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QDir>
+#include <QElapsedTimer>
+#include <QImage>
+#include <QNetworkInterface>
 #include <QScroller>
+#include <QTimer>
 
+#include <QrCode.hpp>
+
+#include "common/util.h"
 #include "selfdrive/ui/qt/util.h"
 #include "selfdrive/ui/qt/widgets/input.h"
 #include "selfdrive/ui/ui.h"
@@ -27,6 +35,113 @@ static QLabel *optech_note(const QString &text) {
   label->setStyleSheet("font-size: 36px; color: #9A9A9A; padding: 10px 10px;");
   return label;
 }
+
+// live text for 'GPS 확인' (optech-hkg gps_check_text): the GPS summary the UI keeps (ubloxGnss) + gpsLocationExternal
+static QString optech_gps_check_text(int elapsed_s) {
+  const UIState *s = uiState();
+  const SubMaster &sm = *(s->sm);
+  const UIScene &scene = s->scene;
+  const bool panda = scene.pandaType != cereal::PandaState::PandaType::UNKNOWN;
+  const bool gnss_alive = sm.alive("ubloxGnss");
+  const bool loc_alive = sm.alive("gpsLocationExternal");
+  const auto loc = sm["gpsLocationExternal"].getGpsLocationExternal();
+  const bool fixed = loc_alive && (loc.getFlags() & 1);
+  const float acc = loc.getAccuracy();
+
+  QString state, color;
+  if (!panda) { state = "판다 연결 안 됨"; color = "#AAAAAA"; }
+  else if (!gnss_alive) { state = "GPS 신호 없음"; color = "#AAAAAA"; }
+  else if (scene.gps_antenna_bad) { state = "안테나 이상"; color = "#FF4040"; }
+  else if (!fixed) { state = "위성 찾는 중"; color = "#DACA25"; }
+  else if (acc <= 5.0f) { state = "잡힘 (좋음)"; color = "#33DD33"; }
+  else if (acc <= 15.0f) { state = "잡힘 (보통)"; color = "#DACA25"; }
+  else { state = "잡힘 (약함)"; color = "#DA6F25"; }
+
+  const int cno = scene.gps_cno;
+  const int bars = cno >= 35 ? 4 : cno >= 30 ? 3 : cno >= 25 ? 2 : cno >= 20 ? 1 : 0;
+  const QString bar_text = QString("<span style='color:%1'>%2</span><span style='color:#555555'>%3</span>")
+                             .arg(color, QString("■").repeated(bars), QString("■").repeated(4 - bars));
+  QString t = "<h2>GPS 확인 (판다/uno GPS)</h2>";
+  t += QString("<p style='font-size:60px; color:%1'><b>%2</b></p>").arg(color, state);
+  t += QString("<p>신호 세기: %1 &nbsp;(%2 dB-Hz)</p>").arg(bar_text).arg(cno);
+  t += QString("<p>보이는 위성: %1개 &nbsp;(강한 위성 %2개)</p>").arg(scene.gps_sats).arg(scene.gps_strong);
+  if (fixed) {
+    t += QString("<p>위치 오차: 약 %1 m</p>").arg(acc, 0, 'f', 0);
+    t += QString("<p>위치: %1, %2</p>").arg(loc.getLatitude(), 0, 'f', 5).arg(loc.getLongitude(), 0, 'f', 5);
+  } else {
+    t += "<p>위치 오차: -</p>";
+  }
+  t += QString("<p style='color:#888888'>확인 시작 후 %1초</p>").arg(elapsed_s);
+  if (!panda) {
+    t += "<p>판다(uno 보드)가 연결되지 않았어요. C2에 차량 하네스 전원이 들어와야 GPS가 켜집니다.</p>";
+  } else if (!gnss_alive && elapsed_s >= 20) {
+    t += "<p>GPS 칩에서 데이터가 오지 않아요. GPS 안테나가 연결돼 있는지 확인해 주세요.</p>";
+  } else if (!fixed) {
+    t += "<p>처음 켜면 위성을 찾는 데 1~3분 걸릴 수 있어요. 하늘이 잘 보이는 곳에서 확인하세요.</p>";
+  }
+  return t;
+}
+
+// '주행 기록 내려받기' (optech-hkg): the device's addresses a phone on the same Wi-Fi / hotspot can open
+// (selfdrive/optech/logserver.py, port 8088); the device's own hotspot first
+static QStringList optech_log_page_urls() {
+  QStringList urls, others;
+  for (const QNetworkInterface &nif : QNetworkInterface::allInterfaces()) {
+    if (!(nif.flags() & QNetworkInterface::IsUp) || (nif.flags() & QNetworkInterface::IsLoopBack)) continue;
+    if (nif.name().startsWith("rmnet")) continue;  // mobile data: a phone can't reach it
+    for (const QNetworkAddressEntry &e : nif.addressEntries()) {
+      if (e.ip().protocol() != QAbstractSocket::IPv4Protocol) continue;
+      const QString url = QString("http://%1:8088").arg(e.ip().toString());
+      (e.ip().toString().startsWith("192.168.43.") ? urls : others) << url;
+    }
+  }
+  return urls + others;
+}
+
+// QR code + how to use it, for the phone to open the log page (optech-hkg LogQrDialog)
+class OptechLogQrDialog : public QDialogBase {
+public:
+  OptechLogQrDialog(QWidget *parent, const QStringList &urls) : QDialogBase(parent) {
+    QHBoxLayout *main = new QHBoxLayout(this);
+    main->setContentsMargins(60, 50, 60, 50);
+    main->setSpacing(60);
+
+    QLabel *qr = new QLabel();
+    qrcodegen::QrCode code = qrcodegen::QrCode::encodeText(urls[0].toUtf8().data(), qrcodegen::QrCode::Ecc::MEDIUM);
+    const int sz = code.getSize();
+    QImage im(sz + 8, sz + 8, QImage::Format_RGB32);  // 4-module white border
+    im.fill(qRgb(255, 255, 255));
+    for (int y = 0; y < sz; y++) {
+      for (int x = 0; x < sz; x++) {
+        if (code.getModule(x, y)) im.setPixel(x + 4, y + 4, qRgb(0, 0, 0));
+      }
+    }
+    const int px = (720 / (sz + 8)) * (sz + 8);
+    qr->setPixmap(QPixmap::fromImage(im.scaled(px, px, Qt::KeepAspectRatio, Qt::FastTransformation)));
+    main->addWidget(qr, 0, Qt::AlignVCenter);
+
+    QVBoxLayout *right = new QVBoxLayout();
+    right->setSpacing(30);
+    QLabel *title = new QLabel("폰 카메라로 QR 코드를 찍으세요");
+    title->setStyleSheet("font-size: 60px; font-weight: 600;");
+    title->setWordWrap(true);
+    right->addWidget(title);
+    QLabel *desc = new QLabel(
+      "열린 화면에서 '전체 기록 한 번에 받기'를 누르고, 받은 파일을 카카오톡으로 보내 주세요.\n\n"
+      "폰이 이 기기와 같은 와이파이나 핫스팟에 연결돼 있어야 열립니다. 15분 뒤 자동으로 닫힙니다.\n\n"
+      "주소: " + urls.join("  /  "));
+    desc->setStyleSheet("font-size: 40px; color: #CCCCCC;");
+    desc->setWordWrap(true);
+    right->addWidget(desc);
+    right->addStretch(1);
+    QPushButton *close = new QPushButton("닫기");
+    close->setFixedHeight(140);
+    close->setStyleSheet("font-size: 50px; border-radius: 20px; background-color: #393939;");
+    QObject::connect(close, &QPushButton::clicked, this, &QDialog::accept);
+    right->addWidget(close);
+    main->addLayout(right, 1);
+  }
+};
 
 static const char *VALUE_BTN_STYLE = R"(
   padding: 0;
@@ -377,6 +492,22 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
         "카메라 앞과 구간단속 안에서 제한 속도의 몇 %로 달릴지 정합니다. "
         "100이면 제한 속도 그대로(단속 100km/h → 100km/h), 105면 5% 더 빠르게 (100km/h → 105km/h). 단속 기준을 넘지 않게 주의하세요.",
         90, 120, 1, [](int v) { return QString("%1%").arg(v); }));
+  cam_group.append(value(drive, "HapticFeedbackWhenSpeedCamera", "과속 단속 알림",
+        "과속 단속 카메라 앞에서 감속을 시작할 때 8초 동안 알려 주는 방법입니다.\n"
+        "0:사용 안 함, 1:핸들 진동, 2:계기판 표시 (1·2는 현대·기아·제네시스의 차로 경고 표시를 씁니다), 3:화면에 알림",
+        0, 3, 1, [](int v) {
+          const char *names[] = {"사용 안 함", "핸들 진동", "계기판 표시", "화면 알림"};
+          return QString(names[std::clamp(v, 0, 3)]);
+        }));
+  cam_group.append(value(drive, "OptechNaviLinkMode", "내비 연동 방식",
+        "카메라 정보를 어디서 받을지 정합니다.\n0:내비 안 씀 (내장 카메라 DB만, 내비 앱이 보내는 정보는 무시)\n"
+        "1:APM(내비 앱)\n2:APM + 순정 내비게이션\n3:NDA\n"
+        "내비 앱은 폰과 이 기기가 같은 와이파이나 핫스팟에 연결돼 있어야 합니다. 앱 정보가 있으면 먼저 쓰고, 없을 때는 내장 카메라 DB로 채웁니다. "
+        "바꾼 뒤 재부팅해야 적용됩니다.",
+        0, 3, 1, [](int v) {
+          const char *names[] = {"내비 안 씀", "APM", "APM+순정", "NDA"};
+          return QString(names[std::clamp(v, 0, 3)]);
+        }));
   cam_group.append(toggle(drive, "OptechSpeedCam", "내장 카메라 DB",
          "내비 앱 없이 기기 GPS로 앞쪽 고정식 단속카메라(과속·신호과속·구간단속)를 찾습니다.\n"
          "전국 약 3만 1천 대(공공데이터, 2026년 10월)의 위치가 기기에 들어 있습니다. 구간단속은 구간이 끝날 때까지 제한속도를 지킵니다.\n\n"
@@ -387,6 +518,20 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
   // visibility only after addItem (a widget without a parent would open as its own window and crash the C2 UI)
   for (auto w : cam_group) w->setVisible(params.getBool("OptechSpeedCamDecel"));
   QObject::connect(cam_decel, &ToggleControl::toggleFlipped, [=](bool on) { for (auto w : cam_group) w->setVisible(on); });
+
+  // 신호등 (selfdrive/controls/lib/optech_signal.py, StarPilot's stop light detector): HUD light + green light alert
+  drive->addItem(optech_section("신호등"));
+  ParamControl *signal_on = toggle(drive, "OptechSignalEnable", "신호등 사용",
+    "켜 두면 주행 모델의 예측으로 빨간불·초록불을 판단해 주행 화면 가운데 위에 신호등을 보여 줍니다. "
+    "차가 신호에 맞춰 서거나 출발하지는 않고, 화면 표시와 알림에만 씁니다.\n"
+    "신호등을 직접 보는 것이 아니라서 노란불은 없고, 서지 않고 지나가는 초록불에서는 아무것도 켜지지 않습니다. "
+    "끄면 신호등 표시와 초록불 알림이 모두 꺼집니다.");
+  ParamControl *green_alert = toggle(drive, "OptechGreenAlert", "초록불 알림",
+    "빨간불에 서 있다가 초록불로 바뀌면 소리와 함께 '초록불로 바뀌었어요'를 띄워 줍니다. 오픈파일럿이 켜져 있을 때만 알려 줍니다.\n"
+    "신호등을 직접 보는 것이 아니라, 주행 모델이 멈출지 출발할지 예측한 것으로 판단합니다. "
+    "앞차가 출발할 때도 울릴 수 있고, 늦거나 빠를 수 있으니 출발 전에는 꼭 신호를 직접 확인하세요.");
+  green_alert->setVisible(params.getBool("OptechSignalEnable"));
+  QObject::connect(signal_on, &ToggleControl::toggleFlipped, [=](bool on) { green_alert->setVisible(on); });
 
   // ======== 속도 ========
   speed->addItem(optech_note("이 탭의 설정은 openpilot이 가감속을 맡는 차량에서만 동작합니다. 차의 원래 크루즈를 쓰는 차량은 변화가 없습니다."));
@@ -454,6 +599,17 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
     });
     lm_refresh();
   }
+  value(steer, "PathOffset", "경로 좌우 보정 (쏠릴 때)",
+        "차가 차로 안에서 한쪽으로 치우쳐 달리면 보정합니다. -값:왼쪽으로, +값:오른쪽으로 옮깁니다(cm). 주행 중에도 몇 초 안에 적용됩니다.",
+        -50, 50, 1, [](int v) { return v == 0 ? QString("0") : QString("%1%2 cm").arg(v > 0 ? "+" : "").arg(v); });
+  toggle(steer, "NNFF", "NNFF 조향 보정",
+         "차종별로 미리 학습된 작은 신경망으로 커브에서 필요한 핸들 힘을 더 정확히 계산합니다(twilsonco NNFF, 당근 c3-wip에서 이식). "
+         "현대·기아·제네시스 일부 차종에만 모델이 있고, 모델이 없는 차(K7, 그랜저 IG 등)는 켜도 기존 방식 그대로입니다. "
+         "조향 방식이 토크인 차량에서만 동작합니다. 재부팅해야 적용됩니다.");
+  toggle(steer, "NNFFLite", "NNFF 라이트",
+         "NNFF 모델이 없는 차(K7, 그랜저 등)용입니다. 주행 모델이 예상한 앞쪽 커브 변화를 미리 보고, 커브에 들어가거나 나올 때 핸들 마찰 보정을 "
+         "미리 넣어 늦게 꺾이거나 늦게 풀리는 느낌을 줄입니다. 보정 크기는 기존 마찰 값 안으로 제한됩니다. "
+         "모델이 있는 차에서 NNFF를 켜면 NNFF가 우선합니다. 조향 방식이 토크인 차량에서만 동작합니다. 재부팅해야 적용됩니다.");
   value(steer, "dp_lat_lane_change_assist_speed", "차선변경 최소 속도",
         "방향지시등을 켰을 때 이 속도 이상이면 차선 변경을 도와줍니다. 끄기: 차선 변경 보조를 쓰지 않습니다.",
         0, 80, 5, [](int v) { return v == 0 ? QString("끄기") : QString("%1 km/h").arg((int)std::round(v * 1.609)); });
@@ -537,8 +693,44 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
     });
     disp->addItem(dim_btn);
   }
+  toggle(disp, "OptechShowRecordBtn", "녹화 버튼",
+    "켜 두면(초록색) 주행 화면 오른쪽 아래에 동그란 'REC' 녹화 버튼이 보입니다. 누르면 기기 화면을 동영상으로 녹화하고 "
+    "(녹화 중에는 버튼이 빨갛게 깜빡입니다), 다시 누르면 멈춥니다. 영상은 3분마다 나뉘어 기기 저장공간(videos 폴더)에 남습니다. "
+    "주행 영상을 남기고 싶을 때만 켜세요. 끄면 버튼이 사라지고 하던 녹화도 멈춥니다.");
+  toggle(disp, "ShowTpms", "타이어 공기압",
+         "주행 화면 오른쪽 맨 아래 칸에 네 바퀴의 타이어 공기압(psi)을 보여 줍니다. 위 줄이 앞바퀴(왼쪽·오른쪽), 아래 줄이 뒷바퀴입니다. "
+         "현대·기아·제네시스처럼 공기압을 보내는 차에서만 나옵니다.");
+  toggle(disp, "ShowGpsInfo", "GPS 상태",
+         "주행 화면 왼쪽 위(연결 표시 옆)에 GPS가 잡혔는지와 신호 세기(막대 4칸)를 보여 줍니다. 초록: 잘 잡힘, 주황: 찾는 중·약함. "
+         "GPS는 시동이 켜져 있을 때만 동작합니다.");
   toggle(disp, "OptechShowDeviceState", "기기 상태",
-         "주행 화면 속도 상자 위에 CPU 온도, CPU 사용률, 화면 FPS를 보여 줍니다. 너무 높으면 빨갛게 깜빡입니다.");
+         "주행 화면 오른쪽 가운데 칸에 기기의 CPU 온도와 CPU 사용률을 보여 줍니다. 80°C를 넘거나 사용률이 90%를 넘으면 빨갛게 깜빡입니다.");
+  toggle(disp, "ShowBlindSpot", "후측방(BSD) 경고",
+         "옆 차로 뒤쪽에 차가 있으면 화면 양옆에 노란 '차량 주의' 표시가 뜹니다. 그쪽으로 방향지시등을 켜면 빨간 표시와 "
+         "'왼쪽/오른쪽 차량 주의' 글이 깜빡입니다. 시속 30km 이상에서만 보이고, 차에 후측방 감지(BSD)가 있어야 합니다.");
+  // ShowRadarInfo '레이더 물체 표시': 0 off, 1 moving objects + speed, 2 also how far to the side, 3 also stopped ones
+  {
+    ButtonControl *radar_btn = new ButtonControl("", "선택",
+      "앞 레이더가 잡은 주변 물체를 주행 화면에 네모로 보여 줍니다. 네모 안 숫자는 그 물체의 속도(km/h)입니다.\n"
+      "초록: 같은 방향으로 가는 물체, 빨강: 마주 오는 물체, 주황 '정지': 서 있는 물체.\n"
+      "사람·차·오토바이 같은 종류는 구별하지 못합니다. 레이더가 여러 물체를 보내 주는 차에서만 여러 개가 나옵니다.\n"
+      "서 있는 물체까지 보이게 하면 가드레일·표지판도 잡혀서 화면이 복잡해질 수 있습니다.");
+    const QStringList radar_names = {"안 보임", "움직이는 물체", "움직이는 물체 + 옆 거리", "전부 (서 있는 물체까지)"};
+    auto radar_name = [=]() {
+      return "레이더 물체 표시: " + radar_names[std::clamp(std::atoi(params.get("ShowRadarInfo").c_str()), 0, 3)];
+    };
+    radar_btn->setTitle(radar_name());
+    QObject::connect(radar_btn, &ButtonControl::clicked, [=]() {
+      const QString sel = MultiOptionDialog::getSelection("레이더 물체 표시", radar_names, radar_name().section(": ", 1), this);
+      if (sel.isEmpty()) return;
+      params.put("ShowRadarInfo", std::to_string(radar_names.indexOf(sel)));
+      radar_btn->setTitle(radar_name());
+    });
+    disp->addItem(radar_btn);
+  }
+  toggle(disp, "ShowConnInfo", "APM 연결 표시",
+         "주행 화면 왼쪽 위에 연결 상태 표시를 보여 줍니다. APM·APN: 내비 앱 연결, NDA: 차의 고속도로 주행 보조 연결, "
+         "SCC2: 크루즈(SCC)가 카메라 쪽에 있는 차, RadarTracks: 레이더가 여러 물체를 보내는 차.");
   // '운전자 모니터링 아이콘' (ShowDmInfo 0 / 1); the mode itself is chosen on the 토글 page
   dm_icon = new ToggleControl("운전자 모니터링 아이콘",
     "주행 화면 왼쪽 위에 운전자 모니터링 아이콘(얼굴 모양)을 보여 줍니다. 토글 화면의 운전자 모니터링이 '기본 사용'일 때만 쓸 수 있습니다.",
@@ -555,6 +747,28 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
 
   // ======== 고급 ========
   adv->addItem(optech_section("기기"));
+  // 'GPS 확인' (optech-hkg): GpsCheck keeps the uBlox (boardd) and ubloxd on with the car off while the screen is open
+  {
+    ButtonControl *gps_btn = new ButtonControl("GPS 확인", "확인",
+      "시동을 걸지 않아도 GPS를 켜서 잡힘 여부, 신호 세기, 위성 수, 위치 오차를 실시간으로 보여 줍니다. "
+      "GPS 안테나가 제대로 연결됐는지 확인할 때 쓰세요. 창을 닫으면 GPS도 다시 꺼집니다.");
+    QObject::connect(gps_btn, &ButtonControl::clicked, [=]() {
+      params.putBool("GpsCheck", true);
+      ConfirmationDialog d(optech_gps_check_text(0), "닫기", "", true, this);
+      QLabel *label = d.findChild<QLabel *>();
+      QElapsedTimer started;
+      started.start();
+      QTimer refresh;
+      QObject::connect(&refresh, &QTimer::timeout, [&]() {
+        if (label) label->setText(optech_gps_check_text(started.elapsed() / 1000));
+      });
+      refresh.start(500);
+      d.exec();
+      refresh.stop();
+      params.putBool("GpsCheck", false);
+    });
+    adv->addItem(gps_btn);
+  }
   // OptechOffShutdown '시동 끈 뒤 꺼짐' (selfdrive/thermald/power_monitoring.py, read every few seconds)
   {
     ButtonControl *off_btn = new ButtonControl("", "선택",
@@ -588,6 +802,63 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
   toggle(adv, "dp_logging", "주행 기록 저장",
          "주행 중 차량 정보와 카메라 영상을 기기에 저장합니다. 문제가 생겼을 때 원인을 찾는 데 꼭 필요합니다.\n"
          "새 주행 모델(아래 '옛 주행 모델 사용' 끔)과 함께 쓰면 기기가 느려질 수 있습니다.\n재부팅해야 적용됩니다.");
+  // optech-hkg: selfdrive/optech/drivelog.py writes /data/drivelog/<date>-<time>.txt while driving
+  ButtonControl *drivelog_btn = new ButtonControl("주행 기록 보기", "보기",
+    "주행할 때마다 자동으로 남는 간단한 기록입니다. 고른 주행에서 켜짐·꺼짐, 경고, 오류, 프로그램 멈춤을 시간순으로 보여 줍니다. (최근 30번 보관)");
+  QObject::connect(drivelog_btn, &ButtonControl::clicked, [=]() {
+    const QString dir_path = "/data/drivelog";
+    QDir dir(dir_path);
+    const QStringList files = dir.entryList(QStringList() << "2*.txt" << "1*.txt", QDir::Files, QDir::Name | QDir::Reversed);
+    if (files.isEmpty()) {
+      ConfirmationDialog::alert("아직 주행 기록이 없어요.", this);
+      return;
+    }
+    QStringList labels;  // file name YYYYmmdd-HHMMSS.txt -> "11/18 08:30 주행"
+    for (const QString &f : files) {
+      labels << QString("%1/%2 %3:%4 주행").arg(f.mid(4, 2), f.mid(6, 2), f.mid(9, 2), f.mid(11, 2));
+    }
+    const QString sel = MultiOptionDialog::getSelection("볼 주행을 고르세요", labels, "", this);
+    if (sel.isEmpty()) return;
+    const QString file = files[labels.indexOf(sel)];
+    QString first_time, last_time;
+    QStringList events;
+    const QStringList lines = QString::fromStdString(util::read_file((dir_path + "/" + file).toStdString())).split('\n');
+    for (const QString &line : lines) {
+      if (line.isEmpty() || line.startsWith("#")) continue;
+      const QString t = line.left(5);  // HH:MM
+      if (first_time.isEmpty()) first_time = t;
+      last_time = t;
+      if (line.contains(" ** ")) events << line.left(8) + "  " + line.mid(line.indexOf(" ** ") + 4);
+    }
+    QString text = sel + (first_time.isEmpty() ? "" : " (" + first_time + " ~ " + last_time + ")") + "\n\n";
+    if (events.isEmpty()) {
+      text += "경고나 오류 없이 정상이었어요.";
+    } else {
+      if (events.size() > 200) {
+        text += QString("(앞부분 %1줄 생략)\n").arg(events.size() - 200);
+        events = events.mid(events.size() - 200);
+      }
+      text += events.join("\n");
+    }
+    ConfirmationDialog d(text, "확인", "", true, this);
+    d.exec();
+  });
+  adv->addItem(drivelog_btn);
+  ButtonControl *drivelog_get_btn = new ButtonControl("주행 기록 내려받기", "QR 보기",
+    "주행 기록을 폰으로 받아 카카오톡 등으로 보낼 수 있습니다. 누르면 QR 코드가 뜨고, 폰으로 찍으면 기록 목록이 열립니다. "
+    "기록에는 켜짐·꺼짐, 경고, 오류와 1초마다의 주행 상태가 들어 있고, 위치(좌표)는 들어 있지 않습니다. "
+    "폰이 이 기기와 같은 와이파이나 핫스팟에 연결돼 있어야 합니다.");
+  QObject::connect(drivelog_get_btn, &ButtonControl::clicked, [=]() {
+    const QStringList urls = optech_log_page_urls();
+    if (urls.isEmpty()) {
+      ConfirmationDialog::alert("와이파이나 핫스팟에 연결돼 있지 않아요. 폰 핫스팟에 이 기기를 연결하거나, '부팅 시 핫스팟 켜기'로 "
+                                "이 기기의 핫스팟을 켠 뒤 폰을 연결하고 다시 눌러 주세요.", this);
+      return;
+    }
+    params.put("OptechLogServer", "1");  // logserver.py serves the page for 15 minutes
+    OptechLogQrDialog(this, urls).exec();
+  });
+  adv->addItem(drivelog_get_btn);
 
   adv->addItem(optech_section("실험 모드"));
   op_long_toggle = toggle(adv, "ExperimentalLongitudinalEnabled", "openpilot 가감속 제어 (알파)",

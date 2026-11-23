@@ -62,6 +62,7 @@ class CarController:
     # optech: set speed sync after engaging (set_speed_sync)
     self.set_current_speed = Params().get_bool("OptechCruiseSetCurrent")
     self.ldws_car = Params().get_bool("OptechLdwsCar")  # 토글 > LDWS 차량 (read at start: reboot to apply)
+    self.cam_haptic = 0  # 과속 단속 알림 (read every 5 s in update)
     self.cruise_on_prev = False
     self.sync_target = 0  # set speed to reach, in the cluster unit; 0 = nothing to do
     self.sync_start_frame = 0
@@ -99,6 +100,14 @@ class CarController:
     # HUD messages
     sys_warning, sys_state, left_lane_warning, right_lane_warning = process_hud_alert(CC.enabled, self.car_fingerprint,
                                                                                       hud_control)
+    # optech '과속 단속 알림' 1 핸들 진동 / 2 계기판 표시 (optech-hkg): controlsd sets both lane departs together for it
+    if self.frame % 500 == 0:
+      try:
+        self.cam_haptic = int(Params().get("HapticFeedbackWhenSpeedCamera", encoding="utf8") or 0)
+      except ValueError:
+        self.cam_haptic = 0
+    if hud_control.leftLaneDepart and hud_control.rightLaneDepart and self.cam_haptic in (1, 2):
+      left_lane_warning = right_lane_warning = self.cam_haptic
 
     can_sends = []
 

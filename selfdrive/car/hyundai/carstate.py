@@ -29,6 +29,7 @@ class CarState(CarStateBase):
     self.scc_wrong_frames = 0
     self.scc_bus_changed = False
     self.nexo_gear = GearShifter.unknown
+    self.tpms = [0., 0., 0., 0.]  # optech 주행 화면 (psi; controlsd puts it in controlsStateExt)
     can_define = CANDefine(DBC[CP.carFingerprint]["pt"])
 
     self.cruise_buttons = deque([Buttons.NONE] * PREV_BUTTON_SAMPLES, maxlen=PREV_BUTTON_SAMPLES)
@@ -188,6 +189,10 @@ class CarState(CarStateBase):
       ret.leftBlindspot = cp.vl["LCA11"]["CF_Lca_IndLeft"] != 0
       ret.rightBlindspot = cp.vl["LCA11"]["CF_Lca_IndRight"] != 0
 
+    # optech 주행 화면 '타이어 공기압' (optech-hkg): psi; UNIT > 0 means the car sends kPa-ish steps (x 0.725)
+    tpms_unit = cp.vl["TPMS11"]["UNIT"] * 0.725 if int(cp.vl["TPMS11"]["UNIT"]) > 0 else 1.
+    self.tpms = [tpms_unit * cp.vl["TPMS11"][s] for s in ("PRESSURE_FL", "PRESSURE_FR", "PRESSURE_RL", "PRESSURE_RR")]
+
     # save the entire LKAS11 and CLU11
     self.lkas11 = copy.copy(cp_cam.vl["LKAS11"])
     self.clu11 = copy.copy(cp.vl["CLU11"])
@@ -297,6 +302,7 @@ class CarState(CarStateBase):
       ("CGW4", 5),
       ("WHL_SPD11", 50),
       ("SAS11", 100),
+      ("TPMS11", 0),  # optech 주행 화면 '타이어 공기압': not checked (cars without it stay valid)
     ]
 
     if not CP.openpilotLongitudinalControl and not is_camera_scc(CP):
