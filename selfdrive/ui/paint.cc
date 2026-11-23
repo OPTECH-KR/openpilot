@@ -1072,7 +1072,7 @@ static void drawOptechHud(const UIState* s) {
             nvgBeginPath(s->vg); nvgCircle(s->vg, ccx, cy, d / 2); nvgFillColor(s->vg, nvgRGBA(226, 75, 74, 255)); nvgFill(s->vg);
             nvgBeginPath(s->vg); nvgCircle(s->vg, ccx, cy, d / 2 - 14); nvgFillColor(s->vg, COLOR_WHITE); nvgFill(s->vg);
             snprintf(str, sizeof(str), "%d", metric ? road_limit : (int)(road_limit * KM_TO_MILE + 0.5));
-            optech_text(s, ccx, cy + 3, str, 54, nvgRGBA(44, 44, 42, 255), NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+            optech_text(s, ccx, cy + 0.36f * 64 - 6, str, 64, nvgRGBA(44, 44, 42, 255), NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
         }
         if (limit_speed > 0) {
             const float cellx = lx + cellw + 20, ccx = cellx + cellw / 2, top = y2 + 50, sx = ccx - sg / 2;
@@ -1084,7 +1084,7 @@ static void drawOptechHud(const UIState* s) {
                 nvgBeginPath(s->vg); nvgRoundedRect(s->vg, sx - 4, top - 4, sg + 8, sg + 8, 17);
                 nvgStrokeColor(s->vg, COLOR_WHITE); nvgStrokeWidth(s->vg, 3); nvgStroke(s->vg);
                 snprintf(str, sizeof(str), "%d", metric ? limit_speed : (int)(limit_speed * KM_TO_MILE + 0.5));
-                optech_text(s, ccx - 4, top + sg / 2 + 8, str, 60, nvgRGBA(44, 44, 42, 255), NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+                optech_text(s, ccx, top + sg / 2 + 0.36f * 68 - 6, str, 68, nvgRGBA(44, 44, 42, 255), NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
                 optech_camera_icon(s, sx + sg - 20, top + 20, 15);  // small, inside the sign's top right corner
             }
             if (left_dist > 0) {
@@ -1172,14 +1172,14 @@ static void drawOptechHud(const UIState* s) {
         int mode = 0;
         if (longActiveUser > 0) mode = ts >= 100 ? 3 : (ts % 100);
         if (mode >= 1 && mode <= 3) {
-            const float w = 186, h = 64, x = cx - w / 2, y = 250, r = 22;
+            const float w = 264, h = 88, x = cx - w / 2, y = 250, r = 31;
             carrot_round_box(s, x, y, w, h, nvgRGBA(44, 44, 42, 240), COLOR_WHITE, 14, 3);
             const NVGcolor off = nvgRGBA(95, 94, 90, 255);
             const NVGcolor on[3] = {nvgRGBA(226, 75, 74, 255), nvgRGBA(239, 159, 39, 255), nvgRGBA(99, 153, 34, 255)};
             const int lit = mode == 1 ? 0 : mode == 3 ? 1 : 2;  // 1 red, 3 yellow, 2 green
             for (int i = 0; i < 3; i++) {
                 nvgBeginPath(s->vg);
-                nvgCircle(s->vg, x + w / 2 + (i - 1) * 58, y + h / 2, r);
+                nvgCircle(s->vg, x + w / 2 + (i - 1) * 82, y + h / 2, r);
                 nvgFillColor(s->vg, i == lit ? on[i] : off);
                 nvgFill(s->vg);
             }
@@ -1222,7 +1222,7 @@ static void drawOptechHud(const UIState* s) {
                 else snprintf(str, sizeof(str), "%s", label);
                 nvgFontSize(s->vg, 44);
                 float b[4]; nvgTextBounds(s->vg, 0, 0, str, NULL, b);
-                const float tw = b[2] - b[0], iw = img ? 80 : 0, w = tw + iw + 50, h = 84, x = cx - w / 2, y = 328;  // under the traffic light
+                const float tw = b[2] - b[0], iw = img ? 80 : 0, w = tw + iw + 50, h = 84, x = cx - w / 2, y = 352;  // under the traffic light
                 carrot_round_box(s, x, y, w, h, nvgRGBA(0, 0, 0, 120), nvgRGBA(0, 0, 0, 0), 12, 0);
                 if (img) ui_draw_image(s, {(int)(x + 16), (int)(y + 2), 80, 80}, img, 1.0f);
                 optech_text(s, x + 25 + iw, y + h / 2 + 2, str, 44, COLOR_WHITE, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
