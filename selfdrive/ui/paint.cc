@@ -966,6 +966,12 @@ static void optech_text(const UIState* s, float x, float y, const char* str, flo
     ui_draw_text(s, x, y, str, size, color, BOLD, 2.0f, 0.0f);
 }
 
+// text whose letters sit vertically centred on cy (digits and Hangul both reach about 0.72 size above the baseline;
+// ui_draw_text adds 6). halign: NVG_ALIGN_LEFT / CENTER / RIGHT
+static void optech_text_vc(const UIState* s, float x, float cy, const char* str, float size, NVGcolor color, int halign) {
+    optech_text(s, x, cy + 0.36f * size - 6, str, size, color, halign | NVG_ALIGN_BASELINE);
+}
+
 static void optech_chevron(const UIState* s, float x, float y, float w, float h, bool right, NVGcolor color) {
     const float d = right ? 1.f : -1.f, t = w * 0.42f;  // arrow head, line thickness
     const float tip = x + (right ? w : 0), back = x + (right ? 0 : w);
@@ -1186,12 +1192,40 @@ static void drawOptechHud(const UIState* s) {
         }
     }
 
-    // 5) gear box (GPS speed moved next to the big speed, user 2026-11-23)
+    // 5) following distance + gear in one box (user 2026-11-23): left "차간 거리" with 4 steps like the car's
+    //    cluster, right the gear letter on a coloured tile (D green, R red, N amber, P grey)
     {
-        const float w = CW, h = 70, top = y3 + 124 + 14;
+        const float w = CW, h = 96, top = y3 + 124 + 14;
         carrot_round_box(s, lx, top, w, h, nvgRGBA(0, 0, 0, 90), nvgRGBA(136, 135, 128, 255), 14, 2);
-        optech_text(s, lx + 20, top + h / 2 + 2, "기어", 32, label_c, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-        optech_text(s, lx + w - 24, top + h / 2 + 2, carrot_gear_text(car_state.getGearShifter()), 50, COLOR_WHITE, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+        // stock SCC: the car's own gap setting (SCC11 TauGapSet); openpilot long: openpilot's gap
+        const int gap = car_params.getOpenpilotLongitudinalControl() ? (int)controls_state.getLongCruiseGap()
+                                                                     : (int)car_state.getCruiseGap();
+        const float gl = lx + 20, gr = lx + 214;  // left part
+        optech_text_vc(s, gl, top + 30, "차간 거리", 30, label_c, NVG_ALIGN_LEFT);
+        if (gap >= 1 && gap <= 4) snprintf(str, sizeof(str), "%d%s", gap, "단계");
+        else snprintf(str, sizeof(str), "--");
+        optech_text_vc(s, gr, top + 30, str, 30, COLOR_WHITE, NVG_ALIGN_RIGHT);
+        const float sgap = 8, segw = (gr - gl - 3 * sgap) / 4, segh = 22, segy = top + 56;
+        for (int i = 0; i < 4; i++) {
+            nvgBeginPath(s->vg);
+            nvgRoundedRect(s->vg, gl + i * (segw + sgap), segy, segw, segh, 6);
+            nvgFillColor(s->vg, i < gap ? nvgRGBA(151, 196, 89, 255) : nvgRGBA(255, 255, 255, 45));
+            nvgFill(s->vg);
+        }
+        // divider
+        nvgBeginPath(s->vg);
+        nvgMoveTo(s->vg, lx + 234, top + 16); nvgLineTo(s->vg, lx + 234, top + h - 16);
+        nvgStrokeColor(s->vg, nvgRGBA(136, 135, 128, 255)); nvgStrokeWidth(s->vg, 2); nvgStroke(s->vg);
+        // gear tile
+        const auto gear = car_state.getGearShifter();
+        NVGcolor gfill = nvgRGBA(95, 94, 90, 255);
+        if (gear == cereal::CarState::GearShifter::DRIVE || gear == cereal::CarState::GearShifter::SPORT ||
+            gear == cereal::CarState::GearShifter::LOW || gear == cereal::CarState::GearShifter::ECO) gfill = nvgRGBA(59, 109, 17, 255);
+        else if (gear == cereal::CarState::GearShifter::REVERSE) gfill = nvgRGBA(226, 75, 74, 255);
+        else if (gear == cereal::CarState::GearShifter::NEUTRAL) gfill = nvgRGBA(186, 117, 23, 255);
+        const float ts = 68, tcx = (lx + 234 + lx + w) / 2, tcy = top + h / 2;
+        carrot_round_box(s, tcx - ts / 2, tcy - ts / 2, ts, ts, gfill, COLOR_WHITE, 12, 3);
+        optech_text_vc(s, tcx, tcy, carrot_gear_text(gear), 54, COLOR_WHITE, NVG_ALIGN_CENTER);
     }
 
     // ======================= top centre =======================
@@ -2450,6 +2484,12 @@ static void ui_draw_gps_info(const UIState* s) {
     else if (acc <= 5.0f) { state = "잡힘"; color = nvgRGBA(0, 230, 0, 255); }
     else if (acc <= 15.0f) { state = "잡힘"; color = COLOR_YELLOW; }
     else { state = "약함"; color = COLOR_OCHRE; }
+    if (s->show_mode == 7) {  // the optech HUD's own soft grey / red / green / amber
+        if (!gnss_alive && !loc_alive) color = nvgRGBA(180, 178, 169, 255);
+        else if (gps_antenna_bad) color = nvgRGBA(240, 149, 149, 255);
+        else if (fixed && acc <= 5.0f) color = nvgRGBA(151, 196, 89, 255);
+        else color = nvgRGBA(250, 199, 117, 255);
+    }
 
     // no middle dot / degree sign: the font has neither and stops drawing the string there
     char str[96];
@@ -2458,9 +2498,32 @@ static void ui_draw_gps_info(const UIState* s) {
     else if (gnss_alive) snprintf(str, sizeof(str), "GPS %s  %s %d%s(%s %d)", state, "위성", gps_sats, "개", "강", gps_strong);
     else snprintf(str, sizeof(str), "GPS %s", state);
 
+    const int bars = gps_cno >= 35 ? 4 : gps_cno >= 30 ? 3 : gps_cno >= 25 ? 2 : gps_cno >= 20 ? 1 : 0;
+    if (s->show_mode == 7) {
+        // optech HUD: a box as high as the APN badge beside it, styled like the other HUD boxes (user 2026-11-23:
+        // the loose bars + text sat off centre and looked untidy). Bars and text both centred in the box.
+        const float bx = g_gps_x, by0 = 20, bh = 54, cy = by0 + bh / 2, fs = 30;
+        const float bw = 8, gap = 4, barsw = 4 * bw + 3 * gap, maxbar = 30;
+        nvgFontFace(s->vg, BOLD);
+        nvgFontSize(s->vg, fs);
+        float tb[4];
+        nvgTextBounds(s->vg, 0, 0, str, NULL, tb);
+        const float w = 18 + barsw + 14 + (tb[2] - tb[0]) + 20;
+        carrot_round_box(s, bx, by0, w, bh, nvgRGBA(0, 0, 0, 110), nvgRGBA(136, 135, 128, 255), 14, 2);
+        const float bottom = cy + maxbar / 2;
+        for (int i = 0; i < 4; i++) {
+            const float h = 12 + i * 6;
+            nvgBeginPath(s->vg);
+            nvgRoundedRect(s->vg, bx + 18 + i * (bw + gap), bottom - h, bw, h, 2);
+            nvgFillColor(s->vg, i < bars ? color : nvgRGBA(255, 255, 255, 55));
+            nvgFill(s->vg);
+        }
+        optech_text_vc(s, bx + 18 + barsw + 14, cy, str, fs, color, NVG_ALIGN_LEFT);
+        return;
+    }
+
     // top left, in the badge row after SCC2 and the navigation badge (drawLeadApilot sets g_gps_x past them)
     const float fsize = 32, by = 64;  // badges are 20..74 high
-    const int bars = gps_cno >= 35 ? 4 : gps_cno >= 30 ? 3 : gps_cno >= 25 ? 2 : gps_cno >= 20 ? 1 : 0;
     const float bw = 9, gap = 4;
     for (int i = 0; i < 4; i++) {  // signal bars: <20 dB-Hz none, then one bar per 5 dB-Hz up to 35+
         const float bh = 8 + i * 6;
