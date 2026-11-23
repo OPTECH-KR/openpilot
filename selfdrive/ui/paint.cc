@@ -1061,7 +1061,7 @@ static void drawOptechHud(const UIState* s) {
 
     // 3) road limit + camera / bump sign (second row, only with navigation data). Every left item is CW wide and
     //    the two signs sit in equal cells, so the column lines up (user: the left side looked untidy)
-    const float CW = 340, cellw = (CW - 20) / 2, sg = 116;  // column width, sign cell width, sign size
+    const float CW = 340, cellw = (CW - 20) / 2, sg = 124;  // column width, sign cell width, sign size (both signs)
     const NVGcolor label_c = nvgRGBA(211, 209, 199, 255);
     float y2 = ry + 54 + 18;
     const bool sign_row = road_limit > 0 || limit_speed > 0;
@@ -1089,10 +1089,10 @@ static void drawOptechHud(const UIState* s) {
             }
             if (left_dist > 0) {
                 optech_dist_text(str, sizeof(str), left_dist, " 남음");
-                const float bh = 46, btop = top + sg + 10;
+                const float bw = sg + 8, bh = 44, btop = top + sg + 12;  // same width as the sign with its outline
                 const float a = std::clamp((600.f - left_dist) / 600.f, 0.25f, 1.f);  // fills redder as it gets close
-                carrot_round_box(s, cellx, btop, cellw, bh, nvgRGBA(226, 75, 74, (int)(255 * a)), COLOR_WHITE, 10, 3);
-                optech_text(s, ccx, btop + bh / 2 + 2, str, 30, COLOR_WHITE, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+                carrot_round_box(s, ccx - bw / 2, btop, bw, bh, nvgRGBA(226, 75, 74, (int)(255 * a)), COLOR_WHITE, 10, 3);
+                optech_text(s, ccx, btop + bh / 2 + 2, str, 27, COLOR_WHITE, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
             }
         }
     }
@@ -1100,7 +1100,7 @@ static void drawOptechHud(const UIState* s) {
     // 4) set speed box (moves up when there is no navigation sign row)
     const float applyMaxSpeed = controls_state.getVCruiseOut();
     const float cruiseMaxSpeed = controls_state.getVCruiseCluster();
-    float y3 = sign_row ? y2 + 42 + sg + 10 + 46 + 18 : y2;
+    float y3 = sign_row ? y2 + 42 + sg + 12 + 44 + 18 : y2;
     {
         const float w = CW, h = 124;
         NVGcolor fill = nvgRGBA(95, 94, 90, 230), line = nvgRGBA(136, 135, 128, 255);
