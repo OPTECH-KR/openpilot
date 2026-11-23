@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include <QDebug>
+#include <QMouseEvent>
 
 #include "selfdrive/common/timing.h"
 #include "selfdrive/ui/paint.h"
