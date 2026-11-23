@@ -831,7 +831,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   selectCar = new SelectCar(this);
   connect(selectCarBtn, &QPushButton::clicked, [=]() { main_layout->setCurrentWidget(selectCar); });
   connect(selectCar, &SelectCar::backPress, [=]() { main_layout->setCurrentWidget(homeScreen); });
-  // '레이 EV 설정' / '포터 II EV 설정' / '볼트 EV 설정': shown open right under the car button while that car is the
+  // '레이 EV 설정' / '포터 II EV 설정': shown open right under the car button while that car is the
   // chosen one; choosing such a car also pops up a note to check them
   for (int i = 0; i < CcOnlyCarPage::count(); i++) {
     CcOnlyCarPage* page = new CcOnlyCarPage(i, this);
@@ -1070,8 +1070,8 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     lm_refresh();
   }
   steerToggles->addItem(new CValueControl("PathOffset", "경로 좌우 보정 (쏠릴 때)", "차가 차로 안에서 한쪽으로 치우쳐 달리면 보정합니다. -값:왼쪽으로, +값:오른쪽으로 옮깁니다.", ROAD_ICON, -200, 200, 1));
-  steerToggles->addItem(new CValueControl("NNFF", "NNFF 조향 보정", "차종별로 미리 학습된 작은 신경망으로 커브에서 필요한 핸들 힘을 더 정확히 계산합니다(twilsonco NNFF, 당근 c3-wip에서 이식). 현대·기아·제네시스 31개 차종에만 모델이 있고, 모델이 없는 차(K7, 그랜저 IG, 볼트 등)는 켜도 기존 방식 그대로입니다. 토크 조향 차량에서만 동작합니다. 0:끄기, 1:켜기. 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 1, 1));
-  steerToggles->addItem(new CValueControl("NNFFLite", "NNFF 라이트", "NNFF 모델이 없는 차(K7, 그랜저, 볼트 등)용입니다. 주행 모델이 예상한 앞쪽 커브 변화를 미리 보고, 커브에 들어가거나 나올 때 핸들 마찰 보정을 미리 넣어 늦게 꺾이거나 늦게 풀리는 느낌을 줄입니다. 보정 크기는 기존 마찰 값 안으로 제한됩니다. 모델이 있는 차에서 NNFF를 켜면 NNFF가 우선합니다. 토크 조향 차량에서만 동작합니다. 0:끄기, 1:켜기. 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 1, 1));
+  steerToggles->addItem(new CValueControl("NNFF", "NNFF 조향 보정", "차종별로 미리 학습된 작은 신경망으로 커브에서 필요한 핸들 힘을 더 정확히 계산합니다(twilsonco NNFF, 당근 c3-wip에서 이식). 현대·기아·제네시스 31개 차종에만 모델이 있고, 모델이 없는 차(K7, 그랜저 IG 등)는 켜도 기존 방식 그대로입니다. 토크 조향 차량에서만 동작합니다. 0:끄기, 1:켜기. 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 1, 1));
+  steerToggles->addItem(new CValueControl("NNFFLite", "NNFF 라이트", "NNFF 모델이 없는 차(K7, 그랜저 등)용입니다. 주행 모델이 예상한 앞쪽 커브 변화를 미리 보고, 커브에 들어가거나 나올 때 핸들 마찰 보정을 미리 넣어 늦게 꺾이거나 늦게 풀리는 느낌을 줄입니다. 보정 크기는 기존 마찰 값 안으로 제한됩니다. 모델이 있는 차에서 NNFF를 켜면 NNFF가 우선합니다. 토크 조향 차량에서만 동작합니다. 0:끄기, 1:켜기. 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 1, 1));
   steerToggles->addItem(new CValueControl("AutoLaneChangeSpeed", "차선변경 최소 속도", "방향지시등을 켰을 때 자동 차선 변경이 되는 최소 속도(km/h)입니다.", ROAD_ICON, 5, 60, 5));
   steerToggles->addItem(carrot_section("커브"));
   steerToggles->addItem(new CValueControl("AutoCurveSpeedCtrlUse", "커브 자동 감속", "커브를 만나면 미리 속도를 줄입니다. 0:사용 안 함, 1·3:도로 설계 기준(주행 경로의 휘어짐으로 계산), 2:당근 방식(카메라로 앞 커브를 보고 거리에 맞춰 미리 감속)", ROAD_ICON, 0, 3, 1));
@@ -1667,14 +1667,7 @@ static const CcOnlyCarEntry CC_ONLY_CARS[] = {
    "페달 보정값은 스타파일럿이 실제 레이 EV로 맞춘 값을 씁니다(당근파일럿도 같은 값). 아래 '페달 세게'와 '속도 오차 보정'은 당근파일럿 방식입니다."},
   {"HYUNDAI PORTER II EV 2024", "포터 II EV", "Porter", 40, 10, 70, true, NON_SCC_INTRO, NON_SCC_PEDAL,
    "포터는 아직 실제 차로 맞춘 페달 보정값이 없어 레이 EV 값을 임시로 씁니다. 안전한 곳에서 낮은 상한으로 먼저 확인하고, 필요하면 보정값을 맞춰야 합니다."},
-  {"CHEVROLET BOLT EV NO ACC", "볼트 EV", "Bolt", 100, 20, 100, false,
-   "어댑티브 크루즈(ACC)가 없는 볼트 EV(2017~2021)입니다. 카메라 하네스로 연결합니다. 페달 장치가 없으면 openpilot은 조향만 하고, "
-   "차의 일반 크루즈를 켜면 함께 켜집니다. 레이더가 없으니 앞차와의 거리는 항상 운전자가 지켜 주세요. "
-   "아직 실제 차로 시험하지 않았으니, 처음에는 'openpilot 사용'을 끄고(읽기 전용) 짧게 달려 본 뒤 조향을 켜 주세요.",
-   "comma 페달 장치를 단 경우에만 켜세요(스타파일럿 볼트 EV 방식). 켜면 openpilot이 가속페달로 가감속을 맡습니다. "
-   "기어는 L(원페달) 모드여야 하고, 차의 크루즈 메인 버튼은 꺼 둔 채 SET 또는 RES 버튼으로 켭니다. "
-   "브레이크 장치가 없어 감속은 회생제동만큼만 됩니다. 페달 장치가 인식되지 않으면 켜 두어도 조향만 합니다. 재부팅해야 적용됩니다.",
-   "기본 100%는 스타파일럿 그대로입니다. 저속에서는 스타파일럿이 따로 정한 상한(정지 근처 20%부터)이 먼저 적용됩니다."},
+  // (the Chevrolet Bolt EV page was removed 2026-11-23: optech-hkg is Hyundai / Kia / Genesis only)
 };
 
 int CcOnlyCarPage::count() { return sizeof(CC_ONLY_CARS) / sizeof(CC_ONLY_CARS[0]); }
@@ -1699,12 +1692,6 @@ CcOnlyCarPage::CcOnlyCarPage(int index, QWidget* parent): QWidget(parent) {
   if (e.speed_buttons) {
     list->addItem(new ParamControl(prefix + "SpeedButtons", "크루즈 속도 자동 조절",
       "페달을 쓰지 않을 때, openpilot이 크루즈 버튼을 대신 눌러 설정 속도를 바꿉니다(커브·과속카메라 감속 등). 크루즈가 브레이크를 세게 걸지 못하므로 앞차와의 거리는 항상 운전자가 지켜야 합니다. 기본은 꺼짐(조향만).", SHELL_ICON, this));
-  }
-
-  if (prefix == "Bolt") {
-    list->addItem(new ParamControl("BoltYear2017", "2017년식",
-      "2017년식 볼트 EV면 켜세요. 2017년식은 핸들 모터(EPS)가 약해서, 스타파일럿의 2017년식 조향 튜닝과 더 큰 조향 힘 한도를 씁니다. "
-      "2018~2021년식은 끈 채로 두세요. 재부팅해야 적용됩니다.", SHELL_ICON, this));
   }
 
   list->addItem(carrot_section("페달 (comma 페달 장치)"));

@@ -97,8 +97,6 @@ def car_attr_name(brand, fingerprint):
   try:
     if brand == "hyundai":
       from selfdrive.car.hyundai.values import CAR
-    elif brand == "gm":
-      from selfdrive.car.gm.values import CAR
     else:
       return None
   except Exception:
