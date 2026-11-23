@@ -1088,7 +1088,7 @@ static void drawOptechHud(const UIState* s) {
             nvgBeginPath(s->vg); nvgCircle(s->vg, cx, cy, d / 2 - 13); nvgFillColor(s->vg, COLOR_WHITE); nvgFill(s->vg);
             snprintf(str, sizeof(str), "%d", metric ? road_limit : (int)(road_limit * KM_TO_MILE + 0.5));
             optech_text(s, cx, cy + 4, str, 56, nvgRGBA(44, 44, 42, 255), NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-            sx += d + 30;
+            sx += d + 40;
         }
         if (limit_speed > 0) {
             const float w = 130, cx = sx + w / 2, top = y2 + 40;
@@ -1101,7 +1101,7 @@ static void drawOptechHud(const UIState* s) {
                 nvgStrokeColor(s->vg, COLOR_WHITE); nvgStrokeWidth(s->vg, 3); nvgStroke(s->vg);
                 snprintf(str, sizeof(str), "%d", metric ? limit_speed : (int)(limit_speed * KM_TO_MILE + 0.5));
                 optech_text(s, cx, top + w / 2 + 4, str, 64, nvgRGBA(44, 44, 42, 255), NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-                optech_camera_icon(s, sx + w - 4, top + 4, 22);
+                optech_camera_icon(s, sx + w + 6, top + w / 2, 22);
             }
             if (left_dist > 0) {
                 optech_dist_text(str, sizeof(str), left_dist, " 남음");
@@ -1157,7 +1157,7 @@ static void drawOptechHud(const UIState* s) {
         if (gps_ok) snprintf(str, sizeof(str), "GPS %d", (int)(std::max(sm["gpsLocationExternal"].getGpsLocationExternal().getSpeed() * unit, 0.f) + 0.5f));
         else snprintf(str, sizeof(str), "GPS --");
         optech_text(s, lx + 22, top + h / 2 + 2, str, 42, gps_ok ? COLOR_WHITE : nvgRGBA(180, 178, 169, 255), NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-        snprintf(str, sizeof(str), "기어 %s", carrot_gear_text(car_state.getGearShifter()));
+        snprintf(str, sizeof(str), "%s %s", "기어", carrot_gear_text(car_state.getGearShifter()));
         optech_text(s, lx + w - 22, top + h / 2 + 2, str, 42, COLOR_WHITE, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
     }
 
@@ -1245,11 +1245,11 @@ static void drawOptechHud(const UIState* s) {
             nvgFillColor(s->vg, nvgRGBA(239, 159, 39, 255)); nvgFill(s->vg);
             const float d = lead.getDRel(), vl = std::max(0.f, lead.getVLead() * unit), ve = car_state.getVEgo();
             char l1[32], l2[32], l3[32];
-            snprintf(l1, sizeof(l1), "거리 %.0fm", d);
-            snprintf(l2, sizeof(l2), "앞차 %.0f%s", vl, metric ? "km/h" : "mph");
+            snprintf(l1, sizeof(l1), "%s %.0fm", "거리", d);
+            snprintf(l2, sizeof(l2), "%s %.0f%s", "앞차", vl, metric ? "km/h" : "mph");
             const bool gap_ok = ve > 1.0f;
             const float tgap = gap_ok ? d / ve : 0.f;
-            snprintf(l3, sizeof(l3), "도달 %.1f초", tgap);
+            snprintf(l3, sizeof(l3), "%s %.1f%s", "도달", tgap, "초");
             const float w = 250, h = gap_ok ? 150 : 104, top = y + 44;
             carrot_round_box(s, x - w / 2, top, w, h, nvgRGBA(0, 0, 0, 110), nvgRGBA(0, 0, 0, 0), 12, 0);
             optech_text(s, x, top + 46, l1, 40, COLOR_WHITE, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
@@ -1266,9 +1266,10 @@ static void drawOptechHud(const UIState* s) {
         const float colw = 210, rx = s->fb_w - 30 - colw, rcx = rx + colw / 2;
         // steering wheel: turns with the wheel, green while openpilot steers. Tap: path offset panel
         const float r = 68, wy = 30 + r;
-        ui_draw_circle_image_rotation(s, rcx, wy, r, "ic_steer_momo", enabled ? nvgRGBA(59, 109, 17, 230) : nvgRGBA(95, 94, 90, 200),
-                                      0.9f, car_state.getSteeringAngleDeg());
-        nvgBeginPath(s->vg); nvgCircle(s->vg, rcx, wy, r); nvgStrokeColor(s->vg, COLOR_WHITE); nvgStrokeWidth(s->vg, 4); nvgStroke(s->vg);
+        // like OPKR: the comma wheel picture on a circle in the status colour (engaged green, off dark blue)
+        const QColor& sc = bg_colors[s->status];
+        const NVGcolor wc = enabled ? nvgRGBA(sc.red(), sc.green(), sc.blue(), sc.alpha()) : nvgRGBA(0x17, 0x33, 0x49, 0xc8);
+        ui_draw_circle_image_rotation(s, rcx, wy, r, "wheel", wc, 1.0f, car_state.getSteeringAngleDeg());
 
         // CPU temperature / CPU use
         auto ds = sm["deviceState"].getDeviceState();
@@ -1281,7 +1282,7 @@ static void drawOptechHud(const UIState* s) {
         float top = wy + r + 18;
         carrot_round_box(s, rx, top, colw, 190, nvgRGBA(0, 0, 0, 100), nvgRGBA(180, 178, 169, 255), 14, 3);
         optech_text(s, rcx, top + 42, "CPU 온도", 30, nvgRGBA(211, 209, 199, 255), NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
-        snprintf(str, sizeof(str), "%.0f도", temp);  // the font has no degree sign
+        snprintf(str, sizeof(str), "%.0f%s", temp, "°C");
         optech_text(s, rcx, top + 92, str, 46, temp > 80 && blink_on ? nvgRGBA(240, 149, 149, 255) : COLOR_WHITE, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
         optech_text(s, rcx, top + 132, "CPU 사용", 30, nvgRGBA(211, 209, 199, 255), NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
         snprintf(str, sizeof(str), "%d%%", use);
@@ -2397,8 +2398,8 @@ static void ui_draw_gps_info(const UIState* s) {
 
     // no middle dot / degree sign: the font has neither and stops drawing the string there
     char str[96];
-    if (fixed) snprintf(str, sizeof(str), "GPS %s  위성 %d개(강 %d)  오차 %.0fm", state, gps_sats, gps_strong, acc);
-    else if (gnss_alive) snprintf(str, sizeof(str), "GPS %s  위성 %d개(강 %d)", state, gps_sats, gps_strong);
+    if (fixed) snprintf(str, sizeof(str), "GPS %s  %s %d%s(%s %d)  %s %.0fm", state, "위성", gps_sats, "개", "강", gps_strong, "오차", acc);
+    else if (gnss_alive) snprintf(str, sizeof(str), "GPS %s  %s %d%s(%s %d)", state, "위성", gps_sats, "개", "강", gps_strong);
     else snprintf(str, sizeof(str), "GPS %s", state);
 
     // top left, in the badge row after SCC2 and the navigation badge (drawLeadApilot sets g_gps_x past them)
@@ -2428,7 +2429,7 @@ static void ui_draw_bsd_mark(const UIState* s, bool right, bool danger) {
     // there, red and blinking with '왼쪽/오른쪽 차량 주의' once the turn signal is on towards it
     const float w = 140, h = 170;
     const float x = right ? s->fb_w - w - 20 : 20;
-    const float y = s->fb_h * 0.54f;  // under the right column (wheel, CPU, tyres)
+    const float y = s->fb_h * 0.60f;  // under the right column (wheel, CPU, tyres)
     const bool blink_on = (s->sm->frame % 12) < 7;
     if (danger && !blink_on) return;
 
@@ -2568,7 +2569,7 @@ void ui_nvg_init(UIState *s) {
   }
   // init images
   std::vector<std::pair<const char *, const char *>> images = {
-    //{"wheel", "../assets/img_chffr_wheel.png"},
+    {"wheel", "../assets/img_chffr_wheel.png"},
     //{"driver_face", "../assets/img_driver_face.png"},
     //{"speed_bump", "../assets/addon/img/img_speed_bump.png"},
   {"ic_radar", "../assets/images/radar_red.png"},
