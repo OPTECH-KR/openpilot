@@ -221,6 +221,8 @@ def manager_init() -> None:
   # old carrot screen (6) back
   if not params.get_bool("OptechHud7Set"):
     params.put("ShowHudMode", "7")
+    params.put("ShowDateTime", "1")  # the time is the first item of the top-left row
+    params.put("ShowTpms", "1")      # tyres are part of the right column
     params.put_bool("OptechHud7Set", True)
 
   # Korean by default: once per install, switch to Korean even if an older install left English behind.
