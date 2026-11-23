@@ -756,12 +756,15 @@ void ui_draw_radar_info(const UIState* s) {
         if (s->show_radar_info >= 3) {
             for (auto const& vrd : s->scene.lead_vertices_stopped) {
                 auto [rx, ry, rd, rv, ry_rel] = vrd;
-                strcpy(str, "*");
-                ui_draw_text(s, rx, ry, str, 40, COLOR_WHITE, BOLD);
-                //wStr = 35;
-                //if (true) {
-                //    ui_fill_rect(s->vg, { (int)rx - wStr / 2, (int)ry - 35, wStr, 42 }, COLOR_BLACK, 15);
-                //}
+                // stopped object: an amber box saying "정지", shaped like the moving ones (user 2026-11-23: the
+                // small '*' was hard to see)
+                const int bw = 84;
+                ui_fill_rect(s->vg, { (int)rx - bw / 2, (int)ry - 35, bw, 42 }, nvgRGBA(239, 159, 39, 255), 15);
+                ui_draw_text(s, rx, ry - 1, "정지", 34, COLOR_WHITE, BOLD);
+                if (s->show_radar_info >= 2) {
+                    sprintf(str, "%.1f", ry_rel);
+                    ui_draw_text(s, rx, ry - 40, str, 30, COLOR_WHITE, BOLD);
+                }
             }
         }
         for (auto const& vrd : s->scene.lead_vertices_ongoing) {
