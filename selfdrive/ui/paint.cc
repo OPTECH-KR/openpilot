@@ -2032,7 +2032,7 @@ static void ui_draw_gps_info(const UIState* s) {
 // there; red and blinking with '왼쪽/오른쪽 차량 주의' once the turn signal is on towards it. Hidden below 30 km/h
 // (parking lots, queues) where the sensor fires all the time
 static void ui_draw_bsd_mark(const UIState* s, bool right, bool danger) {
-    // rounded box with a car seen from above and an exclamation mark under it: yellow and steady while a car is
+    // rounded box with a car seen from above and a small warning triangle under it: yellow and steady while a car is
     // there, red and blinking with '왼쪽/오른쪽 차량 주의' once the turn signal is on towards it
     const float w = 140, h = 170;
     const float x = right ? s->fb_w - w - 20 : 20;
@@ -2062,11 +2062,24 @@ static void ui_draw_bsd_mark(const UIState* s, bool right, bool danger) {
     nvgFillColor(s->vg, bg);
     nvgFill(s->vg);
 
-    // exclamation mark under the car
+    // small warning triangle with an exclamation mark under the car (the user's sign pictures):
+    // yellow with a black rim in the yellow box, white with a red rim in the red box
+    const float tw = 62, th = 54, tx = cx - tw / 2, ty = y + 106;
     nvgBeginPath(s->vg);
-    nvgRoundedRect(s->vg, cx - 7, y + 108, 14, 34, 7);
-    nvgCircle(s->vg, cx, y + 154, 8);
-    nvgFillColor(s->vg, fg);
+    nvgMoveTo(s->vg, cx, ty);
+    nvgLineTo(s->vg, tx + tw, ty + th);
+    nvgLineTo(s->vg, tx, ty + th);
+    nvgClosePath(s->vg);
+    nvgLineJoin(s->vg, NVG_ROUND);
+    nvgFillColor(s->vg, danger ? COLOR_WHITE : nvgRGBA(250, 184, 0, 255));
+    nvgFill(s->vg);
+    nvgStrokeColor(s->vg, danger ? nvgRGBA(200, 0, 0, 255) : nvgRGBA(20, 20, 20, 255));
+    nvgStrokeWidth(s->vg, danger ? 7 : 5);
+    nvgStroke(s->vg);
+    nvgBeginPath(s->vg);
+    nvgRoundedRect(s->vg, cx - 4, ty + 16, 8, 22, 4);
+    nvgCircle(s->vg, cx, ty + 45, 4.5f);
+    nvgFillColor(s->vg, nvgRGBA(20, 20, 20, 255));
     nvgFill(s->vg);
 
     if (danger) {
