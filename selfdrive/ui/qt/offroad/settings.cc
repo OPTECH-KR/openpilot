@@ -1036,6 +1036,14 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   const bool cam_shown = std::atoi(Params().get("AutoNaviSpeedCtrl").c_str()) > 0;
   for (auto w : cam_group) w->setVisible(cam_shown);
 
+  // OptechGreenAlert (cruise_helper, controls/lib/optech_signal.py: StarPilot's green light alert)
+  cruiseToggles->addItem(carrot_section("신호등"));
+  cruiseToggles->addItem(new ParamControl("OptechGreenAlert", "초록불 알림",
+    "빨간불에 서 있다가 초록불로 바뀌면 소리와 함께 '초록불로 바뀌었어요'를 띄워 줍니다. 오픈파일럿이 켜져 있을 때만 알려 줍니다.\n"
+    "신호등을 직접 보는 것이 아니라, 주행 모델이 멈출지 출발할지 예측한 것으로 판단합니다. "
+    "앞차가 출발할 때도 울릴 수 있고, 늦거나 빠를 수 있으니 출발 전에는 꼭 신호를 직접 확인하세요. "
+    "주행 화면의 신호등 표시도 같은 판단으로 켜집니다.", ROAD_ICON, this));
+
   // ---- 속도: cruise speed, camera / bump, accel ----
   speedToggles = new ListWidget(this);
   speedToggles->addItem(carrot_section("크루즈 속도"));

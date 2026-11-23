@@ -1253,11 +1253,11 @@ static void drawOptechHud(const UIState* s) {
         optech_text(s, x0 + uw + sp, 236, str, 40, gps_ok ? nvgRGBA(151, 196, 89, 255) : nvgRGBA(136, 135, 128, 255), NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
     }
     {
-        // traffic light (openpilot's own stop / go guess): horizontal red / yellow / green, right under the
-        // unit + GPS line (user 2026-11-23)
-        const int ts = lp.getTrafficState();
-        int mode = 0;
-        if (longActiveUser > 0) mode = ts >= 100 ? 3 : (ts % 100);
+        // traffic light (the driving model's stop / go guess, controls/lib/optech_signal.py): horizontal
+        // red / yellow / green, right under the unit + GPS line (user 2026-11-23). Shown whenever it has something,
+        // also without openpilot's speed control (display only, like carrot's signal modes)
+        const int ts = lp.getTrafficState() % 1000;
+        const int mode = ts >= 100 ? 3 : (ts % 100);
         if (mode >= 1 && mode <= 3) {
             const float w = 264, h = 88, x = cx - w / 2, y = 250, r = 31;
             carrot_round_box(s, x, y, w, h, nvgRGBA(44, 44, 42, 240), COLOR_WHITE, 14, 3);
