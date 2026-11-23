@@ -2064,11 +2064,11 @@ static void ui_draw_bsd_mark(const UIState* s, bool right, bool danger) {
 
     // small warning triangle with an exclamation mark under the car (the user's sign pictures):
     // yellow with a black rim in the yellow box, white with a red rim in the red box
-    const float tw = 62, th = 54, tx = cx - tw / 2, ty = y + 106;
+    const float triW = 62, triH = 54, triX = cx - triW / 2, triY = y + 106;
     nvgBeginPath(s->vg);
-    nvgMoveTo(s->vg, cx, ty);
-    nvgLineTo(s->vg, tx + tw, ty + th);
-    nvgLineTo(s->vg, tx, ty + th);
+    nvgMoveTo(s->vg, cx, triY);
+    nvgLineTo(s->vg, triX + triW, triY + triH);
+    nvgLineTo(s->vg, triX, triY + triH);
     nvgClosePath(s->vg);
     nvgLineJoin(s->vg, NVG_ROUND);
     nvgFillColor(s->vg, danger ? COLOR_WHITE : nvgRGBA(250, 184, 0, 255));
@@ -2077,8 +2077,8 @@ static void ui_draw_bsd_mark(const UIState* s, bool right, bool danger) {
     nvgStrokeWidth(s->vg, danger ? 7 : 5);
     nvgStroke(s->vg);
     nvgBeginPath(s->vg);
-    nvgRoundedRect(s->vg, cx - 4, ty + 16, 8, 22, 4);
-    nvgCircle(s->vg, cx, ty + 45, 4.5f);
+    nvgRoundedRect(s->vg, cx - 4, triY + 16, 8, 22, 4);
+    nvgCircle(s->vg, cx, triY + 45, 4.5f);
     nvgFillColor(s->vg, nvgRGBA(20, 20, 20, 255));
     nvgFill(s->vg);
 
