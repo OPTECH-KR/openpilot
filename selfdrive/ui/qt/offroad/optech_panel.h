@@ -50,6 +50,7 @@ private:
   QListWidget *list;
   QStringList brands;
   QMap<QString, QStringList> cars;  // brand -> car names
+  QMap<QString, QString> names;     // Hyundai / Kia / Genesis: car -> menu name ("K5 DL3 2020-2023")
   QString cur_brand;
   void showCars(const QString &brand);
 };
@@ -74,7 +75,7 @@ private:
   QList<OptechValueControl *> values;
   OptechValueControl *auto_shutdown_timer = nullptr;
   OptechValueControl *lane_priority_speed = nullptr;
-  QList<QWidget *> toyota_items, vag_items, bolt_items;
+  QList<QWidget *> toyota_items, vag_items, bolt_items, hkg_items;
   QLabel *brand_note = nullptr;
 
   ParamControl *toggle(ListWidget *list, const QString &param, const QString &title, const QString &desc);

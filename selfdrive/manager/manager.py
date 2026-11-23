@@ -311,6 +311,13 @@ def get_support_car_list():
   except Exception:
     cloudlog.exception("optech: could not list every car model")
   cars["cars"] = sorted(list)
+
+  # optech: Hyundai / Kia / Genesis menu (normal CAN cars only) = brand, then model family, then year, names like optech-hkg
+  try:
+    from openpilot.selfdrive.car.hyundai.car_menu import hkg_menu
+    cars["hkg_menu"] = hkg_menu()
+  except Exception:
+    cloudlog.exception("optech: could not make the Hyundai / Kia / Genesis menu")
   return json.dumps(cars)
 
 

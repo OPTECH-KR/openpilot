@@ -71,14 +71,30 @@ void OptechValueControl::refresh() {
 
 // ---- car selection: brands first (same as optech-hkg SelectCar) ----
 
-// brands shown in this order; Hyundai / Kia / Genesis belong to optech-hkg and are left out of the list
-static const QStringList BRAND_ORDER = {"CHEVROLET", "GMC", "CADILLAC", "BUICK", "HOLDEN", "TOYOTA", "LEXUS", "HONDA", "ACURA",
+// brands shown in this order (same as optech-hkg: Hyundai / Kia / Genesis first)
+static const QStringList BRAND_ORDER = {"HYUNDAI", "KIA", "GENESIS",
+                                        "CHEVROLET", "GMC", "CADILLAC", "BUICK", "HOLDEN", "TOYOTA", "LEXUS", "HONDA", "ACURA",
                                         "VOLKSWAGEN", "AUDI", "SKODA", "SEAT", "MAZDA", "NISSAN", "SUBARU", "FORD",
                                         "CHRYSLER", "JEEP", "RAM", "TESLA"};
 static const char *BOLT_CC_CAR = "CHEVROLET BOLT EV NO ACC";  // selfdrive/car/gm/values.py CAR.BOLT_CC
-static const QStringList BRAND_HIDDEN = {"HYUNDAI", "KIA", "GENESIS", "COMMA", "mock"};
-// ... except these, kept for testing optech-spst on the owner's own car
-static const QStringList HIDDEN_BRAND_TEST_CARS = {"KIA K5 2021"};
+static const QStringList BRAND_HIDDEN = {"COMMA", "mock"};
+// Hyundai / Kia / Genesis come from dp_car_list "hkg_menu" (selfdrive/car/hyundai/car_menu.py): normal CAN cars only,
+// already in menu order (model family, then year), with optech-hkg names. The cars are not sorted again here.
+static const QStringList HKG_BRANDS = {"HYUNDAI", "KIA", "GENESIS"};
+
+// dp_car_list = {"cars": [...], "hkg_menu": [{"car", "brand", "name"}, ...]} written by the manager at every start
+static QJsonObject carList() {
+  return QJsonDocument::fromJson(QByteArray::fromStdString(Params().get("dp_car_list"))).object();
+}
+
+// the Hyundai / Kia / Genesis menu entry of a car ({"car", "brand", "name"}), empty when the car is not in that menu
+static QJsonObject hkgEntry(const QString &car) {
+  for (const auto &v : carList().value("hkg_menu").toArray()) {
+    const QJsonObject o = v.toObject();
+    if (o.value("car").toString() == car) return o;
+  }
+  return QJsonObject();
+}
 
 QString OptechCarSelect::brandOf(const QString &car) {
   return car.section(' ', 0, 0);
@@ -96,6 +112,8 @@ QString OptechCarSelect::brandKo(const QString &brand) {
 }
 
 QString OptechCarSelect::menuName(const QString &car) {
+  const QJsonObject hkg = hkgEntry(car);
+  if (!hkg.isEmpty()) return brandKo(hkg.value("brand").toString()) + "  " + hkg.value("name").toString();
   const QString brand = brandOf(car);
   const QString ko = brandKo(brand);
   return (ko.isEmpty() ? brand : ko) + "  " + car.section(' ', 1);
@@ -119,12 +137,20 @@ OptechCarSelect::OptechCarSelect(QWidget *parent) : QWidget(parent) {
   list->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
   layout->addWidget(list);
 
-  // dp_car_list = {"cars": [...]} written by the manager at every start (all cars this base knows)
-  const QJsonArray all = QJsonDocument::fromJson(QByteArray::fromStdString(Params().get("dp_car_list"))).object().value("cars").toArray();
-  for (const auto &v : all) {
+  const QJsonObject car_list = carList();
+  const QJsonArray hkg = car_list.value("hkg_menu").toArray();
+  for (const auto &v : hkg) {
+    const QJsonObject o = v.toObject();
+    const QString car = o.value("car").toString(), brand = o.value("brand").toString();
+    if (car.isEmpty() || brand.isEmpty()) continue;
+    cars[brand].append(car);
+    names[car] = o.value("name").toString();
+  }
+  // all cars this base knows (without "hkg_menu", e.g. an old manager, the Hyundai / Kia / Genesis cars come from here)
+  for (const auto &v : car_list.value("cars").toArray()) {
     const QString car = v.toString();
     const QString brand = brandOf(car);
-    if (car.isEmpty() || (BRAND_HIDDEN.contains(brand) && !HIDDEN_BRAND_TEST_CARS.contains(car))) continue;
+    if (car.isEmpty() || BRAND_HIDDEN.contains(brand) || (!hkg.isEmpty() && HKG_BRANDS.contains(brand))) continue;
     cars[brand].append(car);
   }
   for (const QString &b : BRAND_ORDER) {
@@ -133,7 +159,9 @@ OptechCarSelect::OptechCarSelect(QWidget *parent) : QWidget(parent) {
   for (const QString &b : cars.keys()) {
     if (!brands.contains(b)) brands.append(b);
   }
-  for (const QString &b : brands) cars[b].sort();
+  for (const QString &b : brands) {
+    if (hkg.isEmpty() || !HKG_BRANDS.contains(b)) cars[b].sort();
+  }
 
   QObject::connect(back, &QPushButton::clicked, [=]() {
     if (!cur_brand.isEmpty()) showBrands();
@@ -188,7 +216,7 @@ void OptechCarSelect::showCars(const QString &brand) {
   header->setFont(f);
   list->addItem(header);
   for (const QString &car : cars[brand]) {
-    QListWidgetItem *item = new QListWidgetItem("      " + car.section(' ', 1));
+    QListWidgetItem *item = new QListWidgetItem("      " + names.value(car, car.section(' ', 1)));
     item->setData(Qt::UserRole, car);
     list->addItem(item);
     if (car == selected) list->setCurrentItem(item);
@@ -265,7 +293,7 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
   });
   start->addItem(car_btn);
   start->addItem(optech_note("자동 인식이 잘 되면 '자동 인식'으로 두세요. 인식이 안 될 때만 직접 고르면 다음 시동부터 적용됩니다. "
-                             "현대·기아·제네시스는 optech-hkg 브랜치를 쓰세요(시험용으로 기아 K5 2021만 있어요). ACC 없는 GM 차량(… NO ACC)은 자동 인식이 안 되니 직접 고르세요."));
+                             "현대·기아·제네시스는 일반 CAN 차량만 있어요(CAN FD 차량은 optech-hkg-fd를 쓰세요). ACC 없는 GM 차량(… NO ACC)은 자동 인식이 안 되니 직접 고르세요."));
 
   // '볼트 EV 설정': only while the Bolt EV without ACC is the chosen car (same texts as optech-hkg)
   QLabel *bolt_section = optech_section("볼트 EV 설정");
@@ -415,6 +443,15 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
 
   brand_note = optech_note("차종이 정해지면(직접 고르거나 한 번 시동을 걸어 자동 인식되면) 그 브랜드 전용 설정이 여기에 나옵니다.");
   adv->addItem(brand_note);
+  QLabel *hkg_section = optech_section("현대 / 기아 / 제네시스 전용");
+  adv->addItem(hkg_section);
+  hkg_items.append(hkg_section);
+  hkg_items.append(toggle(adv, "dp_hkg_min_steer_speed_bypass", "저속 조향 허용",
+         "차가 정한 최저 조향 속도보다 느릴 때도 openpilot이 조향합니다(0 km/h까지).\n"
+         "차에 따라 MDPS 개조가 필요할 수 있어요. 재부팅해야 적용됩니다."));
+  hkg_items.append(toggle(adv, "OptechHkgCameraScc", "크루즈(SCC)가 카메라 쪽에 있음",
+         "차의 크루즈(SCC) 신호가 레이더가 아니라 카메라 쪽에서 나오는 차입니다. 주행 중 openpilot이 스스로 알아내서 켜 주니 보통은 그대로 두세요.\n"
+         "차를 바꿨는데 켜져 있으면 끄세요. 켜져 있으면 openpilot 가감속은 쓸 수 없고 차의 크루즈가 속도를 맡습니다. 시동을 다시 걸어야 적용됩니다."));
   QLabel *toyota_section = optech_section("토요타 / 렉서스 전용");
   adv->addItem(toyota_section);
   toyota_items.append(toyota_section);
@@ -475,6 +512,7 @@ void OptechPanel::updateBrandItems() {
   const bool vag = brand == "VOLKSWAGEN" || brand == "AUDI" || brand == "SKODA" || brand == "SEAT";
   for (auto w : toyota_items) w->setVisible(toyota);
   for (auto w : vag_items) w->setVisible(vag);
+  for (auto w : hkg_items) w->setVisible(HKG_BRANDS.contains(brand));
   const bool bolt_cc = QString::fromStdString(params.get("dp_car_assigned")).trimmed() == BOLT_CC_CAR;
   for (auto w : bolt_items) w->setVisible(bolt_cc);
   brand_note->setVisible(brand.isEmpty());  // brand known but nothing special: no note
