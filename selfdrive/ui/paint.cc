@@ -1346,8 +1346,10 @@ static void drawOptechHud(const UIState* s) {
 
     // ======================= right column =======================
     {
-        // three boxes of the same size (user: make them even): wheel, CPU, tyres
-        const float colw = 210, boxh = 170, gap = 14, rx = s->fb_w - 30 - colw, rcx = rx + colw / 2;
+        // three boxes of the same size (user: make them even): wheel, CPU, tyres. Just big enough for what is inside
+        // (user 2026-11-23: the frames were too big)
+        const QRect wr = optech_wheel_rect(s->fb_w, s->fb_h);
+        const float colw = wr.width(), boxh = wr.height(), gap = 14, rx = wr.x(), rcx = rx + colw / 2;
         const NVGcolor box_fill = nvgRGBA(0, 0, 0, 100), box_line = nvgRGBA(180, 178, 169, 255), lab = nvgRGBA(211, 209, 199, 255);
         float top = 20;
         // steering wheel like OPKR: the comma wheel picture on a circle in the status colour, turning with the wheel.
@@ -1367,12 +1369,12 @@ static void drawOptechHud(const UIState* s) {
         if (std::size(cu) > 0) use /= (int)std::size(cu);
         top += boxh + gap;
         carrot_round_box(s, rx, top, colw, boxh, box_fill, box_line, 14, 3);
-        optech_text(s, rcx, top + 38, "CPU 온도", 30, lab, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+        optech_text_vc(s, rcx, top + 26, "CPU 온도", 30, lab, NVG_ALIGN_CENTER);
         snprintf(str, sizeof(str), "%.0f%s", temp, "°C");
-        optech_text(s, rcx, top + 82, str, 44, temp > 80 && blink_on ? nvgRGBA(240, 149, 149, 255) : COLOR_WHITE, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
-        optech_text(s, rcx, top + 118, "CPU 사용", 30, lab, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+        optech_text_vc(s, rcx, top + 60, str, 44, temp > 80 && blink_on ? nvgRGBA(240, 149, 149, 255) : COLOR_WHITE, NVG_ALIGN_CENTER);
+        optech_text_vc(s, rcx, top + 99, "CPU 사용", 30, lab, NVG_ALIGN_CENTER);
         snprintf(str, sizeof(str), "%d%%", use);
-        optech_text(s, rcx, top + 162, str, 44, use > 90 && blink_on ? nvgRGBA(240, 149, 149, 255) : COLOR_WHITE, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+        optech_text_vc(s, rcx, top + 133, str, 44, use > 90 && blink_on ? nvgRGBA(240, 149, 149, 255) : COLOR_WHITE, NVG_ALIGN_CENTER);
 
         // tyre pressures
         if (s->show_tpms) {
@@ -1380,11 +1382,11 @@ static void drawOptechHud(const UIState* s) {
             const float t[4] = {tpms.getFl(), tpms.getFr(), tpms.getRl(), tpms.getRr()};
             top += boxh + gap;
             carrot_round_box(s, rx, top, colw, boxh, box_fill, box_line, 14, 3);
-            optech_text(s, rcx, top + 38, "공기압 psi", 30, lab, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+            optech_text_vc(s, rcx, top + 26, "공기압 psi", 30, lab, NVG_ALIGN_CENTER);
             for (int i = 0; i < 4; i++) {
-                const float px = rcx + (i % 2 == 0 ? -46 : 46), py = top + (i < 2 ? 100 : 156);
+                const float px = rcx + (i % 2 == 0 ? -38 : 38), py = top + (i < 2 ? 77 : 127);
                 std::string v = get_tpms_text(t[i]);
-                optech_text(s, px, py, v.c_str(), 44, get_tpms_color(t[i]), NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+                optech_text_vc(s, px, py, v.c_str(), 44, get_tpms_color(t[i]), NVG_ALIGN_CENTER);
             }
         }
 
