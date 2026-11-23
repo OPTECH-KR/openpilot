@@ -971,13 +971,24 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   const bool cam_shown = std::atoi(Params().get("AutoNaviSpeedCtrl").c_str()) > 0;
   for (auto w : cam_group) w->setVisible(cam_shown);
 
-  // OptechGreenAlert (cruise_helper, controls/lib/optech_signal.py: StarPilot's green light alert)
+  // OptechSignalEnable '신호등 사용' (long_mpc -> controls/lib/optech_signal.py, StarPilot's stop light detector): the
+  // HUD traffic light; OptechGreenAlert (cruise_helper: StarPilot's green light alert) is shown only while it is on
   cruiseToggles->addItem(carrot_section("신호등"));
-  cruiseToggles->addItem(new ParamControl("OptechGreenAlert", "초록불 알림",
+  auto signal_on = new ParamControl("OptechSignalEnable", "신호등 사용",
+    "켜 두면 주행 모델의 예측으로 빨간불·초록불을 판단해 주행 화면 가운데 위에 신호등을 보여 줍니다. "
+    "차가 신호에 맞춰 서거나 출발하지는 않고, 화면 표시와 알림에만 씁니다.\n"
+    "신호등을 직접 보는 것이 아니라서 노란불은 없고, 서지 않고 지나가는 초록불에서는 아무것도 켜지지 않습니다. "
+    "끄면 신호등 표시와 초록불 알림이 모두 꺼집니다.", ROAD_ICON, this);
+  cruiseToggles->addItem(signal_on);
+  auto green_alert = new ParamControl("OptechGreenAlert", "초록불 알림",
     "빨간불에 서 있다가 초록불로 바뀌면 소리와 함께 '초록불로 바뀌었어요'를 띄워 줍니다. 오픈파일럿이 켜져 있을 때만 알려 줍니다.\n"
     "신호등을 직접 보는 것이 아니라, 주행 모델이 멈출지 출발할지 예측한 것으로 판단합니다. "
     "앞차가 출발할 때도 울릴 수 있고, 늦거나 빠를 수 있으니 출발 전에는 꼭 신호를 직접 확인하세요. "
-    "주행 화면의 신호등 표시도 같은 판단으로 켜집니다.", ROAD_ICON, this));
+    "주행 화면의 신호등 표시도 같은 판단으로 켜집니다.", ROAD_ICON, this);
+  cruiseToggles->addItem(green_alert);
+  // visibility only after addItem (a widget without a parent would open as its own window, see 카메라 감속 above)
+  green_alert->setVisible(Params().getBool("OptechSignalEnable"));
+  QObject::connect(signal_on, &ToggleControl::toggleFlipped, [=](bool on) { green_alert->setVisible(on); });
 
   // ---- 속도: cruise speed, camera / bump, accel ----
   speedToggles = new ListWidget(this);

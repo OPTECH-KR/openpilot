@@ -263,6 +263,7 @@ class LongitudinalMpc:
     self.e2ePaused = False
     self.trafficError = False
     self.optech_signal = OptechSignal()  # HUD traffic light + green light alert while apilot's signal stop is off
+    self.optechSignalEnable = Params().get_bool("OptechSignalEnable")  # 주행 > 신호등 > 신호등 사용
     self.longActiveUser = 0
     self.cruiseButtonCounter = 0
     self.solver = AcadosOcpSolverCython(MODEL_NAME, ACADOS_SOLVER_TYPE, N)
@@ -592,7 +593,7 @@ class LongitudinalMpc:
       self.tFollowGap3 = float(int(Params().get("TFollowGap3", encoding="utf8"))) / 100.
       self.tFollowGap4 = float(int(Params().get("TFollowGap4", encoding="utf8"))) / 100.
     elif self.lo_timer == 120:
-      pass
+      self.optechSignalEnable = Params().get_bool("OptechSignalEnable")
     elif self.lo_timer == 140:
       self.softHoldMode = int(Params().get("SoftHoldMode", encoding="utf8"))
     elif self.lo_timer == 160:
@@ -697,9 +698,12 @@ class LongitudinalMpc:
     lead = radarstate.leadOne
     acc = model.acceleration.x
     model_accel = float(sum(acc[:11]) / len(acc[:11])) if len(acc) else 0.
-    self.optech_signal.update(v_ego, float(x[-1]) if len(x) else 1000., model_accel, carstate.standstill,
-                              carstate.leftBlinker or carstate.rightBlinker, carstate.steeringAngleDeg,
-                              bool(lead.status), lead.dRel, lead.vLead)
+    if self.optechSignalEnable:
+      self.optech_signal.update(v_ego, float(x[-1]) if len(x) else 1000., model_accel, carstate.standstill,
+                                carstate.leftBlinker or carstate.rightBlinker, carstate.steeringAngleDeg,
+                                bool(lead.status), lead.dRel, lead.vLead)
+    elif self.optech_signal.state != 0 or self.optech_signal.stopped_for_light:
+      self.optech_signal = OptechSignal()  # turned off in the menu: no light on the HUD, no green light alert
     if self.trafficStopMode == 0:
       self.trafficState = self.optech_signal.state
 
