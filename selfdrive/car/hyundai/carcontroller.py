@@ -113,7 +113,10 @@ class CarController:
           self.btn_counts[4] += 1
     scc = CS.scc_diag if CS.scc_diag is not None else (-1, -1, -1, -1)
     cam = CS.cam_lkas_diag if CS.cam_lkas_diag is not None else (-1, -1)
-    return "OPT i={} a={} f={} m={} cl={} cw={} r0={} r1={} s={} g={} c={}".format(*scc, *cam, *self.btn_counts)
+    fca = CS.fca_diag if CS.fca_diag is not None else (-1, -1)
+    fcw = CS.cam_fcw_diag if CS.cam_fcw_diag is not None else (-1, -1)
+    return "OPT i={} a={} f={} m={} cl={} cw={} r0={} r1={} s={} g={} c={} fi={} fs={} cf={} cu={}".format(
+      *scc, *cam, *self.btn_counts, *fca, *fcw)
 
   def update(self, CC, CS):
     actuators = CC.actuators

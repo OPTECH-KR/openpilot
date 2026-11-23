@@ -22,7 +22,7 @@ import cereal.messaging as messaging
 LOG_DIR = "/data/drivelog"
 KEEP_FILES = 30
 SERVICES = ("carState", "controlsState", "carControl", "radarState", "deviceState", "managerState", "carEvents",
-            "gpsLocationExternal")
+            "gpsLocationExternal", "pandaStates")
 
 # events that happen in normal driving (buttons, pedals, lane change prompts): not written as faults
 NORMAL_EVENTS = {
@@ -35,12 +35,18 @@ LAG_EVENT_MS = 100  # controlsd frame late by more than this -> event (at most e
 
 HEADER = ("# time | v km/h | set | en act lat lon | gas brk str | angle torque | steerCmd accel | "
           "lead d/vrel | cpu% temp mem% freeGB | lag ms | gps fix sats strong cno accm | fdrop% radarlag | "
-          "carSCC main on mode | cluster info alert fail | lane L R cam camWarn | brakeLight | btn/s RESoff RESon SET GAP CANCEL")
+          "carSCC main on mode | cluster info alert fail | lane L R cam camWarn | brakeLight | btn/s RESoff RESon SET GAP CANCEL | "
+          "FCA fail status camFCW fusion")
 
 # carControl.debugTextCC from the Hyundai carcontroller (drive_record_text): SCC radar -> cluster codes, the stock
 # camera's lane state and the cruise buttons openpilot sent (counts since start)
 OPT_KEYS = ("i", "a", "f", "m", "cl", "cw", "r0", "r1", "s", "g", "c")
 BTN_KEYS = ("r0", "r1", "s", "g", "c")
+# added 2026-11-23 (-1 when the car / an older carcontroller does not give them): the forward collision-avoidance
+# fault (FCA_Failinfo / AEB_Failinfo, non-zero = the cluster's '전방 충돌방지 보조 시스템을 점검하세요') and state,
+# and the stock camera's FCW state and radar fusion state from LKAS11
+FCA_KEYS = ("fi", "fs", "cf", "cu")
+PANDA_ERR_EVENT_S = 10.  # at most one 'panda CAN errors' event this often
 
 
 def parse_opt(text):
@@ -48,7 +54,9 @@ def parse_opt(text):
     return None
   try:
     d = dict(kv.split("=") for kv in text[4:].split())
-    return {k: int(d[k]) for k in OPT_KEYS}
+    opt = {k: int(d[k]) for k in OPT_KEYS}
+    opt.update({k: int(d.get(k, -1)) for k in FCA_KEYS})
+    return opt
   except (ValueError, KeyError):
     return None
 
@@ -104,6 +112,11 @@ class DriveLog:
     self.line_btn = None       # button counts at the last status line
     self.res_off_n = 0         # RES sent while the car's SCC was off, in the current run
     self.res_off_last = None   # time of the last such RES
+    self.prev_fca = None
+    # panda: safety mode (the moment openpilot takes the car's messages over), faults, CAN errors
+    self.prev_panda = None
+    self.prev_panda_errs = None
+    self.next_panda_err_event = 0.
 
   def context(self, cs, cc, ctl):
     """Short state for an event line: what the driver and openpilot were doing at that moment."""
@@ -128,6 +141,13 @@ class DriveLog:
       p = self.prev_disp
       self.event(f"cluster SCC info {p[0]}->{disp[0]} alert {p[1]}->{disp[1]} fail {p[2]}->{disp[2]} {ctx}")
     self.prev_disp = disp
+
+    fca = tuple(opt[k] for k in FCA_KEYS)
+    if self.prev_fca is not None and fca != self.prev_fca:
+      p = self.prev_fca
+      self.event(f"car FCA fail {p[0]}->{fca[0]} status {p[1]}->{fca[1]} (camera FCW {p[2]}->{fca[2]} "
+                 f"fusion {p[3]}->{fca[3]}) {ctx}")
+    self.prev_fca = fca
 
     if self.prev_cw is not None and opt["cw"] != self.prev_cw:
       self.event(f"stock camera warning {self.prev_cw}->{opt['cw']} (camera lane state {opt['cl']}) {ctx}")
@@ -208,6 +228,8 @@ class DriveLog:
           self.event(f"process back: {p.name}")
           self.dead.discard(p.name)
 
+    self.panda_events()
+
     ev = self.last.get("carEvents")
     if ev is not None:
       names = {str(e.name) for e in ev} - NORMAL_EVENTS
@@ -277,8 +299,32 @@ class DriveLog:
     else:
       parts.append("- - - - -")
     self.line_btn = btn
+    parts.append(" ".join(str(opt[k]) for k in FCA_KEYS) if opt is not None else "- - - -")
     self.out.write(" | ".join(parts) + "\n")
     self.cpu_top(now)
+
+  def panda_events(self):
+    """Panda safety mode / controls allowed / faults / harness changes right away (the switch to the car's safety mode
+    is when openpilot starts replacing the car's messages), and CAN send / forward / receive errors when they grow."""
+    ps = self.last.get("pandaStates")
+    if ps is None or len(ps) == 0:
+      return
+    p = ps[0]
+    state = (str(p.safetyModel), p.safetyParam, b(p.controlsAllowed), str(p.faultStatus),
+             ",".join(str(f) for f in p.faults), str(p.harnessStatus), b(p.heartbeatLost), b(p.ignitionLine))
+    if state != self.prev_panda:
+      self.event("panda safety {} ({}) allowed {} fault {} [{}] harness {} heartbeatLost {} ign {}".format(*state)
+                 + (f" (was {self.prev_panda[0]})" if self.prev_panda is not None else ""))
+    self.prev_panda = state
+    errs = (p.canSendErrs, p.canFwdErrs, p.canRxErrs)
+    now = time.monotonic()
+    if self.prev_panda_errs is None:
+      self.prev_panda_errs = errs
+    elif now >= self.next_panda_err_event and errs != self.prev_panda_errs:
+      d = [n - o for n, o in zip(errs, self.prev_panda_errs)]
+      self.event(f"panda CAN errors send +{d[0]} fwd +{d[1]} rx +{d[2]} (total {errs[0]} {errs[1]} {errs[2]})")
+      self.next_panda_err_event = now + PANDA_ERR_EVENT_S
+      self.prev_panda_errs = errs
 
   def cpu_top(self, now):
     """Every 60 s: the processes using the most CPU since the last snapshot (percent of one core)."""
