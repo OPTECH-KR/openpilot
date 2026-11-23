@@ -144,6 +144,34 @@ class CAR(StrEnum):
   GENESIS_G90 = "GENESIS G90 2017"
   GENESIS_GV80 = "GENESIS GV80 2023"
 
+  # optech: Korean market cars from optech-hkg (apilot / carrot specs). No fingerprints: chosen by hand in 차종 선택
+  GRANDEUR_IG = "HYUNDAI GRANDEUR IG 2017"
+  GRANDEUR_IG_HEV = "HYUNDAI GRANDEUR IG HEV 2019"
+  GRANDEUR_IG_FL = "HYUNDAI GRANDEUR IG FL 2020"
+  GRANDEUR_IG_FL_HEV = "HYUNDAI GRANDEUR IG FL HEV 2020"
+  NEXO = "HYUNDAI NEXO"
+  CASPER = "HYUNDAI CASPER AX1"
+  CASPER_EV = "HYUNDAI CASPER EV 2024"
+  KONA_2022 = "HYUNDAI KONA 2022"
+  K7 = "KIA K7 2016-2019"
+  K7_HEV = "KIA K7 HEV 2016-2019"
+  K7_PE = "KIA K7 2020"
+  K7_HEV_PE = "KIA K7 HEV 2020"
+  KIA_MOHAVE = "KIA MOHAVE 2019"
+  KIA_K5_JF = "KIA K5 2016-2019"
+  KIA_K5_HEV_JF = "KIA K5 HEV 2017"
+  KIA_K5_HEV_2022 = "KIA K5 HEV 2022 LEGACY"
+  KIA_K9 = "KIA K9 2016-2019"
+  GENESIS_EQ900 = "GENESIS EQ900 2017"
+  GENESIS_EQ900_L = "GENESIS EQ900 LIMOUSINE"
+  GENESIS_G90_2019 = "GENESIS G90 2019"
+
+# optech: the Korean market cars above (no FW / CAN fingerprints, so auto detect never picks them)
+KOREA_CAR = {CAR.GRANDEUR_IG, CAR.GRANDEUR_IG_HEV, CAR.GRANDEUR_IG_FL, CAR.GRANDEUR_IG_FL_HEV, CAR.NEXO, CAR.CASPER,
+             CAR.CASPER_EV, CAR.KONA_2022, CAR.K7, CAR.K7_HEV, CAR.K7_PE, CAR.K7_HEV_PE, CAR.KIA_MOHAVE, CAR.KIA_K5_JF,
+             CAR.KIA_K5_HEV_JF, CAR.KIA_K5_HEV_2022, CAR.KIA_K9, CAR.GENESIS_EQ900, CAR.GENESIS_EQ900_L,
+             CAR.GENESIS_G90_2019}
+
 
 class Footnote(Enum):
   CANFD = CarFootnote(
@@ -303,6 +331,28 @@ CAR_INFO: Dict[str, Optional[Union[HyundaiCarInfo, List[HyundaiCarInfo]]]] = {
   CAR.GENESIS_G80: HyundaiCarInfo("Genesis G80 2018-19", "All", car_parts=CarParts.common([CarHarness.hyundai_h])),
   CAR.GENESIS_G90: HyundaiCarInfo("Genesis G90 2017-18", "All", car_parts=CarParts.common([CarHarness.hyundai_c])),
   CAR.GENESIS_GV80: HyundaiCarInfo("Genesis GV80 2023", "All", car_parts=CarParts.common([CarHarness.hyundai_m])),
+
+  # optech: Korean market cars (KOREA_CAR)
+  CAR.GRANDEUR_IG: HyundaiCarInfo("Hyundai Grandeur IG 2017-19"),
+  CAR.GRANDEUR_IG_HEV: HyundaiCarInfo("Hyundai Grandeur Hybrid IG 2017-19"),
+  CAR.GRANDEUR_IG_FL: HyundaiCarInfo("Hyundai Grandeur IG 2020-22"),
+  CAR.GRANDEUR_IG_FL_HEV: HyundaiCarInfo("Hyundai Grandeur Hybrid IG 2020-22"),
+  CAR.NEXO: HyundaiCarInfo("Hyundai Nexo 2018-23"),
+  CAR.CASPER: HyundaiCarInfo("Hyundai Casper 2022-24"),
+  CAR.CASPER_EV: HyundaiCarInfo("Hyundai Casper Electric 2024"),
+  CAR.KONA_2022: HyundaiCarInfo("Hyundai Kona 2022"),
+  CAR.K7: HyundaiCarInfo("Kia K7 2016-19"),
+  CAR.K7_HEV: HyundaiCarInfo("Kia K7 Hybrid 2016-19"),
+  CAR.K7_PE: HyundaiCarInfo("Kia K7 2020-21"),
+  CAR.K7_HEV_PE: HyundaiCarInfo("Kia K7 Hybrid 2020-21"),
+  CAR.KIA_MOHAVE: HyundaiCarInfo("Kia Mohave 2019-23"),
+  CAR.KIA_K5_JF: HyundaiCarInfo("Kia K5 2016-19"),
+  CAR.KIA_K5_HEV_JF: HyundaiCarInfo("Kia K5 Hybrid 2017"),
+  CAR.KIA_K5_HEV_2022: HyundaiCarInfo("Kia K5 Hybrid 2022"),
+  CAR.KIA_K9: HyundaiCarInfo("Kia K9 2016-19"),
+  CAR.GENESIS_EQ900: HyundaiCarInfo("Genesis EQ900 2016-18"),
+  CAR.GENESIS_EQ900_L: HyundaiCarInfo("Genesis EQ900 Limousine 2016-18"),
+  CAR.GENESIS_G90_2019: HyundaiCarInfo("Genesis G90 2019-21"),
 }
 
 class Buttons:
@@ -473,14 +523,14 @@ FW_QUERY_CONFIG = FwQueryConfig(
 CHECKSUM = {
   "crc8": [CAR.SANTA_FE, CAR.SONATA, CAR.PALISADE, CAR.KIA_SELTOS, CAR.ELANTRA_2021, CAR.ELANTRA_HEV_2021,
            CAR.SONATA_HYBRID, CAR.SANTA_FE_2022, CAR.KIA_K5_2021, CAR.SANTA_FE_HEV_2022, CAR.SANTA_FE_PHEV_2022,
-           CAR.KIA_K5_HEV_2020, CAR.CUSTIN_1ST_GEN],
+           CAR.KIA_K5_HEV_2020, CAR.CUSTIN_1ST_GEN, CAR.CASPER, CAR.CASPER_EV],
   "6B": [CAR.KIA_SORENTO, CAR.HYUNDAI_GENESIS],
 }
 
 CAN_GEARS = {
   # which message has the gear. hybrid and EV use ELECT_GEAR
-  "use_cluster_gears": {CAR.ELANTRA, CAR.ELANTRA_GT_I30, CAR.KONA},
-  "use_tcu_gears": {CAR.KIA_OPTIMA_G4, CAR.KIA_OPTIMA_G4_FL, CAR.SONATA_LF, CAR.VELOSTER, CAR.TUCSON},
+  "use_cluster_gears": {CAR.ELANTRA, CAR.ELANTRA_GT_I30, CAR.KONA, CAR.GRANDEUR_IG, CAR.GRANDEUR_IG_FL, CAR.K7},
+  "use_tcu_gears": {CAR.KIA_OPTIMA_G4, CAR.KIA_OPTIMA_G4_FL, CAR.SONATA_LF, CAR.VELOSTER, CAR.TUCSON, CAR.KIA_K5_JF},
 }
 
 CANFD_CAR = {CAR.KIA_EV6, CAR.IONIQ_5, CAR.IONIQ_6, CAR.TUCSON_4TH_GEN, CAR.TUCSON_HYBRID_4TH_GEN, CAR.KIA_SPORTAGE_HYBRID_5TH_GEN,
@@ -498,7 +548,7 @@ CANFD_RADAR_SCC_CAR = {CAR.GENESIS_GV70_1ST_GEN, CAR.KIA_SORENTO_PHEV_4TH_GEN, C
 CANFD_UNSUPPORTED_LONGITUDINAL_CAR = {CAR.IONIQ_6, CAR.KONA_EV_2ND_GEN}
 
 # The camera does SCC on these cars, rather than the radar
-CAMERA_SCC_CAR = {CAR.KONA_EV_2022, }
+CAMERA_SCC_CAR = {CAR.KONA_EV_2022, CAR.KONA_2022, CAR.CASPER, CAR.CASPER_EV}
 
 # optech: param remembered by carstate when the SCC was seen only on the camera side (CAN cars, stock longitudinal)
 CAMERA_SCC_PARAM = "OptechHkgCameraScc"
@@ -512,19 +562,24 @@ HYBRID_CAR = {CAR.IONIQ_PHEV, CAR.ELANTRA_HEV_2021, CAR.KIA_NIRO_PHEV, CAR.KIA_N
               CAR.IONIQ_HEV_2022, CAR.SANTA_FE_HEV_2022, CAR.SANTA_FE_PHEV_2022, CAR.IONIQ_PHEV_2019, CAR.TUCSON_HYBRID_4TH_GEN,
               CAR.KIA_SPORTAGE_HYBRID_5TH_GEN, CAR.KIA_SORENTO_PHEV_4TH_GEN, CAR.KIA_K5_HEV_2020, CAR.KIA_NIRO_HEV_2ND_GEN,
               CAR.KIA_SORENTO_HEV_4TH_GEN, CAR.KIA_OPTIMA_H, CAR.KIA_OPTIMA_H_G4_FL, CAR.KIA_K8_HEV_1ST_GEN,
-              CAR.AZERA_HEV_6TH_GEN, CAR.KIA_NIRO_PHEV_2022}
+              CAR.AZERA_HEV_6TH_GEN, CAR.KIA_NIRO_PHEV_2022,
+              CAR.GRANDEUR_IG_HEV, CAR.GRANDEUR_IG_FL_HEV, CAR.K7_HEV, CAR.K7_HEV_PE, CAR.KIA_K5_HEV_JF, CAR.KIA_K5_HEV_2022}
 
 EV_CAR = {CAR.IONIQ_EV_2020, CAR.IONIQ_EV_LTD, CAR.KONA_EV, CAR.KIA_NIRO_EV, CAR.KIA_NIRO_EV_2ND_GEN, CAR.KONA_EV_2022,
-          CAR.KIA_EV6, CAR.IONIQ_5, CAR.IONIQ_6, CAR.GENESIS_GV60_EV_1ST_GEN, CAR.KONA_EV_2ND_GEN}
+          CAR.KIA_EV6, CAR.IONIQ_5, CAR.IONIQ_6, CAR.GENESIS_GV60_EV_1ST_GEN, CAR.KONA_EV_2ND_GEN, CAR.NEXO, CAR.CASPER_EV}
 
 # these cars require a special panda safety mode due to missing counters and checksums in the messages
 LEGACY_SAFETY_MODE_CAR = {CAR.HYUNDAI_GENESIS, CAR.IONIQ_EV_LTD, CAR.KIA_OPTIMA_G4,
                           CAR.VELOSTER, CAR.GENESIS_G70, CAR.GENESIS_G80, CAR.KIA_CEED, CAR.ELANTRA, CAR.IONIQ_HEV_2022,
-                          CAR.KIA_OPTIMA_H, CAR.ELANTRA_GT_I30}
+                          CAR.KIA_OPTIMA_H, CAR.ELANTRA_GT_I30,
+                          # optech: Korean market cars, legacy mode like optech-hkg (no counter / checksum checks)
+                          CAR.GRANDEUR_IG, CAR.GRANDEUR_IG_HEV, CAR.GRANDEUR_IG_FL, CAR.GRANDEUR_IG_FL_HEV, CAR.GENESIS_EQ900,
+                          CAR.GENESIS_EQ900_L, CAR.GENESIS_G90_2019, CAR.K7, CAR.K7_HEV, CAR.K7_PE, CAR.K7_HEV_PE,
+                          CAR.KIA_MOHAVE, CAR.KIA_K5_JF, CAR.KIA_K5_HEV_JF, CAR.KIA_K5_HEV_2022, CAR.KIA_K9}
 
 # these cars have not been verified to work with longitudinal yet - radar disable, sending correct messages, etc.
 UNSUPPORTED_LONGITUDINAL_CAR = LEGACY_SAFETY_MODE_CAR | {CAR.KIA_NIRO_PHEV, CAR.KIA_SORENTO, CAR.SONATA_LF, CAR.KIA_OPTIMA_G4_FL,
-                                                         CAR.KIA_OPTIMA_H_G4_FL}
+                                                         CAR.KIA_OPTIMA_H_G4_FL, CAR.NEXO}
 
 # If 0x500 is present on bus 1 it probably has a Mando radar outputting radar points.
 # If no points are outputted by default it might be possible to turn it on using  selfdrive/debug/hyundai_enable_radar_points.py
@@ -597,4 +652,26 @@ DBC = {
   CAR.CUSTIN_1ST_GEN: dbc_dict('hyundai_kia_generic', None),
   CAR.KIA_NIRO_PHEV_2022: dbc_dict('hyundai_kia_generic', 'hyundai_kia_mando_front_radar_generated'),
   CAR.STARIA_4TH_GEN: dbc_dict('hyundai_canfd', None),
+
+  # optech: Korean market cars (same DBC choice as optech-hkg)
+  CAR.GRANDEUR_IG: dbc_dict('hyundai_kia_generic', None),
+  CAR.GRANDEUR_IG_HEV: dbc_dict('hyundai_kia_generic', None),
+  CAR.GRANDEUR_IG_FL: dbc_dict('hyundai_kia_generic', 'hyundai_kia_mando_front_radar_generated'),
+  CAR.GRANDEUR_IG_FL_HEV: dbc_dict('hyundai_kia_generic', 'hyundai_kia_mando_front_radar_generated'),
+  CAR.NEXO: dbc_dict('hyundai_kia_generic', 'hyundai_kia_mando_front_radar_generated'),
+  CAR.CASPER: dbc_dict('hyundai_kia_generic', None),
+  CAR.CASPER_EV: dbc_dict('hyundai_kia_generic', None),
+  CAR.KONA_2022: dbc_dict('hyundai_kia_generic', None),
+  CAR.K7: dbc_dict('hyundai_kia_generic', None),
+  CAR.K7_HEV: dbc_dict('hyundai_kia_generic', None),
+  CAR.K7_PE: dbc_dict('hyundai_kia_generic', None),
+  CAR.K7_HEV_PE: dbc_dict('hyundai_kia_generic', None),
+  CAR.KIA_MOHAVE: dbc_dict('hyundai_kia_generic', None),
+  CAR.KIA_K5_JF: dbc_dict('hyundai_kia_generic', None),
+  CAR.KIA_K5_HEV_JF: dbc_dict('hyundai_kia_generic', None),
+  CAR.KIA_K5_HEV_2022: dbc_dict('hyundai_kia_generic', None),
+  CAR.KIA_K9: dbc_dict('hyundai_kia_generic', None),
+  CAR.GENESIS_EQ900: dbc_dict('hyundai_kia_generic', None),
+  CAR.GENESIS_EQ900_L: dbc_dict('hyundai_kia_generic', None),
+  CAR.GENESIS_G90_2019: dbc_dict('hyundai_kia_generic', None),
 }

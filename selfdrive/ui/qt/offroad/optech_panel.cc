@@ -293,7 +293,8 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
   });
   start->addItem(car_btn);
   start->addItem(optech_note("자동 인식이 잘 되면 '자동 인식'으로 두세요. 인식이 안 될 때만 직접 고르면 다음 시동부터 적용됩니다. "
-                             "현대·기아·제네시스는 일반 CAN 차량만 있어요(CAN FD 차량은 optech-hkg-fd를 쓰세요). ACC 없는 GM 차량(… NO ACC)은 자동 인식이 안 되니 직접 고르세요."));
+                             "현대·기아·제네시스는 일반 CAN 차량만 있어요(CAN FD 차량은 optech-hkg-fd를 쓰세요). "
+                             "그랜저 IG · K7 · K9 · 모하비 · 캐스퍼 · 넥쏘 · EQ900 같은 국내 차종과 ACC 없는 GM 차량(… NO ACC)은 자동 인식이 안 되니 직접 고르세요."));
 
   // '볼트 EV 설정': only while the Bolt EV without ACC is the chosen car (same texts as optech-hkg)
   QLabel *bolt_section = optech_section("볼트 EV 설정");

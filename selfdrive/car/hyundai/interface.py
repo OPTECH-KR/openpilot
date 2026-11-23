@@ -276,6 +276,70 @@ class CarInterface(CarInterfaceBase):
       ret.wheelbase = 2.95
       ret.steerRatio = 14.14
 
+    # optech: Korean market cars, specs from optech-hkg (apilot / carrot; mass here without the cargo it adds)
+    elif candidate in (CAR.GRANDEUR_IG, CAR.GRANDEUR_IG_HEV):
+      ret.mass = 1570.
+      ret.wheelbase = 2.845
+      ret.steerRatio = 16.
+      ret.tireStiffnessFactor = 0.8
+    elif candidate in (CAR.GRANDEUR_IG_FL, CAR.GRANDEUR_IG_FL_HEV):
+      ret.mass = 1675.
+      ret.wheelbase = 2.885
+      ret.steerRatio = 16.5
+      ret.tireStiffnessFactor = 0.8
+      ret.steerActuatorDelay = 0.2
+    elif candidate == CAR.NEXO:
+      ret.mass = 1885.
+      ret.wheelbase = 2.79
+      ret.steerRatio = 15.3
+      ret.tireStiffnessFactor = 0.385
+    elif candidate == CAR.CASPER:
+      ret.mass = 1060.
+      ret.wheelbase = 2.4
+      ret.steerRatio = 14.3
+    elif candidate == CAR.CASPER_EV:
+      ret.mass = 1355.
+      ret.wheelbase = 2.58
+      ret.steerRatio = 14.3
+    elif candidate == CAR.KONA_2022:
+      ret.mass = 1491.
+      ret.wheelbase = 2.6
+      ret.steerRatio = 13.42
+      ret.tireStiffnessFactor = 0.385
+    elif candidate in (CAR.K7, CAR.K7_HEV, CAR.K7_PE, CAR.K7_HEV_PE):
+      ret.mass = 1850.
+      ret.wheelbase = 2.855
+      ret.steerRatio = 15.5
+      ret.tireStiffnessFactor = 0.7
+    elif candidate == CAR.KIA_MOHAVE:
+      ret.mass = 2285.
+      ret.wheelbase = 2.895
+      ret.steerRatio = 16.
+      ret.tireStiffnessFactor = 0.7
+    elif candidate in (CAR.KIA_K5_JF, CAR.KIA_K5_HEV_JF, CAR.KIA_K5_HEV_2022):
+      ret.mass = 1705. if candidate == CAR.KIA_K5_HEV_JF else 1515.
+      ret.wheelbase = 2.85 if candidate == CAR.KIA_K5_HEV_2022 else 2.80
+      ret.steerRatio = 15.5
+      ret.tireStiffnessFactor = 0.7
+    elif candidate == CAR.KIA_K9:
+      ret.mass = 2075.
+      ret.wheelbase = 3.15
+      ret.steerRatio = 14.5
+      ret.tireStiffnessFactor = 0.7
+    elif candidate == CAR.GENESIS_EQ900:
+      ret.mass = 2200.
+      ret.wheelbase = 3.15
+      ret.steerRatio = 16.0
+      ret.steerActuatorDelay = 0.075
+    elif candidate == CAR.GENESIS_EQ900_L:
+      ret.mass = 2290.
+      ret.wheelbase = 3.45
+      ret.steerRatio = 16.0
+    elif candidate == CAR.GENESIS_G90_2019:
+      ret.mass = 2150.
+      ret.wheelbase = 3.16
+      ret.steerRatio = 16.0
+
     # *** longitudinal control ***
     if candidate in CANFD_CAR:
       ret.longitudinalTuning.kpV = [0.1]

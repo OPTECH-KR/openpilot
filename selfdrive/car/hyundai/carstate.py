@@ -17,6 +17,10 @@ PREV_BUTTON_SAMPLES = 8
 CLUSTER_SAMPLE_RATE = 20  # frames
 STANDSTILL_THRESHOLD = 12 * 0.03125 * CV.KPH_TO_MS
 
+# optech (optech-hkg, Neokii / PolorBear): the Nexo sends its gear as one 16 bit value (ELECT_GEAR Elect_Gear_Shifter_NEXO)
+GearShifter = car.CarState.GearShifter
+NEXO_GEARS = {1546: GearShifter.drive, 2314: GearShifter.neutral, 2566: GearShifter.reverse, 2569: GearShifter.park}
+
 
 class CarState(CarStateBase):
   def __init__(self, CP):
@@ -24,6 +28,7 @@ class CarState(CarStateBase):
     self.camera_scc = is_camera_scc(CP)
     self.scc_wrong_frames = 0
     self.scc_bus_changed = False
+    self.nexo_gear = GearShifter.unknown
     can_define = CANDefine(DBC[CP.carFingerprint]["pt"])
 
     self.cruise_buttons = deque([Buttons.NONE] * PREV_BUTTON_SAMPLES, maxlen=PREV_BUTTON_SAMPLES)
@@ -163,7 +168,12 @@ class CarState(CarStateBase):
     else:
       gear = cp.vl["LVR12"]["CF_Lvr_Gear"]
 
-    ret.gearShifter = self.parse_gear_shifter(self.shifter_values.get(gear))
+    if self.CP.carFingerprint == CAR.NEXO:
+      # unknown values keep the last known gear (optech-hkg)
+      self.nexo_gear = NEXO_GEARS.get(int(cp.vl["ELECT_GEAR"]["Elect_Gear_Shifter_NEXO"]), self.nexo_gear)
+      ret.gearShifter = self.nexo_gear
+    else:
+      ret.gearShifter = self.parse_gear_shifter(self.shifter_values.get(gear))
 
     if not self.CP.openpilotLongitudinalControl:
       aeb_src = "FCA11" if self.CP.flags & HyundaiFlags.USE_FCA.value else "SCC12"
