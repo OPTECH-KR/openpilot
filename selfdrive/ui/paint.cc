@@ -1181,7 +1181,7 @@ static void drawOptechHud(const UIState* s) {
         int mode = 0;
         if (longActiveUser > 0) mode = ts >= 100 ? 3 : (ts % 100);
         if (mode >= 1 && mode <= 3) {
-            const float w = 70, h = 150, x = cx - 165 - w, y = 40;
+            const float w = 70, h = 150, x = cx - 165 - w, y = 84;  // below the top-left row
             carrot_round_box(s, x, y, w, h, nvgRGBA(44, 44, 42, 240), COLOR_WHITE, 12, 3);
             const NVGcolor off = nvgRGBA(95, 94, 90, 255);
             nvgBeginPath(s->vg); nvgCircle(s->vg, x + w / 2, y + 40, 24);
@@ -1195,7 +1195,7 @@ static void drawOptechHud(const UIState* s) {
         const bool lb = car_state.getLeftBlinker(), rb = car_state.getRightBlinker();
         if (lb || rb) {
             const int step = (sm.frame / 4) % 4;  // 0..3
-            const float w = 60, h = 110, gap = 44, y = 50;
+            const float w = 60, h = 110, gap = 44, y = 84;
             for (int i = 0; i < 3; i++) {
                 const int a = (step > i) ? 255 : 70;
                 const NVGcolor col = nvgRGBA(239, 159, 39, a);
