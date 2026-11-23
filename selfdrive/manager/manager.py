@@ -84,6 +84,7 @@ def manager_init() -> None:
     ("dp_long_de2e", "0"),
     ("dp_mapd_vision_turn_control", "0"),
     ("dp_hkg_min_steer_speed_bypass", "0"),
+    ("OptechCruiseSetCurrent", "1"),
     ("dp_lat_lane_priority_mode_speed_based", "0"),
     ("dp_long_use_krkeegen_tune", "0"),
     ("dp_toyota_zss", "0"),

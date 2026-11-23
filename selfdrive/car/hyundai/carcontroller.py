@@ -1,5 +1,8 @@
+from random import randint
+
 from cereal import car
 from openpilot.common.conversions import Conversions as CV
+from openpilot.common.params import Params
 from openpilot.common.numpy_fast import clip
 from openpilot.common.realtime import DT_CTRL
 from opendbc.can.packer import CANPacker
@@ -55,6 +58,16 @@ class CarController:
     self.apply_steer_last = 0
     self.car_fingerprint = CP.carFingerprint
     self.last_button_frame = 0
+
+    # optech: set speed sync after engaging (set_speed_sync)
+    self.set_current_speed = Params().get_bool("OptechCruiseSetCurrent")
+    self.cruise_on_prev = False
+    self.sync_target = 0  # set speed to reach, in the cluster unit; 0 = nothing to do
+    self.sync_start_frame = 0
+    self.sync_button_frame = 0
+    self.sync_wait = 10
+    self.sync_alive = 0
+    self.sync_alive_frame = 0
 
   def update(self, CC, CS, now_nanos):
     actuators = CC.actuators
@@ -140,7 +153,9 @@ class CarController:
                                                 left_lane_warning, right_lane_warning))
 
       if not self.CP.openpilotLongitudinalControl:
-        can_sends.extend(self.create_button_messages(CC, CS, use_clu11=True))
+        buttons = self.create_button_messages(CC, CS, use_clu11=True)
+        sync = self.set_speed_sync(CC, CS)
+        can_sends.extend(buttons if (buttons or CC.cruiseControl.cancel or CC.cruiseControl.resume) else sync)
 
       if self.frame % 2 == 0 and self.CP.openpilotLongitudinalControl:
         # TODO: unclear if this is needed
@@ -169,6 +184,50 @@ class CarController:
 
     self.frame += 1
     return new_actuators, can_sends
+
+  def set_speed_sync(self, CC, CS):
+    """optech: openpilot engaged while driving -> bring the car's own cruise (SCC) set speed to the current speed.
+
+    The stock SCC starts from SET or from the last set speed (RES, e.g. 60 km/h) and then speeds up hard, which startles
+    people. Right after engaging, openpilot presses SET- / RES+ (one CLU11 per frame for 4-8 frames, then a 8-15 frame
+    pause: optech-hkg / apilot timing) until the set speed is the speed at engaging. After that the set speed is the
+    driver's again: a cruise button pressed later than 1 s after engaging, braking, disengaging or 10 s end it.
+    The panda allows SET- / RES+ only while engaged (safety_hyundai.h)."""
+    cruise_on = CS.out.cruiseState.enabled
+    to_unit = CV.MS_TO_KPH if CS.is_metric else CV.MS_TO_MPH
+    if cruise_on and not self.cruise_on_prev and self.set_current_speed:
+      v = CS.out.vEgoCluster if CS.out.vEgoCluster > 0.1 else CS.out.vEgo
+      speed = v * to_unit
+      if speed >= (10 if CS.is_metric else 6):  # driving, not starting from a stop
+        self.sync_target = int(round(max(speed, 30 if CS.is_metric else 20)))  # the SCC sets nothing lower
+        self.sync_start_frame = self.frame
+        self.sync_button_frame = self.frame
+    self.cruise_on_prev = cruise_on
+    if not self.sync_target:
+      return []
+
+    set_speed = int(round(CS.out.cruiseState.speed * to_unit))
+    driver_button = CS.cruise_buttons[-1] != Buttons.NONE
+    since = (self.frame - self.sync_start_frame) * DT_CTRL
+    done = set_speed == self.sync_target or since > 10.
+    if done or not cruise_on or not CC.enabled or CS.out.brakePressed or (driver_button and since > 1.):
+      self.sync_target = 0
+      return []
+    if driver_button:  # still holding the button that engaged
+      return []
+
+    if self.frame - self.sync_button_frame > self.sync_wait:
+      if self.frame - self.sync_alive_frame > self.sync_alive:  # pressed long enough: let go and wait
+        self.sync_wait = randint(8, 15)
+        self.sync_button_frame = self.frame
+      else:
+        button = Buttons.SET_DECEL if set_speed > self.sync_target else Buttons.RES_ACCEL
+        return [hyundaican.create_clu11(self.packer, self.frame, CS.clu11, button, self.CP.carFingerprint, CS.camera_scc,
+                                        next_counter=True)]
+    else:
+      self.sync_alive = randint(4, 8)
+      self.sync_alive_frame = self.frame
+    return []
 
   def create_button_messages(self, CC: car.CarControl, CS: car.CarState, use_clu11: bool):
     can_sends = []

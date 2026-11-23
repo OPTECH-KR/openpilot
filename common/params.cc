@@ -246,6 +246,7 @@ std::unordered_map<std::string, uint32_t> keys = {
     {"BoltPedalMax", PERSISTENT},
     {"BoltYear2017", PERSISTENT},
     {"OptechHkgCameraScc", PERSISTENT},
+    {"OptechCruiseSetCurrent", PERSISTENT},
     {"ShowDmInfo", PERSISTENT},
     {"dp_long_use_df_tune", PERSISTENT},
     {"dp_long_de2e", PERSISTENT},

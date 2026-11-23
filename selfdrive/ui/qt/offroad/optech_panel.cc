@@ -339,6 +339,12 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
     engage_mode_btn->setTitle(engage_name());
   });
   start->addItem(engage_mode_btn);
+  // Hyundai / Kia / Genesis with the car's own cruise: selfdrive/car/hyundai/carcontroller.py set_speed_sync
+  hkg_items.append(toggle(start, "OptechCruiseSetCurrent", "켤 때 지금 속도로 설정",
+    "달리는 중에 크루즈를 켜면, 차의 크루즈가 예전 설정 속도(예: 60)로 갑자기 빨라지지 않게 설정 속도를 지금 속도로 맞춥니다. "
+    "openpilot이 크루즈 버튼(SET-, RES+)을 대신 눌러 1 km/h씩 맞추고, 다 맞춘 뒤에는 운전자가 버튼으로 바꾸는 대로 따릅니다.\n"
+    "차의 크루즈는 30 km/h 아래로는 설정되지 않아서, 그보다 느릴 때는 30 km/h로 맞춥니다. "
+    "현대·기아·제네시스에서 차의 순정 크루즈를 쓸 때만 동작합니다. 시동을 다시 걸면 적용됩니다."));
 
   // ======== 주행 ========
   drive->addItem(optech_section("과속카메라"));
