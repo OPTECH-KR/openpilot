@@ -270,6 +270,7 @@ std::unordered_map<std::string, uint32_t> keys = {
     { "OptechCamTuneSet", PERSISTENT },
     { "OptechBrakeResumeMode", PERSISTENT },
     { "OptechGasResume", PERSISTENT },
+    { "OptechGreenAlert", PERSISTENT },
     { "OptechOffShutdown", PERSISTENT },
     { "OptechLogServer", CLEAR_ON_MANAGER_START },
     { "OptechSettingsTimeout", PERSISTENT },

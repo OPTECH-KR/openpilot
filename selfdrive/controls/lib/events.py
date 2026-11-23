@@ -970,7 +970,12 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
     ET.WARNING: EngagementAlert(AudibleAlert.longEngaged),
   },
   EventName.trafficSignGreen: {
-    ET.WARNING: EngagementAlert(AudibleAlert.trafficSignGreen),
+    # optech '초록불 알림' (cruise_helper, optech_signal.py): stopped for a red light, the light turned green
+    ET.WARNING: Alert(
+      "초록불로 바뀌었어요",
+      "",
+      AlertStatus.normal, AlertSize.small,
+      Priority.LOW, VisualAlert.none, AudibleAlert.trafficSignGreen, 3.),
     #ET.WARNING: Alert(
     #  "출발합니다.",
     #  "",

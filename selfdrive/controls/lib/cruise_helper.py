@@ -140,6 +140,7 @@ class CruiseHelper:
     self.optechBrakeResumeMode = self.read_brake_resume_mode()
     # optech '악셀로 다시 켜기' (주행 > 브레이크): speed control paused by the brake comes back while on the gas
     self.optechGasResume = Params().get_bool("OptechGasResume")
+    self.optechGreenAlert = Params().get_bool("OptechGreenAlert")
     self.brake_paused = False  # speed control paused by the brake (resumes when the brake is off, see below)
     self.autoSyncCruiseSpeedMax = int(Params().get("AutoSyncCruiseSpeedMax"))
     self.autoResumeFromBrakeReleaseDist = float(int(Params().get("AutoResumeFromBrakeReleaseDist", encoding="utf8")))
@@ -193,6 +194,7 @@ class CruiseHelper:
         self.brakeResumeSpeedMode = int(Params().get("BrakeResumeSpeedMode", encoding="utf8") or 1)
         self.optechBrakeResumeMode = self.read_brake_resume_mode()
         self.optechGasResume = Params().get_bool("OptechGasResume")
+        self.optechGreenAlert = Params().get_bool("OptechGreenAlert")
       elif self.update_params_count == 5:
         self.autoSyncCruiseSpeedMax = int(Params().get("AutoSyncCruiseSpeedMax"))
         self.autoResumeFromBrakeReleaseDist = float(int(Params().get("AutoResumeFromBrakeReleaseDist", encoding="utf8")))
@@ -891,6 +893,12 @@ class CruiseHelper:
       #elif trafficError:
       #  self.send_apilot_event(controls, EventName.trafficError, 20.0)
 
+
+    # optech '초록불 알림' (StarPilot green light alert): stopped for a red light and the light (the model) turned green.
+    # Only while openpilot is on (the alert type); the event's own wait keeps it from repeating
+    if (self.optechGreenAlert and trafficState == 2 and (self.trafficState % 10) == 1 and CS.vEgo < 0.3 and
+        not CS.gasPressed):
+      self.send_apilot_event(controls, EventName.trafficSignGreen, 5.0)
 
     self.mpcEvent_prev = mpcEvent
     self.trafficState = trafficState
