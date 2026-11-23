@@ -37,21 +37,11 @@
 
 ## 1. 설치
 
-SSH로 기기에 접속해서 아래 명령을 **통째로 복사해서** 붙여 넣으세요. 기존 openpilot을 지우고 optech-hkg를 받은 뒤 재부팅합니다.
+설치 방법은 OPTECH 자료실의 안내를 따라 주세요.
 
-```
-rm -fr /data/openpilot
-cd /data/ && git clone https://github.com/OPTECH-KR/openpilot.git -b optech-hkg --depth=1 openpilot &&
-touch /data/data/com.termux/files/continue.sh &&
-echo "#!/usr/bin/bash" >> /data/data/com.termux/files/continue.sh &&
-echo "cd /data/openpilot" >> /data/data/com.termux/files/continue.sh &&
-echo "exec ./launch_openpilot.sh" >> /data/data/com.termux/files/continue.sh &&chmod u+x /data/data/com.termux/files/continue.sh &&
-reboot
-```
+👉 **[설치 방법 보기 (optech-kr.com 자료실)](https://optech-kr.com/%ec%9e%90%eb%a3%8c%ec%8b%a4/?pageid=2&mod=document&uid=78)**
 
-* **첫 부팅은 빌드(프로그램 조립) 때문에 10분 넘게 걸릴 수 있습니다.** 화면이 멈춘 것처럼 보여도 전원을 끄지 말고 기다려 주세요. 그다음부터는 빨리 켜집니다.
-* 설치 화면의 Continue 버튼이 안 뜨는 경우가 있어서 SSH로 설치합니다.
-* 기기 설정값(`/data/params`)은 지우지 마세요. SSH 키도 거기에 들어 있어서, 지우면 다시 접속할 수 없습니다.
+* 이 브랜치 이름은 **`optech-hkg`** 입니다. (CAN FD 차량은 `optech-hkg-fd`)
 
 ## 2. 업데이트
 
