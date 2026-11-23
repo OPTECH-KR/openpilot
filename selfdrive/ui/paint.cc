@@ -2425,7 +2425,7 @@ static void ui_draw_gps_info(const UIState* s) {
 // there; red and blinking with '왼쪽/오른쪽 차량 주의' once the turn signal is on towards it. Hidden below 30 km/h
 // (parking lots, queues) where the sensor fires all the time
 static void ui_draw_bsd_mark(const UIState* s, bool right, bool danger) {
-    // rounded box with a car seen from above and a small warning triangle under it: yellow and steady while a car is
+    // rounded box with a car seen from the side and a warning triangle under it: yellow and steady while a car is
     // there, red and blinking with '왼쪽/오른쪽 차량 주의' once the turn signal is on towards it
     const float w = 140, h = 170;
     const float x = right ? s->fb_w - w - 20 : 20;
@@ -2443,21 +2443,47 @@ static void ui_draw_bsd_mark(const UIState* s, bool right, bool danger) {
     nvgStrokeWidth(s->vg, 5);
     nvgStroke(s->vg);
 
-    // car seen from above
-    const float cx = x + w / 2, cw = 58, ch = 82, cy = y + 16;
+    // car seen from the side (the user's picture), big enough to fill the upper half of the box
+    const float cx = x + w / 2, cw = 118, ch = 64, cy = y + 48;  // car width / height, centre of the body
     nvgBeginPath(s->vg);
-    nvgRoundedRect(s->vg, cx - cw / 2, cy, cw, ch, 16);
+    nvgRoundedRect(s->vg, cx - cw / 2, cy - ch * 0.08f, cw, ch * 0.42f, 10);  // lower body
+    nvgMoveTo(s->vg, cx - cw * 0.34f, cy - ch * 0.06f);                         // cabin
+    nvgLineTo(s->vg, cx - cw * 0.20f, cy - ch * 0.46f);
+    nvgLineTo(s->vg, cx + cw * 0.18f, cy - ch * 0.46f);
+    nvgLineTo(s->vg, cx + cw * 0.38f, cy - ch * 0.06f);
+    nvgClosePath(s->vg);
     nvgFillColor(s->vg, fg);
     nvgFill(s->vg);
-    nvgBeginPath(s->vg);
-    nvgRoundedRect(s->vg, cx - cw / 2 + 9, cy + 14, cw - 18, 18, 5);   // windscreen
-    nvgRoundedRect(s->vg, cx - cw / 2 + 9, cy + ch - 26, cw - 18, 13, 4);  // rear window
+    nvgBeginPath(s->vg);                                                        // side windows
+    nvgMoveTo(s->vg, cx - cw * 0.27f, cy - ch * 0.10f);
+    nvgLineTo(s->vg, cx - cw * 0.16f, cy - ch * 0.37f);
+    nvgLineTo(s->vg, cx - cw * 0.02f, cy - ch * 0.37f);
+    nvgLineTo(s->vg, cx - cw * 0.02f, cy - ch * 0.10f);
+    nvgClosePath(s->vg);
+    nvgMoveTo(s->vg, cx + cw * 0.03f, cy - ch * 0.10f);
+    nvgLineTo(s->vg, cx + cw * 0.03f, cy - ch * 0.37f);
+    nvgLineTo(s->vg, cx + cw * 0.15f, cy - ch * 0.37f);
+    nvgLineTo(s->vg, cx + cw * 0.29f, cy - ch * 0.10f);
+    nvgClosePath(s->vg);
     nvgFillColor(s->vg, bg);
     nvgFill(s->vg);
+    for (int i = -1; i <= 1; i += 2) {                                          // wheels
+        nvgBeginPath(s->vg);
+        nvgCircle(s->vg, cx + i * cw * 0.29f, cy + ch * 0.36f, ch * 0.17f);
+        nvgFillColor(s->vg, fg);
+        nvgFill(s->vg);
+        nvgStrokeColor(s->vg, bg);
+        nvgStrokeWidth(s->vg, 4);
+        nvgStroke(s->vg);
+        nvgBeginPath(s->vg);
+        nvgCircle(s->vg, cx + i * cw * 0.29f, cy + ch * 0.36f, ch * 0.06f);
+        nvgFillColor(s->vg, bg);
+        nvgFill(s->vg);
+    }
 
-    // small warning triangle with an exclamation mark under the car (the user's sign pictures):
+    // warning triangle with an exclamation mark under the car, filling the lower half of the box:
     // yellow with a black rim in the yellow box, white with a red rim in the red box
-    const float triW = 62, triH = 54, triX = cx - triW / 2, triY = y + 106;
+    const float triW = 92, triH = 76, triX = cx - triW / 2, triY = y + h - triH - 8;
     nvgBeginPath(s->vg);
     nvgMoveTo(s->vg, cx, triY);
     nvgLineTo(s->vg, triX + triW, triY + triH);
@@ -2467,11 +2493,11 @@ static void ui_draw_bsd_mark(const UIState* s, bool right, bool danger) {
     nvgFillColor(s->vg, danger ? COLOR_WHITE : nvgRGBA(250, 184, 0, 255));
     nvgFill(s->vg);
     nvgStrokeColor(s->vg, danger ? nvgRGBA(200, 0, 0, 255) : nvgRGBA(20, 20, 20, 255));
-    nvgStrokeWidth(s->vg, danger ? 7 : 5);
+    nvgStrokeWidth(s->vg, danger ? 9 : 6);
     nvgStroke(s->vg);
     nvgBeginPath(s->vg);
-    nvgRoundedRect(s->vg, cx - 4, triY + 16, 8, 22, 4);
-    nvgCircle(s->vg, cx, triY + 45, 4.5f);
+    nvgRoundedRect(s->vg, cx - 5.5f, triY + 24, 11, 30, 5.5f);
+    nvgCircle(s->vg, cx, triY + 64, 6);
     nvgFillColor(s->vg, nvgRGBA(20, 20, 20, 255));
     nvgFill(s->vg);
 
