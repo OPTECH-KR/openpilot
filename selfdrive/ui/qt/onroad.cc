@@ -1,8 +1,10 @@
 #include "selfdrive/ui/qt/onroad.h"
 
+#include <algorithm>
 #include <cmath>
 
 #include <QDebug>
+#include <QMouseEvent>
 
 #include "selfdrive/common/timing.h"
 #include "selfdrive/ui/paint.h"
@@ -82,6 +84,18 @@ OnroadWindow::OnroadWindow(QWidget *parent) : QWidget(parent) {
 }
 
 void OnroadWindow::updateState(const UIState &s) {
+  // optech '녹화 버튼' (화면 탭): show or hide the screen record button; hiding it stops a recording
+  if (recorder && recorder->isVisible() != s.show_record_btn) {
+    if (!s.show_record_btn) recorder->stop(false);
+    recorder->setVisible(s.show_record_btn);
+  }
+  if (recorder && recorder->isVisible()) {
+    // optech HUD: bottom right corner, under the red '차량 주의' mark (paint.cc ui_draw_bsd_mark: right 20, 140 wide)
+    QWidget* rw = recorder->parentWidget();
+    const QMargins m = s.show_mode == 7 ? QMargins(0, 0, 20, 40) : QMargins(35, 35, 35, 35);
+    if (rw->layout() && rw->layout()->contentsMargins() != m) rw->layout()->setContentsMargins(m);
+  }
+
   QColor bgColor = bg_colors[s.status];
   Alert alert = Alert::get(*(s.sm), s.scene.started_frame);
   if (s.sm->updated("controlsState") || !alert.equal({})) {
@@ -110,6 +124,25 @@ void OnroadWindow::updateState(const UIState &s) {
 }
 
 void OnroadWindow::mousePressEvent(QMouseEvent* e) {
+  // optech 주행 화면: the steering wheel (top right) opens a small panel to move the path left / right
+  UIState* s = uiState();
+  if (s->scene.started && s->show_mode == 7) {
+    const QPoint p = e->pos() - nvg->pos();
+    const int w = nvg->width(), h = nvg->height();
+    if (optech_wheel_rect(w, h).contains(p)) {
+      s->optech_tune_open = !s->optech_tune_open;
+      return;
+    }
+    if (s->optech_tune_open) {
+      int step = optech_tune_minus_rect(w, h).contains(p) ? -5 : optech_tune_plus_rect(w, h).contains(p) ? 5 : 0;
+      if (step != 0) {
+        s->path_offset = std::clamp(s->path_offset + step, -200, 200);
+        Params().put("PathOffset", std::to_string(s->path_offset));
+        return;
+      }
+      if (optech_tune_panel_rect(w, h).contains(p)) return;
+    }
+  }
   if (false && map != nullptr) {
     bool sidebarVisible = geometry().x() > 0;
     map->setVisible(!sidebarVisible && !map->isVisible());
@@ -605,6 +638,15 @@ void AnnotatedCameraWidget::drawDriverState(QPainter &painter, const UIState *s)
   // base icon
   int x = rightHandDM ? rect().right() -  (btn_size - 24) / 2 - (bdr_s * 2) : (btn_size - 24) / 2 + (bdr_s * 2);
   int y = rect().bottom() - footer_h / 2;
+  if (s->show_mode == 7) {
+    // optech HUD: bottom left corner, centred under the yellow '차량 주의' mark (paint.cc ui_draw_bsd_mark: x 20,
+    // 140 wide), 170 across, its centre level with the REC button's (user 2026-11-23)
+    const float k = 170.f / btn_size;
+    painter.translate(20 + 70, height() - 40 - 70);
+    painter.scale(k, k);
+    x = 0;
+    y = 0;
+  }
   float opacity = dmActive ? 0.65 : 0.2;
   drawIcon(painter, x, y, dm_img, blackColor(70), opacity);
 

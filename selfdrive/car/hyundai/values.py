@@ -1960,37 +1960,7 @@ def main():
   cars = [value for member, value in vars(CAR).items()
           if not member.startswith("_") and value not in CANFD_CAR and value not in OTHER_CAR and value not in MENU_HIDDEN
           and value in DBC]  # a name without a DBC entry (TUCSON_4TH_GEN) cannot start
-  # Chevrolet (selfdrive/car/gm): the Bolt EUV 2022-23 with the camera harness, stock ACC
-  from selfdrive.car.gm.values import CAR as GM_CAR
-  cars.append(GM_CAR.BOLT_EUV)
-  cars.append(GM_CAR.BOLT_CC)
-  # more GM cars (optech, after StarPilot / sunnypilot / comma): ASCM, camera harness with stock ACC, without ACC
-  cars += [GM_CAR.VOLT, GM_CAR.VOLT_CC, GM_CAR.ACADIA, GM_CAR.BUICK_LACROSSE, GM_CAR.ESCALADE, GM_CAR.ESCALADE_ESV,
-           GM_CAR.ESCALADE_ESV_2019, GM_CAR.SILVERADO, GM_CAR.SILVERADO_CC, GM_CAR.EQUINOX, GM_CAR.EQUINOX_CC,
-           GM_CAR.TRAILBLAZER, GM_CAR.TRAILBLAZER_CC, GM_CAR.TRAX, GM_CAR.SUBURBAN, GM_CAR.SUBURBAN_CC, GM_CAR.YUKON_CC,
-           GM_CAR.MALIBU_CC, GM_CAR.CT6_CC, GM_CAR.XT4_CC, GM_CAR.XT5_CC]
-  # Toyota / Lexus (selfdrive/car/toyota, comma v0.9.2): all but the LTA (angle) cars, which are dashcam only here
-  from selfdrive.car.toyota.values import CAR as TOYOTA_CAR, ANGLE_CONTROL_CAR as TOYOTA_ANGLE_CAR
-  cars += [v for k, v in vars(TOYOTA_CAR).items() if not k.startswith("_") and v not in TOYOTA_ANGLE_CAR]
-  # Honda / Acura (selfdrive/car/honda, comma v0.9.2): not the radarless cars (dashcam only here) or Europe-only models
-  from selfdrive.car.honda.values import CAR as HONDA_CAR
-  cars += [v for k, v in vars(HONDA_CAR).items() if not k.startswith("_") and v not in ["HONDA CIVIC 2022", "HONDA CIVIC SEDAN 1.6 DIESEL 2019", "HONDA CR-V EU 2016", "HONDA HR-V 2023"]]
-  # Volkswagen group MQB (selfdrive/car/volkswagen, comma v0.9.2): stock ACC; not the PQ cars (dashcam only)
-  from selfdrive.car.volkswagen.values import CAR as VW_CAR, PQ_CARS as VW_PQ_CARS
-  cars += [v for k, v in vars(VW_CAR).items() if not k.startswith("_") and v not in VW_PQ_CARS]
-  # Mazda (selfdrive/car/mazda, comma v0.9.2): only CX-5 2022 and CX-9 2021 steer there; the older ones are dashcam only
-  from selfdrive.car.mazda.values import CAR as MAZDA_CAR
-  cars += [MAZDA_CAR.CX5_2022, MAZDA_CAR.CX9_2021]
-  # Nissan (selfdrive/car/nissan, comma v0.9.2): all
-  from selfdrive.car.nissan.values import CAR as NISSAN_CAR
-  cars += [v for k, v in vars(NISSAN_CAR).items() if not k.startswith("_")]
-  # Subaru (selfdrive/car/subaru, comma v0.9.2): global platform; not gen2 (Outback / Legacy 2020+, no gen2 mode in
-  # this panda) or pre-global (dashcam only in comma v0.9.2)
-  from selfdrive.car.subaru.values import CAR as SUBARU_CAR, GLOBAL_GEN2 as SUBARU_GEN2, PREGLOBAL_CARS as SUBARU_PREGLOBAL
-  cars += [v for k, v in vars(SUBARU_CAR).items() if not k.startswith("_") and v not in SUBARU_GEN2 + SUBARU_PREGLOBAL]
-  # Chrysler / Jeep (selfdrive/car/chrysler, comma v0.9.2): Pacifica and Grand Cherokee; not RAM (dashcam only here)
-  from selfdrive.car.chrysler.values import CAR as CHRYSLER_CAR, RAM_CARS as CHRYSLER_RAM
-  cars += [v for k, v in vars(CHRYSLER_CAR).items() if not k.startswith("_") and v not in CHRYSLER_RAM]
+  # optech-hkg is Hyundai / Kia / Genesis only (2026-11-23): the other brands were removed (they go to optech-spst)
   # grouped by brand / model / year with Korean names (car_menu.py); utf-8 whatever the locale
   from selfdrive.car.hyundai.car_menu import menu_lines
   for line in menu_lines(cars):

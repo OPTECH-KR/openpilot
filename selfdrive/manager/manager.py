@@ -56,7 +56,7 @@ def manager_init() -> None:
     ("ShowDebugUI", "0"),
     ("OPKRServer", "0"),
     ("ShowDateTime", "0"),
-    ("ShowHudMode", "6"),
+    ("ShowHudMode", "7"),
     ("ShowSteerRotate", "1"),
     ("ShowPathEnd", "1"),
     ("ShowAccelRpm", "1"),
@@ -125,8 +125,25 @@ def manager_init() -> None:
     ("AutoNaviSpeedBumpSpeed", "35"),
     ("AutoNaviSpeedSafetyFactor", "100"),
     ("OptechBrakeResumeMode", "1"),
+    ("OptechLdwsCar", "0"),       # 토글 > LDWS 차량 (OPKR LdwsCarFix: LKAS11 CF_Lkas_LdwsOpt_USM = 3)
+    ("OptechSignalEnable", "1"),  # 주행 > 신호등 > 신호등 사용 (HUD traffic light + green light alert)
+    ("OptechGreenAlert", "1"),   # 주행 > 신호등 > 초록불 알림 (StarPilot green light alert)
     ("OptechGasResume", "0"),    # 주행 > 브레이크 > 악셀로 다시 켜기 (off: the driver turns it on)
     ("OptechOffShutdown", "0"),  # 고급 > 시동 끈 뒤 꺼짐 (seconds, 0 off)
+    ("OptechSettingsTimeout", "180"),  # 화면 > 화면 유지 시간 (seconds, -1 항상)
+    ("OptechDriveDim", "0"),  # 화면 > 주행 중 밝기 (%, 0 off)
+    ("OptechShowRecordBtn", "0"),  # 화면 > 녹화 버튼 (0 hidden)
+    ("OptechLatMethod", "0"),
+    ("OptechPidKp", "25"),
+    ("OptechPidKi", "40"),
+    ("OptechPidKf", "7"),
+    ("OptechIndiInner", "35"),
+    ("OptechIndiOuter", "20"),
+    ("OptechIndiTime", "14"),
+    ("OptechIndiAct", "20"),
+    ("OptechLqrScale", "1500"),
+    ("OptechLqrKi", "16"),
+    ("OptechLqrDcGain", "265"),  # 조향 > 조향 방식 (0 토크, 1 PID, 2 INDI, 3 LQR) and their values (OPKR defaults)
     ("AutoNaviSpeedDecelRate", "80"),
     ("AutoRoadLimitCtrl", "0"),
     ("AutoResumeFromBrakeRelease", "1"),
@@ -214,6 +231,13 @@ def manager_init() -> None:
     if params.get(k) is None:
       params.put(k, v)
 
+  # optech 주행 화면 (ShowHudMode 7, 2026-11): every device uses it (also forced below on every start; the
+  # '화면 표시 방식' menu was removed 2026-11-23). Once: tyres on, as they are part of the right column
+  if not params.get_bool("OptechHud7Set"):
+    params.put("ShowHudMode", "7")
+    params.put("ShowTpms", "1")      # tyres are part of the right column
+    params.put_bool("OptechHud7Set", True)
+
   # Korean by default: once per install, switch to Korean even if an older install left English behind.
   # After that the language chosen in the menu is kept (the marker is removed only by a fresh install).
   langMarker = '/data/openpilot/.lang_ko_default'
@@ -245,10 +269,10 @@ def manager_init() -> None:
                ("LateralMotionCost", "11"), ("LateralJerkCost", "5"), ("MaxAngleFrames", "89"),
                ("SteerDeltaUp", "3"), ("SteerDeltaDown", "7"), ("UseLaneLineSpeed", "0"),
                ("CruiseButtonMode", "0"), ("CruiseSpeedMin", "10"),
-               ("ShowHudMode", "6"),
+               ("ShowHudMode", "7"),
                ("GpsSource", "1"),
                # brake release resume is done by cruise_helper (EngageWithLong): the old apilot conditions are off
-               ("AutoResumeFromBrakeRelease", "0"), ("BrakeResumeSpeedMode", "1")):  # GPS is always the phone built-in one; the selector is removed  # screen mode fixed to the carrot HUD box; the selector is removed
+               ("AutoResumeFromBrakeRelease", "0"), ("BrakeResumeSpeedMode", "1")):  # GPS is always the phone built-in one; the selector is removed  # screen mode fixed to the optech 주행 화면 (7); the selector is removed
     params.put(k, v)
 
   # optech: 감속 시작 / 감속 끝 / 목표 속도 are menu settings again (주행 > 카메라 감속); they used to be reset here on
@@ -332,6 +356,8 @@ def manager_thread() -> None:
 
   if EON:
     Process(name="autoshutdownd", target=launcher, args=("selfdrive.autoshutdownd", "autoshutdownd")).start()
+    # optech 고급 > 주행 기록 내려받기: serves /data/drivelog to the phone for 15 min after the menu button
+    Process(name="logserver", target=launcher, args=("selfdrive.carrot.tools.logserver", "logserver")).start()
     system("am startservice com.neokii.optool/.MainService")
 
   Process(name="road_speed_limiter", target=launcher, args=("selfdrive.road_speed_limiter", "road_speed_limiter")).start()

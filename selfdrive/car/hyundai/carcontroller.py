@@ -26,7 +26,12 @@ def process_hud_alert(enabled, fingerprint, hud_control):
   # initialize to no line visible
   # TODO: this is not accurate for all cars
   sys_state = 1
-  if hud_control.leftLaneVisible and hud_control.rightLaneVisible or sys_warning:  # HUD alert only display when LKAS status is active
+  # optech (K7 HEV HUD feedback, like OPKR which always sends both lanes visible): while openpilot is on show both
+  # lane lines all the time, so the HUD lines just mean 'on'. The model's lane visibility flips around 50 % on faded
+  # lines / intersections and made the lines come and go every second (drivelog still records the real values)
+  if enabled:
+    sys_state = 3
+  elif hud_control.leftLaneVisible and hud_control.rightLaneVisible or sys_warning:  # HUD alert only display when LKAS status is active
     sys_state = 3 if enabled or sys_warning else 4
   elif hud_control.leftLaneVisible:
     sys_state = 5
@@ -52,6 +57,7 @@ class CarController:
   def __init__(self, dbc_name, CP, VM):
     self.CP = CP
     self.params = CarControllerParams(CP)
+    self.ldws_car = Params().get_bool("OptechLdwsCar")  # 토글 > LDWS 차량 (read at start: reboot to apply)
     self.packer = CANPacker(dbc_name)
     self.angle_limit_counter = 0
     self.frame = 0
@@ -89,6 +95,29 @@ class CarController:
     self.resume_wait_timer = 0
     self.button_alive = 0
     self.button_alive_frame = 0
+    # optech drive record: cruise buttons openpilot sent to the car (CLU11), counted since start -
+    # RES while the car's SCC is off / RES while on / SET- / GAP / CANCEL (drivelog reads the change)
+    self.btn_counts = [0, 0, 0, 0, 0]
+
+  def drive_record_text(self, CS, can_sends):
+    """carControl.debugTextCC for selfdrive/carrot/tools/drivelog.py (nothing else shows it)."""
+    for msg in can_sends:
+      if msg[0] == 1265:  # CLU11: CF_Clu_CruiseSwState is the low 3 bits of byte 0
+        btn = msg[2][0] & 0x7
+        if btn == Buttons.RES_ACCEL:
+          self.btn_counts[1 if CS.out.cruiseState.enabled else 0] += 1
+        elif btn == Buttons.SET_DECEL:
+          self.btn_counts[2] += 1
+        elif btn == Buttons.GAP_DIST:
+          self.btn_counts[3] += 1
+        elif btn == Buttons.CANCEL:
+          self.btn_counts[4] += 1
+    scc = CS.scc_diag if CS.scc_diag is not None else (-1, -1, -1, -1)
+    cam = CS.cam_lkas_diag if CS.cam_lkas_diag is not None else (-1, -1)
+    fca = CS.fca_diag if CS.fca_diag is not None else (-1, -1)
+    fcw = CS.cam_fcw_diag if CS.cam_fcw_diag is not None else (-1, -1)
+    return "OPT i={} a={} f={} m={} cl={} cw={} r0={} r1={} s={} g={} c={} fi={} fs={} cf={} cu={}".format(
+      *scc, *cam, *self.btn_counts, *fca, *fcw)
 
   def update(self, CC, CS):
     actuators = CC.actuators
@@ -219,8 +248,8 @@ class CarController:
     else:
       can_sends.append(hyundaican.create_lkas11(self.packer, self.frame, self.car_fingerprint, self.send_lfa_mfa_lkas, apply_steer, lat_active,
                                                 torque_fault, CS.lkas11, sys_warning, sys_state, CC.enabled,
-                                                hud_control.leftLaneVisible, hud_control.rightLaneVisible,
-                                                left_lane_warning, right_lane_warning))
+                                                hud_control.leftLaneVisible or CC.enabled, hud_control.rightLaneVisible or CC.enabled,
+                                                left_lane_warning, right_lane_warning, ldws_car=self.ldws_car))
 
       if not self.CP.openpilotLongitudinalControl:
         if CC.cruiseControl.cancel:
@@ -347,6 +376,11 @@ class CarController:
     new_actuators = actuators.copy()
     new_actuators.steer = apply_steer / self.params.STEER_MAX
     new_actuators.accel = accel
+
+    try:
+      CC.debugTextCC = self.drive_record_text(CS, can_sends)
+    except Exception:  # noqa: BLE001  (the drive record must never stop the car's messages)
+      pass
 
     self.frame += 1
     return new_actuators, can_sends

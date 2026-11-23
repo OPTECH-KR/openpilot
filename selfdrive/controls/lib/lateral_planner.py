@@ -106,12 +106,12 @@ class LateralPlanner:
     # Lane change logic
     self.DH.update(sm['carState'], sm['carControl'].latActive, lane_change_prob, md, turn_prob, sm['roadLimitSpeed'], self.LP.lane_width)
 
-    if self.v_ego*3.6 >= self.useLaneLineSpeed + 2:
-      self.useLaneLineMode = True
-    elif self.v_ego*3.6 < self.useLaneLineSpeed - 2:
-      self.useLaneLineMode = False
+    # optech (2026-11): lane lines are always chosen automatically while openpilot runs (its own enable speed is the
+    # only speed condition): follow the lane lines when both are clear, the model path when they fade
+    # (UseLaneLineSpeed is not used any more; it was 0 = never lane lines on every device)
+    self.useLaneLineMode = True
 
-    if self.useLaneLineMode and self.useLaneLineSpeed > 0:
+    if self.useLaneLineMode:
       # Turn off lanes during lane change
       if self.DH.desire == log.LateralPlan.Desire.laneChangeRight or self.DH.desire == log.LateralPlan.Desire.laneChangeLeft:
         self.LP.lll_prob *= self.DH.lane_change_ll_prob
