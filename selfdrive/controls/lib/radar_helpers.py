@@ -18,6 +18,8 @@ RADAR_TO_CAMERA = 1.52   # RADAR is ~ 1.5m ahead from center of mesh frame
 class Track():
   def __init__(self, v_lead, kalman_params):
     self.cnt = 0
+    self.seen = 0           # optech: radar frames since this track id appeared (cnt restarts on a speed jump)
+    self.vision_frames = 0  # optech: frames in a row the camera's lead sat on this track (radard, raw tracks only)
     self.aLeadTau = _LEAD_ACCEL_TAU
     self.K_A = kalman_params.A
     self.K_C = kalman_params.C
@@ -52,6 +54,7 @@ class Track():
       self.aLeadTau *= 0.9
 
     self.cnt += 1
+    self.seen += 1
 
   def get_key_for_cluster(self):
     # Weigh y higher since radar is inaccurate in this dimension
