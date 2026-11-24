@@ -324,8 +324,9 @@ class Controls:
       if self.optech_signal_on:
         model = self.sm['modelV2']
         x = model.position.x
-        acc = model.acceleration.x
-        model_accel = float(sum(acc[:11]) / len(acc[:11])) if len(acc) else 0.
+        # a capnp list (pycapnp 1.x on the device) can't be sliced: acc[:11] raised TypeError and stopped controlsd
+        acc = list(model.acceleration.x)[:11]
+        model_accel = float(sum(acc) / len(acc)) if len(acc) else 0.
         lead = self.sm['radarState'].leadOne
         self.optech_signal.update(CS.vEgo, float(x[-1]) if len(x) else 1000., model_accel, CS.standstill,
                                   CS.leftBlinker or CS.rightBlinker, CS.steeringAngleDeg,

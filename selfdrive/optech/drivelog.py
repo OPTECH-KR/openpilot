@@ -316,13 +316,13 @@ class DriveLog:
       self.event("panda safety {} ({}) allowed {} fault {} [{}] harness {} heartbeatLost {} ign {}".format(*state)
                  + (f" (was {self.prev_panda[0]})" if self.prev_panda is not None else ""))
     self.prev_panda = state
-    errs = (p.canSendErrs, p.canFwdErrs, p.canRxErrs)
+    # spst's pandaState (legacypilot) has one CAN error counter, not optech-hkg's send / forward / receive ones
+    errs = (p.canErrorCounter,)
     now = time.monotonic()
     if self.prev_panda_errs is None:
       self.prev_panda_errs = errs
     elif now >= self.next_panda_err_event and errs != self.prev_panda_errs:
-      d = [n - o for n, o in zip(errs, self.prev_panda_errs)]
-      self.event(f"panda CAN errors send +{d[0]} fwd +{d[1]} rx +{d[2]} (total {errs[0]} {errs[1]} {errs[2]})")
+      self.event(f"panda CAN errors +{errs[0] - self.prev_panda_errs[0]} (total {errs[0]})")
       self.next_panda_err_event = now + PANDA_ERR_EVENT_S
       self.prev_panda_errs = errs
 
