@@ -19,6 +19,25 @@ MAX_ANGLE = 85
 MAX_ANGLE_FRAMES = 89
 MAX_ANGLE_CONSECUTIVE_FRAMES = 2
 
+# KIA SOUL EV (SK3), carrot e5cf102 (measured in that car): its MDPS starts taking our torque (MDPS12 ToiActive 0 -> 1)
+# only when the requested torque is near 0 at its check - every start seen was at |torque| <= 9, a steady 30..409 was
+# refused for good. So while it does not take our torque (ignored anyway), send 0 with the request bit still on: it
+# starts at its next check and our torque then ramps up from 0. Carrot also found: do NOT toggle the request bit to
+# coax it (faults the MDPS or turns short slips into full drops); keep the request steady.
+SK3_NOACT_ZERO_FRAMES = 10    # MDPS not taking torque this long (100 Hz, small debounce) -> send 0
+SK3_NOACT_WARN_FRAMES = 100   # ... and this long while moving -> cluster 'keep hands on wheel'
+
+# RES that turns the car's own SCC on while openpilot is engaged (stock SCC cars), see optech_res_allowed().
+# K7 HEV 2018 drive record 2026-11-24 (28 tries): every RES below 30 km/h without a lead (11..26 km/h) and every RES at
+# a standstill was refused, and each refusal showed '스마트 크루즈 컨트롤 작동조건이 아님' on the cluster (SCC11
+# DriverAlertDisplay 2, 21 times; the old rule kept pressing RES for up to 12 s). From 30 km/h, or moving with a lead,
+# the car took it within 1-2 s. Hyundai/Kia manuals of these years: without a car ahead SCC sets from 30 km/h.
+RES_MIN_KPH = 30.0       # no lead: from this speed
+RES_LEAD_MIN_KPH = 5.0   # with a lead: once moving (at a standstill the car refuses RES)
+RES_TRY_S = 3.0          # car SCC still off after this long -> stop pressing RES ...
+RES_RETRY_KPH = 5.0      # ... until the speed is this much higher, a lead appears,
+RES_HOLD_S = 15.0        # ... or this long has passed
+
 
 def process_hud_alert(enabled, fingerprint, hud_control):
   sys_warning = (hud_control.visualAlert in (VisualAlert.steerRequired, VisualAlert.ldw))
@@ -61,6 +80,9 @@ class CarController:
     self.packer = CANPacker(dbc_name)
     self.angle_limit_counter = 0
     self.frame = 0
+    self.sk3 = CP.carFingerprint == CAR.KIA_SOUL_EV_SK3
+    self.mdps_noact_frames = 0  # SK3: frames the MDPS has not taken our torque while steering is on
+    self.lkas_noact_frames = 0  # SK3: the same while moving (cluster warning)
 
     self.accel_last = 0
     self.apply_steer_last = 0
@@ -95,6 +117,12 @@ class CarController:
     self.resume_wait_timer = 0
     self.button_alive = 0
     self.button_alive_frame = 0
+    # RES while the car's SCC is off (optech_res_allowed)
+    self.res_try_frame = -1    # frame of the first RES of the current try (-1: not trying)
+    self.res_hold = False      # the car refused for RES_TRY_S: wait for a better chance
+    self.res_hold_kph = 0.
+    self.res_hold_lead = False
+    self.res_hold_frame = 0
     # optech drive record: cruise buttons openpilot sent to the car (CLU11), counted since start -
     # RES while the car's SCC is off / RES while on / SET- / GAP / CANCEL (drivelog reads the change)
     self.btn_counts = [0, 0, 0, 0, 0]
@@ -119,6 +147,27 @@ class CarController:
     return "OPT i={} a={} f={} m={} cl={} cw={} r0={} r1={} s={} g={} c={} fi={} fs={} cf={} cu={}".format(
       *scc, *cam, *self.btn_counts, *fca, *fcw)
 
+  def optech_res_allowed(self, CS, lead):
+    """May RES go to the car now to turn its SCC on? Only when the car can accept it (see RES_MIN_KPH): every refused
+    RES shows '작동조건이 아님' on the cluster. Called on every frame a RES would be sent."""
+    v_kph = CS.out.vEgo * CV.MS_TO_KPH
+    if CS.out.brakePressed or CS.out.brakeLights or not (v_kph >= RES_MIN_KPH or (lead and v_kph >= RES_LEAD_MIN_KPH)):
+      self.res_try_frame = -1
+      return False
+    if self.res_hold:
+      if v_kph >= self.res_hold_kph + RES_RETRY_KPH or (lead and not self.res_hold_lead) or \
+         (self.frame - self.res_hold_frame) * DT_CTRL >= RES_HOLD_S:
+        self.res_hold = False
+      else:
+        return False
+    if self.res_try_frame < 0:
+      self.res_try_frame = self.frame
+    elif (self.frame - self.res_try_frame) * DT_CTRL >= RES_TRY_S:
+      self.res_try_frame = -1
+      self.res_hold, self.res_hold_kph, self.res_hold_lead, self.res_hold_frame = True, v_kph, lead, self.frame
+      return False
+    return True
+
   def update(self, CC, CS):
     actuators = CC.actuators
     hud_control = CC.hudControl
@@ -130,6 +179,13 @@ class CarController:
     apply_steer = apply_driver_steer_torque_limits(new_steer, self.apply_steer_last, CS.out.steeringTorque, self.params)
 
     if not CC.latActive:
+      apply_steer = 0
+
+    # KIA SOUL EV (SK3): MDPS not taking our torque -> request 0 so it starts, then ramp up from 0 (see SK3_NOACT_*)
+    mdps_noact = self.sk3 and CC.latActive and int(round(getattr(CS, "steer_state", 1))) == 0
+    self.mdps_noact_frames = self.mdps_noact_frames + 1 if mdps_noact else 0
+    self.lkas_noact_frames = self.lkas_noact_frames + 1 if mdps_noact and CS.out.vEgoRaw >= 2.0 else 0
+    if self.mdps_noact_frames >= SK3_NOACT_ZERO_FRAMES:
       apply_steer = 0
 
     self.apply_steer_last = apply_steer
@@ -200,6 +256,13 @@ class CarController:
     if self.angle_limit_counter >= self.maxAngleFrames + MAX_ANGLE_CONSECUTIVE_FRAMES:
       self.angle_limit_counter = 0
 
+    if self.sk3:
+      # KIA SOUL EV (SK3), carrot e5cf102: no 2-frame request cut above 85 degrees. This MDPS drops steering at each
+      # cut and has to start again, so it let go over and over through every sharp turn; the >90 degree EPS fault the
+      # cut prevents was never seen on this car (it held steering at 89 degrees under high torque).
+      torque_fault = False
+      lat_active = CC.latActive
+
     # CAN-FD platforms
     if self.CP.carFingerprint in CANFD_CAR:
       hda2 = self.CP.flags & HyundaiFlags.CANFD_HDA2
@@ -249,7 +312,8 @@ class CarController:
       can_sends.append(hyundaican.create_lkas11(self.packer, self.frame, self.car_fingerprint, self.send_lfa_mfa_lkas, apply_steer, lat_active,
                                                 torque_fault, CS.lkas11, sys_warning, sys_state, CC.enabled,
                                                 hud_control.leftLaneVisible or CC.enabled, hud_control.rightLaneVisible or CC.enabled,
-                                                left_lane_warning, right_lane_warning, ldws_car=self.ldws_car))
+                                                left_lane_warning, right_lane_warning, ldws_car=self.ldws_car,
+                                                noact_warning=self.lkas_noact_frames >= SK3_NOACT_WARN_FRAMES))
 
       if not self.CP.openpilotLongitudinalControl:
         if CC.cruiseControl.cancel:
@@ -275,6 +339,9 @@ class CarController:
         else:
           self.resume_wait_timer = 0
           self.resume_cnt = 0
+          if CS.out.cruiseState.enabled or not CC.enabled:
+            self.res_try_frame = -1
+            self.res_hold = False
           target = int(set_speed_in_units+0.5)
           current = int(CS.out.cruiseState.speed*CV.MS_TO_KPH + 0.5)
 
@@ -287,7 +354,8 @@ class CarController:
               self.last_button_frame = self.frame
             elif CC.enabled and CS.cruise_buttons[-1] == Buttons.NONE:
               if not CS.out.cruiseState.enabled:
-                if CC.longActive and (hud_control.leadVisible or current > 10.0):
+                # was: CC.longActive and (hud_control.leadVisible or current > 10.0), current = the car's set speed
+                if CC.longActive and self.optech_res_allowed(CS, hud_control.leadVisible):
                   can_sends.append(hyundaican.create_clu11_button(self.packer, self.frame, CS.clu11, Buttons.RES_ACCEL, self.CP.carFingerprint))
                   CC.debugTextCC = "BTN:++,T:{:.1f},C:{:.1f}".format(target, current)
                 #elif CC.longActive:

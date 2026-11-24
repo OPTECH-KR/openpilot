@@ -263,6 +263,17 @@ void TogglesPanel::updateToggles() {
   }
 }
 
+// Power Off button (Soul EV tester, 2026-11-24): upstream shows it only offroad, but with the harness the car on in P
+// (parking brake on) still counts as onroad, so the screen had no way to turn the device off. Onroad it now shows when
+// the car is in P and openpilot is off. Once the device is off the panda gets no heartbeat, goes to its idle mode
+// after ~5 s and passes the stock camera's messages to the car again (safety_defaults.h nooutput forwarding).
+static bool optech_poweroff_ok(const UIState &s) {
+  if (!s.scene.started) return true;
+  if (s.engaged()) return false;
+  return s.sm->rcv_frame("carState") > s.scene.started_frame &&
+         (*s.sm)["carState"].getCarState().getGearShifter() == cereal::CarState::GearShifter::PARK;
+}
+
 DevicePanel::DevicePanel(SettingsWindow *parent) : ListWidget(parent) {
   setSpacing(50);
   addItem(new LabelControl(tr("동글 ID"), getDongleId().value_or(tr("N/A"))));
@@ -387,7 +398,11 @@ DevicePanel::DevicePanel(SettingsWindow *parent) : ListWidget(parent) {
   QObject::connect(poweroff_btn, &QPushButton::clicked, this, &DevicePanel::poweroff);
 
   if (!Hardware::PC()) {
-    connect(uiState(), &UIState::offroadTransition, poweroff_btn, &QPushButton::setVisible);
+    // was: visible only offroad (offroadTransition)
+    connect(uiState(), &UIState::uiUpdate, poweroff_btn, [=](const UIState &s) {
+      const bool ok = optech_poweroff_ok(s);
+      if (poweroff_btn->isVisibleTo(this) != ok) poweroff_btn->setVisible(ok);
+    });
   }
 
   setStyleSheet(R"(
@@ -439,15 +454,15 @@ void DevicePanel::reboot() {
 }
 
 void DevicePanel::poweroff() {
-  if (!uiState()->engaged()) {
-    if (ConfirmationDialog::confirm(tr("Are you sure you want to power off?"), tr("Power Off"), this)) {
-      // Check engaged again in case it changed while the dialog was open
-      if (!uiState()->engaged()) {
-        Params().putBool("DoShutdown", true);
-      }
-    }
-  } else {
+  if (uiState()->engaged()) {
     ConfirmationDialog::alert(tr("Disengage to Power Off"), this);
+  } else if (!optech_poweroff_ok(*uiState())) {
+    ConfirmationDialog::alert("시동이 켜져 있을 때는 기어를 P에 놓아야 끌 수 있어요.", this);
+  } else if (ConfirmationDialog::confirm(tr("Are you sure you want to power off?"), tr("Power Off"), this)) {
+    // check again in case it changed while the dialog was open (engaged, or out of P with the car on)
+    if (optech_poweroff_ok(*uiState())) {
+      Params().putBool("DoShutdown", true);
+    }
   }
 }
 
@@ -957,7 +972,14 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   };
   // 1. 과속 단속 알림  2. 내비 연동 방식  3. 내장 카메라 DB: with the note and the tuning values they are shown only
   // while '카메라 감속' is on; when it is off only '카메라 감속' is left in this section
-  CValueControl *cam_haptic = new CValueControl("HapticFeedbackWhenSpeedCamera", "과속 단속 알림", "과속 단속 카메라가 가까워질 때 알려 주는 방법입니다. 0:사용 안 함, 1:핸들 진동, 2:계기판 표시, 3:HUD 표시", ROAD_ICON, 0, 3, 1);
+  // carcontroller: while the camera slowdown starts (activeHda 2) the value goes into LKAS11 CF_Lkas_LdwsLH/RHWarning
+  // for 0-3 s and 5-8 s, i.e. the car's own lane departure warning (K7 HEV tester 2026-11-24: beeps + cluster warning
+  // surprised him; the old text promised '1 핸들 진동, 2 계기판 표시, 3 HUD 표시', but every value 1-3 does the same)
+  CValueControl *cam_haptic = new CValueControl("HapticFeedbackWhenSpeedCamera", "과속 단속 알림",
+                                                "카메라 앞에서 속도를 줄이기 시작할 때 차의 차선 이탈 경고를 빌려 알려 줍니다 (3초씩 두 번).\n"
+                                                "0: 사용 안 함 (속도만 줄임, 처음 값)\n"
+                                                "1~3: 계기판에 차선 이탈 경고가 뜨고 경고음이 납니다. 핸들 진동이 있는 차는 핸들도 떨립니다. 숫자에 따라 차마다 경고 모양이 조금 다릅니다.",
+                                                ROAD_ICON, 0, 3, 1);
   CValueControl *navi_mode = new CValueControl("OptechNaviLinkMode", "내비 연동 방식", "카메라 정보를 어디서 받을지 정합니다.\n0:내비 안 씀 (내장 카메라 DB만, 내비 앱이 보내는 정보는 무시)\n1:APM(내비 앱)\n2:APM + 순정 내비게이션\n3:NDA\n'카메라 감속'이 켜져 있을 때 적용되고, 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 3, 1);
   QObject::connect(navi_mode, &CValueControl::valueChanged, [=](int cam_v) {
     Params cam_params;
