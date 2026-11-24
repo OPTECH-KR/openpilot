@@ -36,7 +36,7 @@ LAG_EVENT_MS = 100  # controlsd frame late by more than this -> event (at most e
 HEADER = ("# time | v km/h | set | en act lat lon | gas brk str | angle torque | steerCmd accel | "
           "lead d/vrel | cpu% temp mem% freeGB | lag ms | gps fix sats strong cno accm | fdrop% radarlag | "
           "carSCC main on mode | cluster info alert fail | lane L R cam camWarn | brakeLight | btn/s RESoff RESon SET GAP CANCEL | "
-          "FCA fail status camFCW fusion")
+          "FCA fail status camFCW fusion | leadSrc")
 
 # carControl.debugTextCC from the Hyundai carcontroller (drive_record_text): SCC radar -> cluster codes, the stock
 # camera's lane state and the cruise buttons openpilot sent (counts since start)
@@ -328,6 +328,8 @@ class DriveLog:
       parts.append("- - - - -")
     self.line_btn = btn
     parts.append(" ".join(str(opt[k]) for k in FCA_KEYS) if opt is not None else "- - - -")
+    # where leadOne came from: R = a radar point (camera-matched or the low-speed rule), V = camera only (added 2026-11-24)
+    parts.append(("R" if rs.leadOne.radar else "V") if rs is not None and rs.leadOne.status else "-")
     self.out.write(" | ".join(parts) + "\n")
     self.cpu_top(now)
 
