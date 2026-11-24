@@ -16,12 +16,22 @@
 #include "selfdrive/hardware/hw.h"
 
 
+// optech (2026-11-24, like the Power Off button in settings.cc): the update may also run with the car on while it is
+// parked - gear P and openpilot off. gitpull.sh reboots the device and it then builds for a few minutes, fine in P.
+static bool optech_update_parked = false;
+
+static bool optech_parked(const UIState &s) {
+  return !s.engaged() && s.sm->rcv_frame("carState") > s.scene.started_frame &&
+         (*s.sm)["carState"].getCarState().getGearShifter() == cereal::CarState::GearShifter::PARK;
+}
+
 void SoftwarePanel::checkForUpdates() {
   std::system("pkill -SIGUSR1 -f selfdrive.updated");
 }
 
 SoftwarePanel::SoftwarePanel(QWidget* parent) : ListWidget(parent) {
-  onroadLbl = new QLabel(tr("Updates are only downloaded while the car is off."));
+  onroadLbl = new QLabel("시동이 켜져 있을 때는 기어를 P에 놓고 오픈파일럿을 끄면 업데이트할 수 있어요.");
+  onroadLbl->setWordWrap(true);
   onroadLbl->setStyleSheet("font-size: 50px; font-weight: 400; text-align: left; padding-top: 30px; padding-bottom: 30px;");
   addItem(onroadLbl);
 
@@ -35,6 +45,10 @@ SoftwarePanel::SoftwarePanel(QWidget* parent) : ListWidget(parent) {
   // download update btn: C2 has no updated process, so check/pull with git directly
   downloadBtn = new ButtonControl("최신 업데이트", "확인");
   connect(downloadBtn, &ButtonControl::clicked, [=]() {
+    if (is_onroad && !optech_update_parked) {
+      ConfirmationDialog::alert("시동이 켜져 있을 때는 기어를 P에 놓아야 업데이트할 수 있어요.", this);
+      return;
+    }
     downloadBtn->setEnabled(false);
     downloadBtn->setValue("확인 중...");
     std::system("/data/openpilot/selfdrive/assets/addon/sh/gitcommit.sh");
@@ -50,8 +64,13 @@ SoftwarePanel::SoftwarePanel(QWidget* parent) : ListWidget(parent) {
       if (changes.isEmpty()) changes = "(바뀐 내용 목록을 불러오지 못했어요)";
       if (ConfirmationDialog::richConfirm("새 업데이트가 있어요. (" + local + " → " + remote + ")\n\n바뀐 내용:\n" + changes +
                                       "\n\n받은 뒤 자동으로 재부팅해요. 업데이트할까요?", "업데이트", this)) {
-        downloadBtn->setValue("업데이트 받는 중...");
-        std::system("/data/openpilot/selfdrive/assets/addon/sh/gitpull.sh");
+        if (is_onroad && !optech_update_parked) {
+          // the gear left P while the dialog was open
+          ConfirmationDialog::alert("기어가 P가 아니어서 업데이트하지 않았어요.", this);
+        } else {
+          downloadBtn->setValue("업데이트 받는 중...");
+          std::system("/data/openpilot/selfdrive/assets/addon/sh/gitpull.sh");
+        }
       }
     }
     updateLabels();
@@ -114,6 +133,13 @@ SoftwarePanel::SoftwarePanel(QWidget* parent) : ListWidget(parent) {
     is_onroad = !offroad;
     updateLabels();
   });
+  connect(uiState(), &UIState::uiUpdate, this, [=](const UIState &s) {
+    const bool parked = s.scene.started && optech_parked(s);
+    if (parked != optech_update_parked) {
+      optech_update_parked = parked;
+      updateLabels();
+    }
+  });
 
   updateLabels();
 }
@@ -136,9 +162,10 @@ void SoftwarePanel::updateLabels() {
     return;
   }
 
-  // updater only runs offroad
-  onroadLbl->setVisible(is_onroad);
-  downloadBtn->setVisible(!is_onroad);
+  // updater only runs offroad; optech: also with the car on while parked (gear P, openpilot off)
+  const bool can_update = !is_onroad || optech_update_parked;
+  onroadLbl->setVisible(!can_update);
+  downloadBtn->setVisible(can_update);
 
   // download update
   {
