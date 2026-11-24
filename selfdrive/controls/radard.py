@@ -21,6 +21,54 @@ import numpy as np
 LEAD_PATH_DREL_MIN = 60 # [m] only care about far away leads
 MIN_LANE_PROB = 0.6  # Minimum lanes probability to allow use.
 
+# optech, raw radar tracks only (RadarInterface.new_radar = Mando front radar tracks; the SCC object is already filtered
+# by the car's radar). Kia Soul EV SK3 drive 2026-11-24 (dashcam + drive record): in 3-10 km/h traffic on a bridge every
+# steel expansion joint came back as a STATIONARY radar point ~5 m ahead while the camera's lead (a car moving ~2 m/s)
+# was at 7-9 m. The comma low-speed override took the closer point after one radar frame without any camera check and
+# braked at -1.0..-1.2 m/s^2. Two rules from other forks:
+# - StarPilot (Honda Bosch raw radar, honda_bosch_a_low_speed_radar_lead_sane): a radar point is a low-speed lead
+#   candidate only after RAW_MIN_SEEN_FRAMES frames in a row.
+# - carrot-wip moving-lead shield (radar_motion/primary.py _fresh_stationary_blocked, added after a tunnel-reflector
+#   FCW; carrot also lists bridge / tunnel / signal-gantry reflections as phantom cases): a stationary point clearly
+#   closer than a moving lead in our lane is not taken - neither by the low-speed override nor as the camera lead's
+#   radar match - until the camera has put its lead on that point SHIELD_VISION_FRAMES frames in a row. carrot's shield
+#   lead must move > 4 m/s; jam leads move 1.5-2.5 m/s, so here it only has to be clearly moving.
+# With no lead at all the low-speed override still takes a stationary point (after RAW_MIN_SEEN_FRAMES): carrot-wip
+# drops that too, but with openpilot long on raw tracks the car's own FCA is not active, so the safety net stays.
+RAW_MIN_SEEN_FRAMES = 3             # StarPilot HONDA_BOSCH_A_LOW_SPEED_MIN_COUNT (20 Hz radar: 0.15 s)
+SHIELD_VISION_FRAMES = 3            # carrot FRESH_STATIONARY_VISION_CONTINUITY_FRAMES
+SHIELD_STATIONARY_MAX_VLEAD = 1.5   # carrot FRESH_STATIONARY_GATE_MAX_ABS_VLEAD_MPS (reflectors read 0-0.2 m/s)
+SHIELD_LEAD_MIN_VLEAD = 1.5         # the shielding lead is moving [m/s] ...
+SHIELD_LEAD_MIN_SPEED_GAP = 1.0     # ... and clearly faster than the point [m/s]
+SHIELD_MIN_GAP_M = 1.0              # the point is at least this much closer than the lead (carrot handoff margin)
+SHIELD_MAX_GAP_M = 40.0             # carrot MOVING_LEAD_SHIELD_MAX_GAP_M: a car far ahead is no shield
+SHIELD_LEAD_MAX_Y = 1.0             # carrot MOVING_LEAD_SHIELD_MAX_DPATH_M: the lead is in our lane
+VISION_SUPPORT_MAX_Y = 1.25         # carrot: camera lead on the point within 1.25 m sideways ...
+VISION_SUPPORT_MIN_DIST_M = 2.0     # ... and max(2 m, 20 %) in distance
+
+
+def vision_on_track(t, lead_msg):
+  """The camera's lead sits on this radar track (distance and side)."""
+  cam_d = lead_msg.x[0] - RADAR_TO_CAMERA
+  return abs(t.dRel - cam_d) <= max(VISION_SUPPORT_MIN_DIST_M, 0.2 * cam_d) and abs(t.yRel + lead_msg.y[0]) <= VISION_SUPPORT_MAX_Y
+
+
+def shielded_stationary(c, lead):
+  """carrot-wip moving-lead shield: c is a stationary radar point clearly closer than lead = (dRel, vLead, yRel) of a
+  moving lead in our lane, and the camera has not confirmed c for SHIELD_VISION_FRAMES frames. lead None: no shield."""
+  if lead is None:
+    return False
+  d, v, y = lead
+  return (abs(c.vLead) <= SHIELD_STATIONARY_MAX_VLEAD
+          and v >= SHIELD_LEAD_MIN_VLEAD and v - c.vLead >= SHIELD_LEAD_MIN_SPEED_GAP
+          and abs(y) <= SHIELD_LEAD_MAX_Y
+          and c.dRel + SHIELD_MIN_GAP_M < d <= c.dRel + SHIELD_MAX_GAP_M
+          and max(t.vision_frames for t in c.tracks) < SHIELD_VISION_FRAMES)
+
+
+def raw_seen_enough(c):
+  return max(t.seen for t in c.tracks) >= RAW_MIN_SEEN_FRAMES
+
 #LEAD_PLUS_ONE_MIN_REL_DIST_V = [3.0, 6.0] # [m] min distance between lead+1 and lead at low and high distance
 #LEAD_PLUS_ONE_MIN_REL_DIST_BP = [0., 100.] # [m] min distance between lead+1 and lead at low and high distance
 #LEAD_PLUS_ONE_MAX_YREL_TO_LEAD = 3.0 # [m]
@@ -138,10 +186,20 @@ def get_path_adjacent_leads(v_ego, md, lane_width, clusters):
   lc = sorted(leads_center.values(), key=lambda c:c["dRel"])
   return [ll,lc,lr]
 
-def get_lead(v_ego, ready, clusters, lead_msg, model_v_ego, low_speed_override=True, mixRadarInfo=0):
+def get_lead(v_ego, ready, clusters, lead_msg, model_v_ego, low_speed_override=True, mixRadarInfo=0, raw_tracks=False,
+             blocked=None):
+  # optech raw radar tracks: stationary points shielded by the camera's moving lead may not be its radar match
+  # (blocked collects them for the diag log)
+  match_clusters = clusters
+  if raw_tracks and ready and lead_msg.prob > .5:
+    cam = (lead_msg.x[0] - RADAR_TO_CAMERA, lead_msg.v[0], -lead_msg.y[0])
+    match_clusters = [c for c in clusters if not shielded_stationary(c, cam)]
+    if blocked is not None:
+      blocked += [(c, cam) for c in clusters if c not in match_clusters]
+
   # Determine leads, this is where the essential logic happens
-  if len(clusters) > 0 and ready and lead_msg.prob > .5:
-    cluster = match_vision_to_cluster(v_ego, lead_msg, clusters)
+  if len(match_clusters) > 0 and ready and lead_msg.prob > .5:
+    cluster = match_vision_to_cluster(v_ego, lead_msg, match_clusters)
   else:
     cluster = None
 
@@ -153,6 +211,13 @@ def get_lead(v_ego, ready, clusters, lead_msg, model_v_ego, low_speed_override=T
 
   if low_speed_override:
     low_speed_clusters = [c for c in clusters if c.potential_low_speed_lead(v_ego)]
+    if raw_tracks:
+      # StarPilot: seen RAW_MIN_SEEN_FRAMES in a row; carrot-wip: not a stationary point short of a moving lead
+      shield = (lead_dict['dRel'], lead_dict['vLead'], lead_dict['yRel']) if lead_dict['status'] else None
+      candidates = [c for c in low_speed_clusters if raw_seen_enough(c)]
+      if blocked is not None and shield is not None:
+        blocked += [(c, shield) for c in candidates if shielded_stationary(c, shield)]
+      low_speed_clusters = [c for c in candidates if not shielded_stationary(c, shield)]
     if len(low_speed_clusters) > 0:
       closest_cluster = min(low_speed_clusters, key=lambda c: c.dRel)
 
@@ -164,8 +229,10 @@ def get_lead(v_ego, ready, clusters, lead_msg, model_v_ego, low_speed_override=T
 
 
 class RadarD():
-  def __init__(self, radar_ts, delay=0):
+  def __init__(self, radar_ts, delay=0, raw_tracks=False):
     self.current_time = 0
+    self.raw_tracks = raw_tracks  # optech: Mando front radar tracks (lead shield + seen-3-frames rule)
+    self.last_block_log = 0.
 
     self.tracks = defaultdict(dict)
     self.kalman_params = KalmanParams(radar_ts)
@@ -253,8 +320,21 @@ class RadarD():
       model_v_ego = self.v_ego
     leads_v3 = sm['modelV2'].leadsV3
     if len(leads_v3) > 1:
-      radarState.leadOne = get_lead(self.v_ego, self.ready, clusters, leads_v3[0], model_v_ego, low_speed_override=True, mixRadarInfo=self.mixRadarInfo)
-      radarState.leadTwo = get_lead(self.v_ego, self.ready, clusters, leads_v3[1], model_v_ego, low_speed_override=False, mixRadarInfo=self.mixRadarInfo)
+      blocked = []
+      if self.raw_tracks:
+        # frames in a row the camera's lead sat on each radar track (the shield lets a point through after 3)
+        cam_lead = self.ready and leads_v3[0].prob > .5
+        for t in self.tracks.values():
+          t.vision_frames = t.vision_frames + 1 if cam_lead and vision_on_track(t, leads_v3[0]) else 0
+      radarState.leadOne = get_lead(self.v_ego, self.ready, clusters, leads_v3[0], model_v_ego, low_speed_override=True, mixRadarInfo=self.mixRadarInfo,
+                                    raw_tracks=self.raw_tracks, blocked=blocked)
+      radarState.leadTwo = get_lead(self.v_ego, self.ready, clusters, leads_v3[1], model_v_ego, low_speed_override=False, mixRadarInfo=self.mixRadarInfo,
+                                    raw_tracks=self.raw_tracks)
+      blocked = [b for b in blocked if abs(b[0].yRel) < 1.5]  # log only points in our lane (not guard rails)
+      if blocked and self.current_time - self.last_block_log >= 1.0:
+        self.last_block_log = self.current_time
+        c, (d, v, _) = blocked[0]
+        diag_write(f"radar shield: stationary point ignored d={c.dRel:.1f} v={c.vLead:.1f} (lead d={d:.1f} v={v:.1f}, ego {self.v_ego:.1f} m/s)")
 
       if self.ready and self.showRadarInfo: #self.extended_radar_enabled and self.ready:
         ll,lc,lr = get_path_adjacent_leads(self.v_ego, sm['modelV2'], sm['lateralPlan'].laneWidth, clusters)
@@ -319,7 +399,7 @@ def radard_thread(sm=None, pm=None, can_sock=None):
     pm = messaging.PubMaster(['radarState', 'liveTracks'])
 
   rk = Ratekeeper(1.0 / CP.radarTimeStep, print_delay_threshold=None)
-  RD = RadarD(CP.radarTimeStep, RI.delay)
+  RD = RadarD(CP.radarTimeStep, RI.delay, raw_tracks=bool(getattr(RI, "new_radar", False)))
   last_diag = None
 
   while 1:
