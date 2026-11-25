@@ -1359,13 +1359,15 @@ static void drawOptechHud(const UIState* s) {
                 if (dist > 0) { char d[32]; optech_dist_text(d, sizeof(d), dist, ""); snprintf(str, sizeof(str), "%s %s", label, d); }
                 else snprintf(str, sizeof(str), "%s", label);
                 nvgFontFace(s->vg, BOLD);
-                nvgFontSize(s->vg, 48);
+                // user 2026-11-25: bigger than before (text 48 -> 58) but about a third of the big speed's height
+                // (arrow 60, letters ~0.9 x 58): 64 / 96 was too big
+                const float fs = 58, S = 60;  // text size, arrow size
+                nvgFontSize(s->vg, fs);
                 float b[4]; nvgTextBounds(s->vg, 0, 0, str, NULL, b);
-                const float S = 72;  // arrow size
-                const float tw = b[2] - b[0], iw = arrow ? S + 18 : 0, w = tw + iw + 50, h = 96, x = cx - w / 2, y = OPTECH_SPEED_BASE + 30;  // under the big speed
+                const float tw = b[2] - b[0], iw = arrow ? S + 20 : 0, w = tw + iw + 56, h = 96, x = cx - w / 2, y = OPTECH_SPEED_BASE + 30;  // under the big speed
                 carrot_round_box(s, x, y, w, h, nvgRGBA(0, 0, 0, 120), nvgRGBA(0, 0, 0, 0), 12, 0);
-                if (arrow) optech_turn_arrow(s, x + 22, y + (h - S) / 2, S, arrow);
-                optech_text(s, x + 25 + iw, y + h / 2 + 2, str, 48, COLOR_WHITE, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+                if (arrow) optech_turn_arrow(s, x + 26, y + (h - S) / 2, S, arrow);
+                optech_text(s, x + 28 + iw, y + h / 2 + 2, str, fs, COLOR_WHITE, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
             }
         }
     }
