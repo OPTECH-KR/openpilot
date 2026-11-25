@@ -206,13 +206,15 @@ class DriveLog:
 
   def navi_events(self, now):
     """What the navigation link delivers (Soul EV tester 2026-11-25: APM connected but no turn arrows). active (see
-    road_speed_limiter): < 100 nothing from a phone app, 100+ APM messages, 200+ route guidance / Tmap SDI data (the
-    screen shows APN). A line on every change of link, turn or camera, at most every 2 s."""
+    road_speed_limiter): < 100 nothing from a phone app, 100+ APM messages, 200+ route guidance / Tmap SDI data.
+    naviSource: the port it came in on (the screen's NAVI CARROT / NAVI NDA / NAVI badge). A line on every change of
+    link, turn or camera, at most every 2 s."""
     msg = messaging.recv_one_or_none(self.navi_sock)
     if msg is None:
       return
     r = msg.roadLimitSpeed
-    link = "none" if r.active < 100 else "APM" if r.active < 200 else "guidance"
+    src = {1: "CARROT", 2: "NDA", 3: "APM"}.get(r.naviSource, "-")
+    link = ("none" if r.active < 100 else "linked" if r.active < 200 else "guidance") + " via " + src
     turn = r.xTurnInfo if r.xDistToTurn > 0 else -1
     cam = (r.xSpdLimit, r.camType) if r.xSpdLimit > 0 and r.xSpdDist > 0 else None
     key = (link, turn, cam, r.roadLimitSpeed)

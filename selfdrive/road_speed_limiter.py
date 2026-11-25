@@ -56,6 +56,7 @@ class RoadLimitSpeedServer:
     self.last_time_location = 0
     self.carrot_addr = None       # phone app that sent carrot-protocol data (7706)
     self.carrot_updated = 0.
+    self.sock_updated = 0.        # last packet from an NDA (843) / APM (7707) app, for roadLimitSpeed.naviSource
     self.json_carrot = None
     self.cmd_ignored = False
 
@@ -234,6 +235,17 @@ class RoadLimitSpeedServer:
       return self.get_json_val(self.json_carrot, key, default)
     return self.get_apilot_val(key, default)
 
+  def navi_source(self, nda_port):
+    """roadLimitSpeed.naviSource, by the port the data came in on (user 2026-11-25: show which link is on, not
+    APM / APN): 1 carrot (7706) while it sends - its Tmap values are the ones used -, else 2 NDA (843) or 3 APM (7707)
+    while that app sends, else 0. 6 s like the other timeouts in this file."""
+    now = sec_since_boot()
+    if self.json_carrot is not None and now - self.carrot_updated < 6.:
+      return 1
+    if now - self.sock_updated < 6.:
+      return 2 if nda_port else 3
+    return 0
+
   def send_sdp(self, sock):
     try:
       if int(Params().get("AutoNaviSpeedCtrl")) != 3:
@@ -260,6 +272,7 @@ class RoadLimitSpeedServer:
       if ret:
         data, self.remote_addr = sock.recvfrom(2048)
         json_obj = json.loads(data.decode())
+        self.sock_updated = sec_since_boot()
         #print(json_obj)
 
         if 'cmd' in json_obj:
@@ -426,6 +439,7 @@ def main():
   # optech 2026-11-25: 0.2 s for NDA too (it was 1.0): 내비 연동 방식 1 TmapNda runs as NDA, and with 1.0 the built-in
   # camera DB and the distances were recomputed only once a second while no app sends
   sockWaitTime = 0.2
+  nda_port = int(Params().get("AutoNaviSpeedCtrl")) == 3   # the app socket is NDA's 843 (else APM's 7707)
   send_time = sec_since_boot()
 
   with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
@@ -477,6 +491,7 @@ def main():
         dat = messaging.new_message()
         dat.init('roadLimitSpeed')
         dat.roadLimitSpeed.active = server.active
+        dat.roadLimitSpeed.naviSource = 0 if navi_off else server.navi_source(nda_port)
         dat.roadLimitSpeed.roadLimitSpeed = server.get_limit_val("road_limit_speed", 0)
         dat.roadLimitSpeed.isHighway = server.get_limit_val("is_highway", False)
         dat.roadLimitSpeed.camType = server.get_limit_val("cam_type", 0)
