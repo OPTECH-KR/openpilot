@@ -1103,6 +1103,8 @@ static void optech_turn_arrow(const UIState* s, float x, float y, float S, int k
     nvgRestore(vg);
 }
 
+static bool optech_alert_up();  // defined after the alert globals
+
 static void drawOptechHud(const UIState* s) {
     SubMaster& sm = *(s->sm);
     const UIScene& scene = s->scene;
@@ -1393,6 +1395,9 @@ static void drawOptechHud(const UIState* s) {
     // ======================= lead info under the lead =======================
     {
         const auto lead = sm["radarState"].getRadarState().getLeadOne();
+        // user 2026-11-25: alerts / AUTO HOLD sit in the lower middle now; the info box steps aside meanwhile
+        const bool msg_box = optech_alert_up() || car_state.getBrakeHoldActive() ||
+                             sm["carControl"].getCarControl().getHudControl().getSoftHold();
         if (lead.getStatus()) {
             const QPointF& v = scene.lead_vertices[0];
             const float x = std::clamp((float)v.x(), 300.f, s->fb_w - 300.f);
@@ -1408,12 +1413,14 @@ static void drawOptechHud(const UIState* s) {
             const float tgap = gap_ok ? d / ve : 0.f;
             snprintf(l3, sizeof(l3), "%s %.1f%s", "도달", tgap, "초");
             const float w = 250, h = gap_ok ? 150 : 104, top = y + 44;
+            if (!msg_box) {
             carrot_round_box(s, x - w / 2, top, w, h, nvgRGBA(0, 0, 0, 110), nvgRGBA(0, 0, 0, 0), 12, 0);
             optech_text(s, x, top + 46, l1, 40, COLOR_WHITE, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
             optech_text(s, x, top + 92, l2, 40, COLOR_WHITE, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
             if (gap_ok) {
                 const NVGcolor gc = tgap < 1.0f ? nvgRGBA(240, 149, 149, 255) : tgap < 2.0f ? nvgRGBA(250, 199, 117, 255) : COLOR_WHITE;
                 optech_text(s, x, top + 138, l3, 40, gc, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+            }
             }
         }
     }
@@ -2574,6 +2581,7 @@ DrawApilot::DrawApilot() {
 }
 DrawApilot* drawApilot;
 Alert alert;
+static bool optech_alert_up() { return alert.size != cereal::ControlsState::AlertSize::NONE; }
 NVGcolor alert_color;
 // GPS status line at the bottom right, left of the Wi-Fi address: fix state, 4 signal bars, satellites seen, accuracy.
 // Signal strength = mean C/N0 of the 4 strongest satellites from ublox RXM-RAWX (ubloxGnss.measurementReport).
@@ -2664,7 +2672,7 @@ static void ui_draw_bsd_mark(const UIState* s, bool right, bool danger) {
     const float w = 140, h = 170;
     const float cxs = s->fb_w / 2.f + (right ? 350.f : -350.f);
     const float x = cxs - w / 2;
-    const float y = s->fb_h * 0.60f;
+    const float y = s->fb_h * 0.60f;  // under the alert box when one is up (the box is drawn last, on top)
     const bool blink_on = (s->sm->frame % 12) < 7;
     if (danger && !blink_on) return;
 
@@ -2760,7 +2768,8 @@ void ui_draw(UIState *s, int w, int h) {
   drawApilot->drawDebugText(s, s->show_debug);
   drawApilot->drawDeviceState(s, s->show_device_stat);
   ui_draw_gps_info(s);
-  ui_draw_bsd_edge(s);
+  ui_draw_bsd_edge(s);  // optech: before the alert box - the box is drawn last (user 2026-11-25: messages are
+                        // never covered by anything; what is under them may be hidden)
 
   ui_draw_text_a2(s);
 
@@ -2777,7 +2786,73 @@ void ui_draw(UIState *s, int w, int h) {
   nvgEndFrame(s->vg);
   glDisable(GL_BLEND);
 }
+// optech HUD alert (user 2026-11-25: the bare yellow letters were hard to read, ran into the lead car info and did
+// not match the HUD): a rounded box low in the middle (3/4 of the screen height, like the picture the user sent; the
+// lead info box steps aside meanwhile; the box is drawn last, over everything). Normal: see-through dark box, light outline, green letters (like the AUTO HOLD box the user
+// showed); 'take action' (STATUS_WARNING) orange and 'danger' (STATUS_ALERT) blinking red, both with white letters. First line big, second smaller, the 'openpilot turns off' note third. Drawn last,
+// so it covers whatever is under it. The screen edge keeps its status colour as before.
+static void optech_draw_alert(UIState* s) {
+    const std::string t1 = alert.text1.toStdString(), t2 = alert.text2.toStdString();
+    const char* line3 = alert.type.contains("immediateDisable") ? "오픈파일럿이 꺼졌습니다"
+                      : alert.type.contains("softDisable") ? "오픈파일럿이 곧 꺼집니다" : nullptr;
+    const bool full = alert.size == cereal::ControlsState::AlertSize::FULL;
+    // one-line messages (소프트 오토홀드, 앞을 보세요 ...) much bigger (user 2026-11-25: "too small")
+    const bool one_line = alert.text2.isEmpty() && !line3;
+    float fs1 = one_line ? (full ? 124 : 116) : (full ? 104 : 92), fs2 = 58, fs3 = 46;
+    const float maxw = std::min(1200.f, s->fb_w - 2 * 450.f);  // between the left and right columns
+    float b[4], tw = 0;
+    nvgFontFace(s->vg, BOLD);
+    nvgFontSize(s->vg, fs1); nvgTextBounds(s->vg, 0, 0, t1.c_str(), NULL, b); float w1 = b[2] - b[0];
+    nvgFontSize(s->vg, fs2); nvgTextBounds(s->vg, 0, 0, t2.c_str(), NULL, b); float w2 = t2.empty() ? 0 : b[2] - b[0];
+    if (w1 > maxw - 80) { fs1 *= (maxw - 80) / w1; w1 = maxw - 80; }
+    if (w2 > maxw - 80) { fs2 *= (maxw - 80) / w2; w2 = maxw - 80; }
+    tw = std::max(w1, w2);
+    const float l1 = fs1 * 0.95f, l2 = t2.empty() ? 0 : fs2 * 0.95f + 14, l3 = line3 ? fs3 * 0.95f + 12 : 0;
+    const float h = 26 + l1 + l2 + l3 + 26, w = std::max(640.f, tw + 120);
+    const float cx = s->fb_w / 2.f, top = std::min(s->fb_h * 0.75f - h / 2, s->fb_h - 20.f - h), x = cx - w / 2;  // low, like the user's picture
+    const bool blink_on = (s->sm->frame % 12) < 7;
+    // normal (information, e.g. auto hold): like the other fork's AUTO HOLD box the user liked - see-through dark box,
+    // light outline, green first line, white second line. Take action / danger: filled orange / blinking red, white
+    // letters (user: "those are right")
+    NVGcolor fill = nvgRGBA(10, 10, 10, 215), line = nvgRGBA(235, 235, 235, 230), c1 = nvgRGBA(80, 230, 60, 255);  // dark enough that nothing under it shows through
+    float lw = 4;
+    if (s->status == STATUS_ALERT) { fill = blink_on ? nvgRGBA(215, 35, 35, 245) : nvgRGBA(150, 20, 20, 245); line = COLOR_WHITE; lw = 5; c1 = COLOR_WHITE; }
+    else if (s->status == STATUS_WARNING) { fill = nvgRGBA(225, 115, 25, 240); line = COLOR_WHITE; lw = 4; c1 = COLOR_WHITE; }
+    carrot_round_box(s, x, top, w, h, fill, line, 22, lw);
+    float y = top + 26;
+    optech_text_vc(s, cx, y + l1 / 2, t1.c_str(), fs1, c1, NVG_ALIGN_CENTER);
+    y += l1;
+    if (!t2.empty()) { y += 14; optech_text_vc(s, cx, y + fs2 * 0.95f / 2, t2.c_str(), fs2, COLOR_WHITE, NVG_ALIGN_CENTER); y += fs2 * 0.95f; }
+    if (line3) { y += 12; optech_text_vc(s, cx, y + fs3 * 0.95f / 2, line3, fs3, nvgRGBA(255, 235, 200, 255), NVG_ALIGN_CENTER); }
+}
+
+// optech HUD hold state (user 2026-11-25, with a picture of another fork's 'AUTO HOLD' box): while no alert is up,
+// the same box says 오토 홀드 작동 중 (the car's own auto hold, carState.brakeHoldActive) or 소프트 오토홀드
+// (openpilot's soft hold, carControl.hudControl.softHold), in the normal-alert look
+static void optech_draw_hold(UIState* s) {
+    if (!s->scene.started) return;
+    const bool auto_hold = (*s->sm)["carState"].getCarState().getBrakeHoldActive();
+    const bool soft_hold = (*s->sm)["carControl"].getCarControl().getHudControl().getSoftHold();
+    if (!auto_hold && !soft_hold) return;
+    // the same look as a normal alert: see-through dark box, light outline, green letters. In Korean, the wording the
+    // alerts already use (user 2026-11-25: "not in English, Korean as before - only the place")
+    const char* txt = auto_hold ? "오토 홀드 작동 중" : "소프트 오토홀드";
+    const float fs = 108, h = 156, cx = s->fb_w / 2.f, top = s->fb_h * 0.75f - h / 2;  // big: one short line
+    float tb[4];
+    nvgFontFace(s->vg, BOLD);
+    nvgFontSize(s->vg, fs);
+    nvgTextBounds(s->vg, 0, 0, txt, NULL, tb);
+    const float w = std::max(560.f, tb[2] - tb[0] + 120);
+    carrot_round_box(s, cx - w / 2, top, w, h, nvgRGBA(10, 10, 10, 215), nvgRGBA(235, 235, 235, 230), 22, 4);
+    optech_text_vc(s, cx, top + h / 2, txt, fs, nvgRGBA(80, 230, 60, 255), NVG_ALIGN_CENTER);
+}
+
 void ui_draw_alert(UIState* s) {
+    if (s->show_mode == 7) {
+        if (alert.size != cereal::ControlsState::AlertSize::NONE) optech_draw_alert(s);
+        else optech_draw_hold(s);
+        return;
+    }
     if (alert.size != cereal::ControlsState::AlertSize::NONE) {
         alert_color = COLOR_ORANGE;
         nvgTextAlign(s->vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
