@@ -41,6 +41,9 @@ SIMULATION = "SIMULATION" in os.environ
 TESTING_CLOSET = "TESTING_CLOSET" in os.environ
 NOSENSOR = "NOSENSOR" in os.environ
 IGNORE_PROCESSES = {"loggerd", "encoderd", "statsd", "mapd", "gpxd"}
+# optech: the drive record (주행 기록) and its download page only write / serve files: openpilot can be used without
+# them (like optech-hkg)
+IGNORE_PROCESSES |= {"drivelog", "logserver"}
 
 NO_IR_CTRL = Params().get_bool("dp_device_no_ir_ctrl")
 # optech 토글 > 운전자 모니터링 '경도 사용' (OptechDmMode 1): no driver camera, but dpmonitoringd (steering / pedal /

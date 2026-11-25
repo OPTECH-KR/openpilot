@@ -133,7 +133,7 @@ class DriveLog:
     lead = f"{rs.leadOne.dRel:.0f}m" if rs is not None and rs.leadOne.status else "-"
     vset = f"{ctl.vCruise:.0f}" if ctl is not None else "-"
     return (f"[v {cs.vEgo * 3.6:.0f} set {vset} oplong {b(cc.longActive)} brk {b(cs.brakePressed)} "
-            f"brkLight {b(cs.brakeLights)} gas {b(cs.gasPressed)} lane {b(hud.leftLaneVisible)}{b(hud.rightLaneVisible)} "
+            f"gas {b(cs.gasPressed)} lane {b(hud.leftLaneVisible)}{b(hud.rightLaneVisible)} "
             f"lead {lead} angle {cs.steeringAngleDeg:.0f}]")
 
   def scc_events(self, cs, cc, ctl, opt, now):
@@ -320,7 +320,7 @@ class DriveLog:
       parts.append(f"{b(hud.leftLaneVisible)} {b(hud.rightLaneVisible)} {opt['cl']} {opt['cw']}")
     else:
       parts += ["- - -", "- - - -"]
-    parts.append(b(cs.brakeLights))
+    parts.append("-")  # spst carState has no brakeLights (optech-hkg Hyundai only)
     btn = [opt[k] for k in BTN_KEYS] if opt is not None else None
     if btn is not None and self.line_btn is not None:
       parts.append(" ".join(str(n - o) for n, o in zip(btn, self.line_btn)))
@@ -344,13 +344,19 @@ class DriveLog:
       self.event("panda safety {} ({}) allowed {} fault {} [{}] harness {} heartbeatLost {} ign {}".format(*state)
                  + (f" (was {self.prev_panda[0]})" if self.prev_panda is not None else ""))
     self.prev_panda = state
-    # spst's pandaState (legacypilot) has one CAN error counter, not optech-hkg's send / forward / receive ones
-    errs = (p.canErrorCounter,)
+    # spst's pandaState (legacypilot) has no CAN error counters (and the C2 boardd fills no canState): count
+    # controlsd's CAN receive errors (controlsState.canErrorCounter) and the panda's rx / tx buffer overflows.
+    # (It read pandaState.canErrorCounter, which does not exist: every step stopped here, so the drive file had
+    # only event lines and no status lines.)
+    ctl = self.last.get("controlsState")
+    errs = (ctl.canErrorCounter if ctl is not None else 0, p.rxBufferOverflow + p.txBufferOverflow)
     now = time.monotonic()
     if self.prev_panda_errs is None:
       self.prev_panda_errs = errs
     elif now >= self.next_panda_err_event and errs != self.prev_panda_errs:
-      self.event(f"panda CAN errors +{errs[0] - self.prev_panda_errs[0]} (total {errs[0]})")
+      o = self.prev_panda_errs
+      self.event(f"CAN errors +{errs[0] - o[0]} (total {errs[0]}), panda buffer overflow +{errs[1] - o[1]} "
+                 f"(total {errs[1]})")
       self.next_panda_err_event = now + PANDA_ERR_EVENT_S
       self.prev_panda_errs = errs
 

@@ -108,7 +108,7 @@ class RoadLimitSpeedServer:
               location.speed,
               location.bearingDeg,
               location.accuracy,
-              location.timestamp,
+              location.unixTimestampMillis,  # was location.timestamp: not in this cereal, GPS was never sent
               # location.source,
               # location.vNED,
               location.verticalAccuracy,
@@ -314,6 +314,7 @@ def main():
   sdiType = -1
 
   totalDistance = 0.0
+  dist_time = sec_since_boot()
   mappyMode = True
   mappyMode_valid = False
 
@@ -352,7 +353,14 @@ def main():
 
       sock.setblocking(False)
 
-      while True:
+    except Exception as e:
+      print(e)
+      server.last_exception = e
+      return
+
+    last_err_print = 0.
+    while True:
+      try:
 
         if navi_off:
           time.sleep(sockWaitTime)
@@ -404,12 +412,16 @@ def main():
         #print(atype, value)
         delta_dist = 0.0
         if CS is not None:
-          delta_dist = CS.totalDistance - totalDistance
-          totalDistance = CS.totalDistance
+          # spst's carState has no totalDistance (optech-hkg's hyundai carstate adds it): add up vEgo here.
+          # Reading CS.totalDistance raised AttributeError on the first carState and ended this process
+          # (exit 0) -> "Process Not Running road_speed_limiter" and openpilot could not be engaged.
+          delta_dist = max(CS.vEgo, 0.) * min(max(now - dist_time, 0.), 1.)
+          totalDistance += delta_dist
           if CS.gasPressed:
             xBumpDistance = -1
             if xSignType == 124:
               xSignType = -1
+        dist_time = now
         apm_valid = True
         if atype == 'none':
           apm_valid = False
@@ -625,9 +637,14 @@ def main():
         server.check()
         #time.sleep(0.03)
 
-    except Exception as e:
-      print(e)
-      server.last_exception = e
+      except Exception as e:
+        # optech: keep running (a missing message field or an odd app packet must not stop the process:
+        # controlsd blocks engaging while it is down). Print at most every 10 s, back off a little.
+        server.last_exception = e
+        if sec_since_boot() - last_err_print > 10.:
+          last_err_print = sec_since_boot()
+          print(f"road_speed_limiter error: {type(e).__name__}: {e}")
+        time.sleep(0.1)
 
 
 if __name__ == "__main__":
