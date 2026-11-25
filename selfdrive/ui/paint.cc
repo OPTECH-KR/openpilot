@@ -812,6 +812,23 @@ static void carrot_round_box(const UIState* s, float x, float y, float w, float 
     }
 }
 
+// optech (user 2026-11-25): the navigation badge said APN / APM / NDA / HDA. Now it names the link by the port the data
+// came in on (roadLimitSpeed.naviSource): NAVI CARROT (7706: 당근내비, TmapNda in carrot mode), NAVI NDA (843: TmapNda
+// in NDA mode); green while it delivers, grey while linked with nothing to show yet. (APM / Mappy is not received any
+// more; plain NAVI only if the source is unknown.) HDA (purple): the car's own navigation (Navi_HU) - car_navi_cam while
+// it reports a camera limit, car_navi when the car has one. roadLimitSpeed.active: 200+ Tmap data, 1-99 an NDA app
+// linked (its cameras come in the road_limit fields). Same order as the old images. nullptr: nothing to show.
+static const char* optech_nav_badge(int active, int source, bool car_navi_cam, bool car_navi, NVGcolor* fill) {
+    const NVGcolor app = nvgRGBA(0, 170, 0, 230), idle = nvgRGBA(110, 110, 110, 220), car = nvgRGBA(140, 80, 200, 220);
+    const char* name = source == 1 ? "NAVI CARROT" : source == 2 ? "NAVI NDA" : "NAVI";
+    if (active >= 200) { *fill = app; return name; }
+    if (car_navi_cam) { *fill = car; return "HDA"; }
+    if (active > 0 && active < 100) { *fill = app; return source == 0 || source == 2 ? "NAVI NDA" : name; }
+    if (active >= 100 || source > 0) { *fill = idle; return name; }
+    if (car_navi) { *fill = car; return "HDA"; }
+    return nullptr;
+}
+
 static const char* carrot_gear_text(cereal::CarState::GearShifter gear) {
     switch (gear) {
     case cereal::CarState::GearShifter::PARK: return "P";
@@ -929,15 +946,20 @@ static void carrot_hud_lower(const UIState* s, int bx, int by, int my_driving_mo
     mode_last = my_driving_mode;
     gap_last = gap;
 
-    // navigation link: APN (green) / APM (blue), between the limit tile and the gap bars
+    // navigation link: NAVI, green while it delivers / grey while linked (was APN / APM), between the limit tile and
+    // the gap bars. The box is small here: no link name (source 0)
     const int nx = bx + 200, ny = by + 175;
-    if (active_nda >= 200) {
-        carrot_round_box(s, nx - 55, ny - 38, 110, 48, nvgRGBA(0, 203, 0, 255), COLOR_WHITE, 6, 2);
-        ui_draw_text(s, nx, ny, "APN", 40, COLOR_WHITE, BOLD, 2.0f, 4.0f);
-    }
-    else if (active_nda >= 100) {
-        carrot_round_box(s, nx - 55, ny - 38, 110, 48, nvgRGBA(0, 120, 255, 210), COLOR_WHITE, 6, 2);
-        ui_draw_text(s, nx, ny, "APM", 40, COLOR_WHITE, BOLD, 2.0f, 4.0f);
+    NVGcolor nav_fill;
+    const char* nav = optech_nav_badge(active_nda, 0, false, false, &nav_fill);
+    if (nav) {
+        const float bw = 124;
+        float fs = 36, tb[4];
+        nvgFontFace(s->vg, BOLD);
+        nvgFontSize(s->vg, fs);
+        nvgTextBounds(s->vg, 0, 0, nav, NULL, tb);
+        if (tb[2] - tb[0] > bw - 12) fs *= (bw - 12) / (tb[2] - tb[0]);
+        carrot_round_box(s, nx - bw / 2, ny - 38, bw, 48, nav_fill, COLOR_WHITE, 6, 2);
+        ui_draw_text(s, nx, ny - 20 + fs / 2, nav, fs, COLOR_WHITE, BOLD, 2.0f, 4.0f);  // bottom-aligned: centred in the box
     }
 
     // speed limit: CAM (blinking red/yellow) or road LIMIT (red when over)
@@ -973,6 +995,20 @@ static void optech_text(const UIState* s, float x, float y, const char* str, flo
 // ui_draw_text adds 6). halign: NVG_ALIGN_LEFT / CENTER / RIGHT
 static void optech_text_vc(const UIState* s, float x, float cy, const char* str, float size, NVGcolor color, int halign) {
     optech_text(s, x, cy + 0.36f * size - 6, str, size, color, halign | NVG_ALIGN_BASELINE);
+}
+
+// a connection badge drawn as text (replaces the APN / APM / NDA / HDA images): as high as the old images (h), at
+// least as wide (120), wider when the words need it. Returns its width.
+static float optech_badge(const UIState* s, float x, float y, float h, const char* label, NVGcolor fill) {
+    const float fs = 34;
+    float tb[4];
+    nvgFontFace(s->vg, BOLD);
+    nvgFontSize(s->vg, fs);
+    nvgTextBounds(s->vg, 0, 0, label, NULL, tb);
+    const float w = std::max(120.f, (tb[2] - tb[0]) + 36.f);
+    carrot_round_box(s, x, y, w, h, fill, COLOR_WHITE, 12, 2);
+    optech_text_vc(s, x + w / 2, y + h / 2, label, fs, COLOR_WHITE, NVG_ALIGN_CENTER);
+    return w;
 }
 
 static void optech_chevron(const UIState* s, float x, float y, float w, float h, bool right, NVGcolor color) {
@@ -1105,9 +1141,9 @@ static void drawOptechHud(const UIState* s) {
         const int naviCluster = (int)car_params.getNaviCluster();
         const bool radar_tracks = s->radar_tracks;
         if (sccBus == 2) { ui_draw_image(s, {(int)bx, (int)ry, 120, 54}, "ic_scc2", 1.0f); bx += 135; }
-        const char* nav = activeNDA >= 200 ? "ic_apn" : (hda_limit > 0 && hda_dist > 0) ? "ic_hda" : activeNDA >= 100 ? "ic_apm"
-                        : activeNDA % 100 > 0 ? "ic_nda" : naviCluster > 0 ? "ic_hda" : nullptr;
-        if (nav) { ui_draw_image(s, {(int)bx, (int)ry, 120, 54}, nav, 1.0f); bx += 135; }
+        NVGcolor nav_fill;
+        const char* nav = optech_nav_badge(activeNDA, road.getNaviSource(), hda_limit > 0 && hda_dist > 0, naviCluster > 0, &nav_fill);
+        if (nav) bx += optech_badge(s, bx, ry, 54, nav, nav_fill) + 15;
         if (radar_tracks) { ui_draw_image(s, {(int)bx, (int)ry, 240, 54}, "ic_radartracks", 1.0f); bx += 255; }
     }
     g_gps_x = bx;  // ui_draw_gps_info draws the GPS bars + text right after
@@ -1395,18 +1431,23 @@ static void drawOptechHud(const UIState* s) {
             }
         }
 
-        // path offset panel (opened by tapping the wheel): − / + move the path left / right, 5 cm a tap
+        // path offset panel (opened by tapping the wheel): − / + move the path left / right, 1 cm a tap
+        // (Soul EV tester 2026-11-25: the 56 px value ran under the buttons and hid its sign; now 44 px, drawn last,
+        //  and the sign is spelled out above it)
         if (s->optech_tune_open) {
             const QRect pr = optech_tune_panel_rect(s->fb_w, s->fb_h);
             const QRect mr = optech_tune_minus_rect(s->fb_w, s->fb_h), plr = optech_tune_plus_rect(s->fb_w, s->fb_h);
             carrot_round_box(s, pr.x(), pr.y(), pr.width(), pr.height(), nvgRGBA(20, 20, 20, 230), COLOR_WHITE, 16, 3);
             optech_text(s, pr.x() + pr.width() / 2, pr.y() + 56, "경로 좌우 보정", 40, COLOR_WHITE, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
-            snprintf(str, sizeof(str), "%+d cm", s->path_offset);
-            optech_text(s, pr.x() + pr.width() / 2, mr.y() + mr.height() / 2 + 4, str, 56, nvgRGBA(250, 199, 117, 255), NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
             carrot_round_box(s, mr.x(), mr.y(), mr.width(), mr.height(), nvgRGBA(95, 94, 90, 255), COLOR_WHITE, 14, 3);
             carrot_round_box(s, plr.x(), plr.y(), plr.width(), plr.height(), nvgRGBA(95, 94, 90, 255), COLOR_WHITE, 14, 3);
             optech_text(s, mr.x() + mr.width() / 2, mr.y() + mr.height() / 2 + 2, "-", 80, COLOR_WHITE, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
             optech_text(s, plr.x() + plr.width() / 2, plr.y() + plr.height() / 2 + 2, "+", 70, COLOR_WHITE, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+            // which way (Korean as a %s argument: NEOS snprintf cuts a format string at Korean)
+            const char *side = s->path_offset < 0 ? "왼쪽" : s->path_offset > 0 ? "오른쪽" : "가운데";
+            optech_text(s, pr.x() + pr.width() / 2, mr.y() + 34, side, 30, nvgRGBA(211, 209, 199, 255), NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+            snprintf(str, sizeof(str), "%+d cm", s->path_offset);
+            optech_text(s, pr.x() + pr.width() / 2, mr.y() + mr.height() / 2 + 20, str, 44, nvgRGBA(250, 199, 117, 255), NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
             optech_text(s, pr.x() + pr.width() / 2, pr.y() + pr.height() - 18, "- 왼쪽으로   + 오른쪽으로", 28, nvgRGBA(211, 209, 199, 255), NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
         }
     }
@@ -2131,15 +2172,15 @@ void DrawApilot::drawLeadApilot(const UIState* s) {
             int hda_speedLimitDistance = car_state.getSpeedLimitDistance();
             int naviCluster = (int)car_params.getNaviCluster();
             if (sccBus) ui_draw_image(s, { 30, 20, 120, 54 }, "ic_scc2", 1.0f);
-            if (activeNDA >= 200) ui_draw_image(s, { 30 + 135, 20, 120, 54 }, "ic_apn", 1.0f);
-            else if (hda_speedLimit > 0 && hda_speedLimitDistance > 0) ui_draw_image(s, { 30 + 135, 20, 120, 54 }, "ic_hda", 1.0f);
-            else if (activeNDA >= 100) ui_draw_image(s, { 30 + 135, 20, 120, 54 }, "ic_apm", 1.0f);
-            else if (activeNDA % 100 > 0) ui_draw_image(s, { 30 + 135, 20, 120, 54 }, "ic_nda", 1.0f);
-            else if (naviCluster > 0) ui_draw_image(s, { 30 + 135, 20, 120, 54 }, "ic_hda", 1.0f);
-            if (radar_tracks) ui_draw_image(s, { 30 + 135 * 2, 20, 240, 54 }, "ic_radartracks", 1.0f);
+            // navigation badge as words (was the APN / HDA / APM / NDA images), then the radar badge after it
+            NVGcolor nav_fill;
+            const char* nav = optech_nav_badge(activeNDA, road_limit_speed.getNaviSource(), hda_speedLimit > 0 && hda_speedLimitDistance > 0,
+                                               naviCluster > 0, &nav_fill);
+            const float nav_w = nav ? optech_badge(s, 30 + 135, 20, 54, nav, nav_fill) : 120;
+            const int radar_x = 30 + 135 + (int)nav_w + 15;
+            if (radar_tracks) ui_draw_image(s, { radar_x, 20, 240, 54 }, "ic_radartracks", 1.0f);
             // GPS line right after the last badge drawn in this row
-            const bool nav_badge = activeNDA > 0 || (hda_speedLimit > 0 && hda_speedLimitDistance > 0) || naviCluster > 0;
-            g_gps_x = radar_tracks ? 30 + 135 * 2 + 255 : nav_badge ? 30 + 135 * 2 : sccBus ? 30 + 135 : 30;
+            g_gps_x = radar_tracks ? radar_x + 255 : nav ? radar_x : sccBus ? 30 + 135 : 30;
         }
 
         int bx = x;
@@ -2443,7 +2484,7 @@ void DrawApilot::drawDebugText(UIState* s, bool show) {
     QString latDebugText = QString::fromStdString(lateralPlan.getLatDebugText());
 
 
-    sprintf(str, "Mappy: Turn(%d,%d), Spd(%d,%d),Sign(%d), Road(%d,%d), LW:%.1f", xTurnInfo, xDistToTurn, xSpdDist, xSpdLimit, xSignType, xRoadSignType, xRoadLimitSpeed, laneWidth);
+    sprintf(str, "Navi: Turn(%d,%d), Spd(%d,%d),Sign(%d), Road(%d,%d), LW:%.1f", xTurnInfo, xDistToTurn, xSpdDist, xSpdLimit, xSignType, xRoadSignType, xRoadLimitSpeed, laneWidth);
     y += dy;
     ui_draw_text(s, text_x, y, str, 35, COLOR_WHITE, BOLD, 0.0f, 0.0f);
     sprintf(str, "Edge(%d), %s",  roadEdgeStat, latDebugText.toStdString().c_str());
