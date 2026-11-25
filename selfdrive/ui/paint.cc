@@ -1133,9 +1133,9 @@ static void drawOptechHud(const UIState* s) {
 
     // ======================= top left =======================
     // user 2026-11-25: every item of the left column has a fixed place and is a bit bigger. Top down: the badge row
-    // (its space is kept while '연결 상태 표시' is on, so a badge coming and going moves nothing), set speed, gap +
-    // gear, GPS, and at the bottom the road limit / camera signs (they used to sit above the set speed and pushed it
-    // down and up whenever the navigation data came and went)
+    // (its space is kept while '연결 상태 표시' is on, so a badge coming and going moves nothing), gap + gear, GPS,
+    // the big set speed box, and at the bottom the road limit / camera signs (they used to sit above the set speed
+    // and pushed it down and up whenever the navigation data came and went)
     const float lx = 30, CW = 370;  // column x, width (was 340)
     const float BH = 62;            // badge row height (was 54)
     const float ry = 20;            // badge row top
@@ -1158,43 +1158,7 @@ static void drawOptechHud(const UIState* s) {
     float col_y = s->show_conn_info ? ry + BH + 16 : ry;  // next item's top
     const NVGcolor label_c = nvgRGBA(211, 209, 199, 255);
 
-    // 2) set speed box
-    const float applyMaxSpeed = controls_state.getVCruiseOut();
-    const float cruiseMaxSpeed = controls_state.getVCruiseCluster();
-    {
-        const float w = CW, h = 138;
-        NVGcolor fill = nvgRGBA(95, 94, 90, 230), line = nvgRGBA(136, 135, 128, 255);
-        NVGcolor txt = COLOR_WHITE;
-        bool draw = true;
-        if (enabled && cam_limit > 0) {
-            const bool over = cur_speed > (metric ? cam_limit : cam_limit * KM_TO_MILE) + 2.0f;
-            if (over) { fill = nvgRGBA(226, 75, 74, 240); line = COLOR_WHITE; draw = blink_on; }
-            else { fill = nvgRGBA(59, 109, 17, 235); line = COLOR_WHITE; }
-        } else if (enabled && longActiveUser > 0) {
-            fill = nvgRGBA(24, 95, 165, 235); line = COLOR_WHITE;
-        } else if (enabled) {
-            fill = nvgRGBA(255, 255, 255, 64); line = COLOR_WHITE;
-        } else {
-            txt = nvgRGBA(180, 178, 169, 255);
-        }
-        if (draw) carrot_round_box(s, lx, col_y, w, h, fill, line, 16, 3);
-        optech_text(s, lx + 22, col_y + 46, "설정 속도", 35, txt, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
-        if (enabled && cruiseMaxSpeed > 0 && cruiseMaxSpeed < 255) {
-            snprintf(str, sizeof(str), "%d", (int)(cruiseMaxSpeed * (metric ? 1.0 : KM_TO_MILE) + 0.5));
-        } else {
-            snprintf(str, sizeof(str), "--");
-        }
-        optech_text(s, lx + 22, col_y + h - 4, str, 90, txt, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
-        const bool slowing = enabled && longActiveUser > 0 && applyMaxSpeed > 0 && applyMaxSpeed + 0.5f < cruiseMaxSpeed;
-        if (slowing) {
-            optech_text(s, lx + w - 22, col_y + 46, "감속 중", 35, nvgRGBA(250, 199, 117, 255), NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
-            snprintf(str, sizeof(str), "%d", (int)(applyMaxSpeed * (metric ? 1.0 : KM_TO_MILE) + 0.5));
-            optech_text(s, lx + w - 22, col_y + h - 8, str, 72, nvgRGBA(250, 199, 117, 255), NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
-        }
-        col_y += h + 14;
-    }
-
-    // 3) following distance + gear in one box (user 2026-11-23): left "차간 거리" with 4 steps like the car's
+    // 2) following distance + gear in one box (user 2026-11-23): left "차간 거리" with 4 steps like the car's
     //    cluster, right the gear letter on a coloured tile (D green, R red, N amber, P grey)
     {
         const float w = CW, h = 106, top = col_y;
@@ -1229,10 +1193,60 @@ static void drawOptechHud(const UIState* s) {
         col_y += h + 14;
     }
 
-    // 4) GPS box (drawn by ui_draw_gps_info, '화면 > GPS 상태'): here in the column, so the bigger badges have the top
+    // 3) GPS box (drawn by ui_draw_gps_info, '화면 > GPS 상태'): here in the column, so the bigger badges have the top
     //    row to themselves and nothing runs into the big speed
     g_gps_x = lx; g_gps_y = col_y; g_gps_w = CW;
     if (s->show_gps_info) col_y += 58 + 16;
+
+    // 4) set speed box: under the GPS box and twice as high as before (user 2026-11-25, marked on a screenshot:
+    //    "move it there and make it that big"). Set speed big on the left, '감속 중' + the speed openpilot is
+    //    actually holding on the right; both numbers shrink together when they would not fit (3-digit speeds)
+    const float applyMaxSpeed = controls_state.getVCruiseOut();
+    const float cruiseMaxSpeed = controls_state.getVCruiseCluster();
+    {
+        const float w = CW, h = 240, pad = 22;
+        NVGcolor fill = nvgRGBA(95, 94, 90, 230), line = nvgRGBA(136, 135, 128, 255);
+        NVGcolor txt = COLOR_WHITE;
+        bool draw = true;
+        if (enabled && cam_limit > 0) {
+            const bool over = cur_speed > (metric ? cam_limit : cam_limit * KM_TO_MILE) + 2.0f;
+            if (over) { fill = nvgRGBA(226, 75, 74, 240); line = COLOR_WHITE; draw = blink_on; }
+            else { fill = nvgRGBA(59, 109, 17, 235); line = COLOR_WHITE; }
+        } else if (enabled && longActiveUser > 0) {
+            fill = nvgRGBA(24, 95, 165, 235); line = COLOR_WHITE;
+        } else if (enabled) {
+            fill = nvgRGBA(255, 255, 255, 64); line = COLOR_WHITE;
+        } else {
+            txt = nvgRGBA(180, 178, 169, 255);
+        }
+        if (draw) carrot_round_box(s, lx, col_y, w, h, fill, line, 18, 3);
+        optech_text(s, lx + pad, col_y + 58, "설정 속도", 44, txt, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
+        char set_s[16], hold_s[16];
+        if (enabled && cruiseMaxSpeed > 0 && cruiseMaxSpeed < 255) {
+            snprintf(set_s, sizeof(set_s), "%d", (int)(cruiseMaxSpeed * (metric ? 1.0 : KM_TO_MILE) + 0.5));
+        } else {
+            snprintf(set_s, sizeof(set_s), "--");
+        }
+        const bool slowing = enabled && longActiveUser > 0 && applyMaxSpeed > 0 && applyMaxSpeed + 0.5f < cruiseMaxSpeed;
+        snprintf(hold_s, sizeof(hold_s), "%d", (int)(applyMaxSpeed * (metric ? 1.0 : KM_TO_MILE) + 0.5));
+        float fs_set = 150, fs_hold = 110, b1[4], b2[4];
+        nvgFontFace(s->vg, BOLD);
+        nvgFontSize(s->vg, fs_set);
+        nvgTextBounds(s->vg, 0, 0, set_s, NULL, b1);
+        float need = b1[2] - b1[0];
+        if (slowing) {
+            nvgFontSize(s->vg, fs_hold);
+            nvgTextBounds(s->vg, 0, 0, hold_s, NULL, b2);
+            need += (b2[2] - b2[0]) + 30;
+        }
+        if (need > w - 2 * pad) { const float k = (w - 2 * pad) / need; fs_set *= k; fs_hold *= k; }
+        optech_text(s, lx + pad, col_y + h - 12, set_s, fs_set, txt, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
+        if (slowing) {
+            optech_text(s, lx + w - pad, col_y + 58, "감속 중", 44, nvgRGBA(250, 199, 117, 255), NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
+            optech_text(s, lx + w - pad, col_y + h - 18, hold_s, fs_hold, nvgRGBA(250, 199, 117, 255), NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
+        }
+        col_y += h + 16;
+    }
 
     // 5) road limit + camera / bump sign, only with navigation data. Last in the column: coming and going moves
     //    nothing. The two signs sit in equal cells (user: the left side looked untidy)
@@ -1668,7 +1682,9 @@ void DrawApilot::drawLeadApilot(const UIState* s) {
     float desireStateLaneChangeLeft = (desire == cereal::LateralPlan::Desire::LANE_CHANGE_LEFT) ? 1 : 0;
     float desireStateLaneChangeRight = (desire == cereal::LateralPlan::Desire::LANE_CHANGE_RIGHT) ? 1 : 0;
 
-    if (desire == cereal::LateralPlan::Desire::NONE) {
+    // optech 2026-11-25: only when the model sent its desire states - before the first modelV2 (or from a model
+    // message without them) the list is empty and [1] read past it: the ui died with SIGSEGV (seen on phone .246)
+    if (desire == cereal::LateralPlan::Desire::NONE && sm["modelV2"].getModelV2().getMeta().getDesireState().size() > 4) {
         auto meta = sm["modelV2"].getModelV2().getMeta();
         desireStateTurnLeft = meta.getDesireState()[1];
         desireStateTurnRight = meta.getDesireState()[2];
