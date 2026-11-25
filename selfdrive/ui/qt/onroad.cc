@@ -1286,7 +1286,17 @@ void AnnotatedCameraWidget::drawOptechHud(QPainter &p) {
     }
   }
 
-  // ======================= lead info under the lead (steps aside while a message box is up) =======================
+  // ======================= lead: amber triangle + info under it (the info steps aside while a message box is up) ======
+  if (optech_lead) {
+    const QPointF &v = uiState()->scene.lead_vertices[0];
+    const float x = std::clamp((float)v.x(), 300.f, width() - 300.f);
+    const float y = std::clamp((float)v.y(), 300.f, height() - 230.f);
+    QPolygonF tri;
+    tri << QPointF(x, y - 6) << QPointF(x + 28, y + 36) << QPointF(x - 28, y + 36);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(239, 159, 39));
+    p.drawPolygon(tri);
+  }
   if (optech_lead && !optech_msg_box) {
     const QPointF &v = uiState()->scene.lead_vertices[0];
     const float x = std::clamp((float)v.x(), 300.f, width() - 300.f);
@@ -1373,6 +1383,38 @@ void AnnotatedCameraWidget::drawLaneLines(QPainter &painter, const UIState *s) {
 
   const UIScene &scene = s->scene;
   SubMaster &sm = *(s->sm);
+
+  if (optech_hud) {
+    // OPTECH 주행 화면 = optech-hkg (paint.cc drawLaneLines, show_mode 7, ShowLaneInfo 1): white lane lines while the
+    // model is fairly sure of them, no road edges, a see-through white path and, while openpilot is on, a blue
+    // centre line along it (instead of dragonpilot's green path)
+    painter.setPen(Qt::NoPen);
+    for (int i = 0; i < std::size(scene.lane_line_vertices); ++i) {
+      if (scene.lane_line_probs[i] <= 0.3) continue;
+      painter.setBrush(QColor(255, 255, 255));
+      painter.drawPolygon(scene.lane_line_vertices[i]);
+    }
+    const int n = scene.track_vertices.length();
+    if (n >= 4) {
+      painter.setBrush(QColor(255, 255, 255, 46));
+      painter.drawPolygon(scene.track_vertices);
+      if (sm["controlsState"].getControlsState().getEnabled()) {
+        // the middle 12 % of the path: point i (one side) paired with point n-1-i (the other side)
+        const int glen = std::min(n / 2 - 1, 64);
+        const float g = 0.06f;
+        QPolygonF band(glen * 2);
+        for (int i = 0; i < glen; i++) {
+          const QPointF a = scene.track_vertices[i], b = scene.track_vertices[n - i - 1];
+          band[i] = a + (b - a) * (0.5f - g);
+          band[glen * 2 - 1 - i] = a + (b - a) * (0.5f + g);
+        }
+        painter.setBrush(QColor(55, 138, 221, 235));
+        painter.drawPolygon(band);
+      }
+    }
+    painter.restore();
+    return;
+  }
 
   // lanelines
   for (int i = 0; i < std::size(scene.lane_line_vertices); ++i) {
@@ -1517,6 +1559,8 @@ void AnnotatedCameraWidget::drawDriverState(QPainter &painter, const UIState *s)
 }
 #endif
 void AnnotatedCameraWidget::drawLead(QPainter &painter, const cereal::RadarState::LeadData::Reader &lead_data, const QPointF &vd, float v_ego) {
+  // OPTECH 주행 화면: no dragonpilot chevron; drawOptechHud marks the lead with optech-hkg's small amber triangle
+  if (optech_hud) return;
   painter.save();
 
   const float speedBuff = 10.;
