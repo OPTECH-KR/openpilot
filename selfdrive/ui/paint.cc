@@ -1229,7 +1229,7 @@ static void drawOptechHud(const UIState* s) {
     //    "550m 남음" box 60 -> 76 high)
     const float cellw = (CW - 16) / 2, sg = 170;  // sign cell width, sign size (both signs)
     const float pill_h = 76;  // "550m 남음" box height
-    const float y2 = col_y;
+    const float y2 = col_y + 50;  // user 2026-11-25: "a little lower" than right under the set speed
     const bool sign_row = road_limit > 0 || limit_speed > 0;
     if (sign_row) {
         const float lab_fs = 42, lab_y = y2 + 42, top = y2 + 56;
