@@ -1172,7 +1172,8 @@ static void drawOptechHud(const UIState* s) {
 
     // 2) GPS box (ui_draw_gps_info, '화면 > GPS 상태'): under the badge row on the left, in the gap above the set
     //    speed (user 2026-11-25, marked on a screenshot), only as wide as its content. Nothing below moves for it
-    g_gps_x = lx; g_gps_y = ry + BH + 14; g_gps_w = 0;
+    // centred between the badge row and the set speed box (user 2026-11-25), the box is 58 high
+    g_gps_x = lx; g_gps_y = (ry + BH + col_y) / 2 - 58 / 2; g_gps_w = 0;
 
     // 3) set speed box: under the badge row, twice as high as before (user 2026-11-25, marked on a screenshot:
     //    "move it there and make it that big"). Set speed big on the left, '감속 중' + the speed openpilot is
@@ -1231,30 +1232,30 @@ static void drawOptechHud(const UIState* s) {
     //    - speed bump: the bump picture, label 방지턱, the distance under it
     //    - otherwise the road limit: white disc in a red ring, label 제한 속도
     {
-        const float d = 210, pill_h = 76, pill_w = 300;  // sign diameter, "550m 남음" box
+        const float d = 260, pill_h = 76, pill_w = 300;  // sign diameter (user 2026-11-25: 210 -> 260), "550m 남음" box
         const float y2 = col_y + 50;  // user 2026-11-25: "a little lower" than right under the set speed
-        const float ccx = lx + CW / 2, lab_y = y2 + 44, top = y2 + 58, cy = top + d / 2;
+        const float ccx = lx + CW / 2, lab_y = y2 + 56, top = y2 + 72, cy = top + d / 2;  // label 44 -> 56 (user 2026-11-25)
         const bool show_cam = limit_speed > 0;           // camera / section / bump from the navigation or the built-in DB
         if (show_cam || road_limit > 0) {
             const char* lab = show_cam ? (bump ? "방지턱" : section ? "구간 단속" : "단속 속도") : "제한 속도";
-            optech_text(s, ccx, lab_y, lab, 44, show_cam ? COLOR_WHITE : label_c, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+            optech_text(s, ccx, lab_y, lab, 56, show_cam ? COLOR_WHITE : label_c, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
             if (show_cam && bump) {
                 ui_draw_image(s, {(int)(ccx - d / 2), (int)top, (int)d, (int)d}, "ic_speed_bump", 1.0f);
             } else {
                 const int v = show_cam ? limit_speed : road_limit;
                 nvgBeginPath(s->vg); nvgCircle(s->vg, ccx, cy, d / 2 + 4); nvgFillColor(s->vg, COLOR_WHITE); nvgFill(s->vg);  // thin white rim
                 nvgBeginPath(s->vg); nvgCircle(s->vg, ccx, cy, d / 2); nvgFillColor(s->vg, nvgRGBA(226, 75, 74, 255)); nvgFill(s->vg);
-                nvgBeginPath(s->vg); nvgCircle(s->vg, ccx, cy, d / 2 - 22);
+                nvgBeginPath(s->vg); nvgCircle(s->vg, ccx, cy, d / 2 - 27);
                 nvgFillColor(s->vg, show_cam ? nvgRGBA(250, 199, 117, 255) : COLOR_WHITE); nvgFill(s->vg);
                 snprintf(str, sizeof(str), "%d", metric ? v : (int)(v * KM_TO_MILE + 0.5));
-                float nfs = 112, tb[4];  // 3-digit limits shrink to fit the disc
+                float nfs = 138, tb[4];  // 3-digit limits shrink to fit the disc
                 nvgFontFace(s->vg, BOLD);
                 nvgFontSize(s->vg, nfs);
                 nvgTextBounds(s->vg, 0, 0, str, NULL, tb);
-                const float maxw = d - 2 * 22 - 24;
+                const float maxw = d - 2 * 27 - 28;
                 if (tb[2] - tb[0] > maxw) nfs *= maxw / (tb[2] - tb[0]);
-                optech_text(s, ccx, cy + 0.36f * nfs - 6 + (show_cam ? 10 : 0), str, nfs, nvgRGBA(44, 44, 42, 255), NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
-                if (show_cam) optech_camera_icon(s, ccx, top + 44, 17);  // small camera above the number
+                optech_text(s, ccx, cy + 0.36f * nfs - 6 + (show_cam ? 12 : 0), str, nfs, nvgRGBA(44, 44, 42, 255), NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
+                if (show_cam) optech_camera_icon(s, ccx, top + 54, 21);  // small camera above the number
             }
             if (show_cam && left_dist > 0) {
                 optech_dist_text(str, sizeof(str), left_dist, " 남음");
