@@ -1232,7 +1232,9 @@ static void drawOptechHud(const UIState* s) {
     //    - speed bump: the bump picture, label 방지턱, the distance under it
     //    - otherwise the road limit: white disc in a red ring, label 제한 속도
     {
-        const float d = 260, pill_h = 76, pill_w = 300;  // sign diameter (user 2026-11-25: 210 -> 260), "550m 남음" box
+        // sign diameter (user 2026-11-25: 210 -> 260, 11-26: 330, near the set speed box width 370), red ring width,
+        // "550m 남음" box
+        const float d = 330, ring = 34, pill_h = 76, pill_w = 300;
         const float y2 = col_y + 50;  // user 2026-11-25: "a little lower" than right under the set speed
         const float ccx = lx + CW / 2, lab_y = y2 + 56, top = y2 + 72, cy = top + d / 2;  // label 44 -> 56 (user 2026-11-25)
         const bool show_cam = limit_speed > 0;           // camera / section / bump from the navigation or the built-in DB
@@ -1245,17 +1247,17 @@ static void drawOptechHud(const UIState* s) {
                 const int v = show_cam ? limit_speed : road_limit;
                 nvgBeginPath(s->vg); nvgCircle(s->vg, ccx, cy, d / 2 + 4); nvgFillColor(s->vg, COLOR_WHITE); nvgFill(s->vg);  // thin white rim
                 nvgBeginPath(s->vg); nvgCircle(s->vg, ccx, cy, d / 2); nvgFillColor(s->vg, nvgRGBA(226, 75, 74, 255)); nvgFill(s->vg);
-                nvgBeginPath(s->vg); nvgCircle(s->vg, ccx, cy, d / 2 - 27);
+                nvgBeginPath(s->vg); nvgCircle(s->vg, ccx, cy, d / 2 - ring);
                 nvgFillColor(s->vg, show_cam ? nvgRGBA(250, 199, 117, 255) : COLOR_WHITE); nvgFill(s->vg);
                 snprintf(str, sizeof(str), "%d", metric ? v : (int)(v * KM_TO_MILE + 0.5));
-                float nfs = 138, tb[4];  // 3-digit limits shrink to fit the disc
+                float nfs = 175, tb[4];  // 3-digit limits shrink to fit the disc
                 nvgFontFace(s->vg, BOLD);
                 nvgFontSize(s->vg, nfs);
                 nvgTextBounds(s->vg, 0, 0, str, NULL, tb);
-                const float maxw = d - 2 * 27 - 28;
+                const float maxw = d - 2 * ring - 34;
                 if (tb[2] - tb[0] > maxw) nfs *= maxw / (tb[2] - tb[0]);
-                optech_text(s, ccx, cy + 0.36f * nfs - 6 + (show_cam ? 12 : 0), str, nfs, nvgRGBA(44, 44, 42, 255), NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
-                if (show_cam) optech_camera_icon(s, ccx, top + 54, 21);  // small camera above the number
+                optech_text(s, ccx, cy + 0.36f * nfs - 8 + (show_cam ? 15 : 0), str, nfs, nvgRGBA(44, 44, 42, 255), NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
+                if (show_cam) optech_camera_icon(s, ccx, top + 68, 27);  // small camera above the number
             }
             if (show_cam && left_dist > 0) {
                 optech_dist_text(str, sizeof(str), left_dist, " 남음");
