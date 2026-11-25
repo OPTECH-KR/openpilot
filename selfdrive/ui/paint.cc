@@ -1395,18 +1395,23 @@ static void drawOptechHud(const UIState* s) {
             }
         }
 
-        // path offset panel (opened by tapping the wheel): − / + move the path left / right, 5 cm a tap
+        // path offset panel (opened by tapping the wheel): − / + move the path left / right, 1 cm a tap
+        // (Soul EV tester 2026-11-25: the 56 px value ran under the buttons and hid its sign; now 44 px, drawn last,
+        //  and the sign is spelled out above it)
         if (s->optech_tune_open) {
             const QRect pr = optech_tune_panel_rect(s->fb_w, s->fb_h);
             const QRect mr = optech_tune_minus_rect(s->fb_w, s->fb_h), plr = optech_tune_plus_rect(s->fb_w, s->fb_h);
             carrot_round_box(s, pr.x(), pr.y(), pr.width(), pr.height(), nvgRGBA(20, 20, 20, 230), COLOR_WHITE, 16, 3);
             optech_text(s, pr.x() + pr.width() / 2, pr.y() + 56, "경로 좌우 보정", 40, COLOR_WHITE, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
-            snprintf(str, sizeof(str), "%+d cm", s->path_offset);
-            optech_text(s, pr.x() + pr.width() / 2, mr.y() + mr.height() / 2 + 4, str, 56, nvgRGBA(250, 199, 117, 255), NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
             carrot_round_box(s, mr.x(), mr.y(), mr.width(), mr.height(), nvgRGBA(95, 94, 90, 255), COLOR_WHITE, 14, 3);
             carrot_round_box(s, plr.x(), plr.y(), plr.width(), plr.height(), nvgRGBA(95, 94, 90, 255), COLOR_WHITE, 14, 3);
             optech_text(s, mr.x() + mr.width() / 2, mr.y() + mr.height() / 2 + 2, "-", 80, COLOR_WHITE, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
             optech_text(s, plr.x() + plr.width() / 2, plr.y() + plr.height() / 2 + 2, "+", 70, COLOR_WHITE, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+            // which way (Korean as a %s argument: NEOS snprintf cuts a format string at Korean)
+            const char *side = s->path_offset < 0 ? "왼쪽" : s->path_offset > 0 ? "오른쪽" : "가운데";
+            optech_text(s, pr.x() + pr.width() / 2, mr.y() + 34, side, 30, nvgRGBA(211, 209, 199, 255), NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+            snprintf(str, sizeof(str), "%+d cm", s->path_offset);
+            optech_text(s, pr.x() + pr.width() / 2, mr.y() + mr.height() / 2 + 20, str, 44, nvgRGBA(250, 199, 117, 255), NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
             optech_text(s, pr.x() + pr.width() / 2, pr.y() + pr.height() - 18, "- 왼쪽으로   + 오른쪽으로", 28, nvgRGBA(211, 209, 199, 255), NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
         }
     }

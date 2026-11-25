@@ -289,5 +289,6 @@ void update_line_data(const UIState *s, const cereal::XYZTData::Reader &line,
 // optech 주행 화면 (ShowHudMode 7): tap areas shared by the drawing (paint.cc) and the touch handler (onroad.cc)
 inline QRect optech_wheel_rect(int w, int h) { (void)h; return QRect(w - 30 - 160, 20, 160, 160); }  // the wheel box (all 3 right boxes this size)
 inline QRect optech_tune_panel_rect(int w, int h) { (void)h; return QRect(w - 30 - 160 - 20 - 440, 30, 440, 300); }
-inline QRect optech_tune_minus_rect(int w, int h) { QRect p = optech_tune_panel_rect(w, h); return QRect(p.x() + 30, p.y() + 90, 120, 120); }
-inline QRect optech_tune_plus_rect(int w, int h) { QRect p = optech_tune_panel_rect(w, h); return QRect(p.right() - 150, p.y() + 90, 120, 120); }
+// buttons 100 wide (were 120): the value between them gets 180 px, so "+200 cm" no longer runs under the buttons
+inline QRect optech_tune_minus_rect(int w, int h) { QRect p = optech_tune_panel_rect(w, h); return QRect(p.x() + 30, p.y() + 90, 100, 120); }
+inline QRect optech_tune_plus_rect(int w, int h) { QRect p = optech_tune_panel_rect(w, h); return QRect(p.right() - 130, p.y() + 90, 100, 120); }

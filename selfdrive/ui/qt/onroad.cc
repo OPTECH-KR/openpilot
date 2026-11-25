@@ -134,7 +134,8 @@ void OnroadWindow::mousePressEvent(QMouseEvent* e) {
       return;
     }
     if (s->optech_tune_open) {
-      int step = optech_tune_minus_rect(w, h).contains(p) ? -5 : optech_tune_plus_rect(w, h).contains(p) ? 5 : 0;
+      // 1 cm a tap, the same step as the menu item (Soul EV tester 2026-11-25: was 5 here, 1 in the menu)
+      int step = optech_tune_minus_rect(w, h).contains(p) ? -1 : optech_tune_plus_rect(w, h).contains(p) ? 1 : 0;
       if (step != 0) {
         s->path_offset = std::clamp(s->path_offset + step, -200, 200);
         Params().put("PathOffset", std::to_string(s->path_offset));
