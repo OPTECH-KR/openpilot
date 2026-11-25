@@ -1330,10 +1330,11 @@ void AnnotatedCameraWidget::drawOptechHud(QPainter &p) {
     if (optech_right_bsd) drawOptechBsd(p, true, optech_right_blinker);
   }
 
-  // driver monitoring icon (OPTECH > 화면 > 운전자 모니터링 아이콘), lower left as on optech-hkg
+  // driver monitoring icon (OPTECH > 화면 > 운전자 모니터링 아이콘): just right of the left column, at the bottom
+  // (user 2026-11-26, marked on a screenshot; in the corner it covered the sign's "남음" box)
   if (optech_show_dm && !hideBottomIcons) {
     const int offset = UI_BORDER_SIZE + btn_size / 2;
-    drawIcon(p, QPoint(offset, height() - offset), dm_img, blackColor(70), dmActive ? 1.0 : 0.2);
+    drawIcon(p, QPoint((int)(lx + CW + 105), height() - offset), dm_img, blackColor(70), dmActive ? 1.0 : 0.2);
   }
   p.restore();
 }
