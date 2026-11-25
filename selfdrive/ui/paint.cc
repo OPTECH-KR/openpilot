@@ -1163,7 +1163,9 @@ static void drawOptechHud(const UIState* s) {
         if (nav) bx += optech_badge(s, bx, ry, BH, nav, nav_fill) + 14;
         if (radar_tracks) bx += optech_badge(s, bx, ry, BH, "RADAR", nvgRGBA(230, 130, 20, 235)) + 14;
     }
-    float col_y = s->show_conn_info ? ry + BH + 16 : ry;  // next item's top
+    // user 2026-11-25 (marked on a screenshot): the set speed + signs block starts lower, at y 180, whether the badge
+    // row is shown or not
+    float col_y = 180;  // next item's top
     const NVGcolor label_c = nvgRGBA(211, 209, 199, 255);
 
     // 2) GPS box (ui_draw_gps_info, '화면 > GPS 상태'): hidden in this HUD for now (user 2026-11-25: "GPS signal and
