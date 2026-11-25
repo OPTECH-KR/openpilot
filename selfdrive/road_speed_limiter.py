@@ -110,7 +110,10 @@ class RoadLimitSpeedServer:
               location.speed,
               location.bearingDeg,
               location.accuracy,
-              location.timestamp,
+              # optech 2026-11-26: was location.timestamp, a field this cereal does not have (GpsLocationData @7 is
+              # unixTimestampMillis): the AttributeError was caught below, so the GPS never reached the app.
+              # TmapNda asks for it (request_gps) and uses it for its openpilot GPS state and the parked spot.
+              location.unixTimestampMillis,
               # location.source,
               # location.vNED,
               location.verticalAccuracy,
