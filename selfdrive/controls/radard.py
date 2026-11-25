@@ -69,6 +69,42 @@ def shielded_stationary(c, lead):
 def raw_seen_enough(c):
   return max(t.seen for t in c.tracks) >= RAW_MIN_SEEN_FRAMES
 
+
+# optech sticky lead, raw radar tracks only (Soul EV SK3 commute 2026-11-25, dashcam): driving into the low sun / a bright
+# tunnel exit the camera lost the car ahead; leadOne jumped to 66-70 m and then was empty for 4-6 s while the radar still
+# had the car, openpilot long accelerated to 52 / 84 km/h and the driver had to brake. Above 14.4 km/h radard only uses
+# radar points the camera matches. carrot c3-wip get_sticky_track: keep following the radar track that was the
+# camera-confirmed lead while it stays measured, physically continuous (Track.update: d 5 m / y 2 m / v 7 m/s jumps end
+# it) and inside the model path (0.8 m, beyond 60 m 1.2 m). Here it also wins over a camera lead that jumped far behind
+# it or a camera-only lead that is not closer.
+STICKY_MIN_SELECTED = 3       # camera-confirmed this many frames first
+STICKY_SELECTED_MAX = 40      # carrot STICKY_SELECTED_COUNT_MAX (2 s): only for choosing between candidates
+STICKY_MAX_DPATH = 0.8        # carrot STICKY_MAX_DPATH
+STICKY_FAR_DREL = 60.0        # carrot STICKY_FAR_DREL
+STICKY_MAX_DPATH_FAR = 1.2    # carrot STICKY_MAX_DPATH_FAR
+STICKY_KEEP_JUMP_M = 5.0      # a camera match this much farther than the followed car is a jump, not the car
+STICKY_VISION_CLOSER_M = 2.0  # a camera-only lead this much closer than the followed car wins (cut-in not on radar)
+
+
+def get_sticky(clusters, path):
+  """The radar point we follow (camera-confirmed lead before), or None. path: model (x, y) lists or None."""
+  if path is None:
+    return None
+  best, best_sel = None, 0
+  for c in clusters:
+    sel = max(t.selected for t in c.tracks)
+    if sel < STICKY_MIN_SELECTED:
+      continue
+    d_path = c.yRel + interp(c.dRel, path[0], path[1])
+    if not (c.measured and 1.0 < c.dRel < 150.0 and
+            abs(d_path) <= (STICKY_MAX_DPATH if c.dRel < STICKY_FAR_DREL else STICKY_MAX_DPATH_FAR)):
+      for t in c.tracks:
+        t.selected = 0  # left our path or lost: not followed any more
+      continue
+    if best is None or (sel, -c.dRel) > (best_sel, -best.dRel):
+      best, best_sel = c, sel
+  return best
+
 #LEAD_PLUS_ONE_MIN_REL_DIST_V = [3.0, 6.0] # [m] min distance between lead+1 and lead at low and high distance
 #LEAD_PLUS_ONE_MIN_REL_DIST_BP = [0., 100.] # [m] min distance between lead+1 and lead at low and high distance
 #LEAD_PLUS_ONE_MAX_YREL_TO_LEAD = 3.0 # [m]
@@ -187,7 +223,7 @@ def get_path_adjacent_leads(v_ego, md, lane_width, clusters):
   return [ll,lc,lr]
 
 def get_lead(v_ego, ready, clusters, lead_msg, model_v_ego, low_speed_override=True, mixRadarInfo=0, raw_tracks=False,
-             blocked=None):
+             blocked=None, sticky_path=None, sticky_used=None):
   # optech raw radar tracks: stationary points shielded by the camera's moving lead may not be its radar match
   # (blocked collects them for the diag log)
   match_clusters = clusters
@@ -202,6 +238,27 @@ def get_lead(v_ego, ready, clusters, lead_msg, model_v_ego, low_speed_override=T
     cluster = match_vision_to_cluster(v_ego, lead_msg, match_clusters)
   else:
     cluster = None
+
+  # optech sticky lead (raw tracks, leadOne only: sticky_path given)
+  if raw_tracks and sticky_path is not None:
+    sticky = get_sticky(clusters, sticky_path)
+    use_sticky = False
+    if sticky is not None and sticky is not cluster:
+      if cluster is not None:
+        use_sticky = cluster.dRel > sticky.dRel + STICKY_KEEP_JUMP_M  # the camera's lead jumped far behind it
+      else:
+        vision_d = lead_msg.x[0] - RADAR_TO_CAMERA if (ready and lead_msg.prob > .5) else None
+        use_sticky = vision_d is None or vision_d >= sticky.dRel - STICKY_VISION_CLOSER_M
+    if use_sticky:
+      if sticky_used is not None:
+        sticky_used.append((sticky, None if cluster is None else cluster.dRel,
+                            lead_msg.x[0] - RADAR_TO_CAMERA if lead_msg.prob > .5 else None))
+      cluster = sticky
+    elif cluster is not None:
+      # the camera confirmed this radar point as the lead: it becomes the one to follow
+      for c in clusters:
+        for t in c.tracks:
+          t.selected = min(t.selected + 1, STICKY_SELECTED_MAX) if c is cluster else 0
 
   lead_dict = {'status': False}
   if cluster is not None:
@@ -233,6 +290,7 @@ class RadarD():
     self.current_time = 0
     self.raw_tracks = raw_tracks  # optech: Mando front radar tracks (lead shield + seen-3-frames rule)
     self.last_block_log = 0.
+    self.last_sticky_log = 0.
 
     self.tracks = defaultdict(dict)
     self.kalman_params = KalmanParams(radar_ts)
@@ -326,8 +384,19 @@ class RadarD():
         cam_lead = self.ready and leads_v3[0].prob > .5
         for t in self.tracks.values():
           t.vision_frames = t.vision_frames + 1 if cam_lead and vision_on_track(t, leads_v3[0]) else 0
+      # model path for the sticky lead (capnp lists: list() before use, they can't be sliced on the device)
+      pos = sm['modelV2'].position
+      path = (list(pos.x), list(pos.y)) if self.ready and len(pos.x) == TRAJECTORY_SIZE else None
+      sticky_used = []
       radarState.leadOne = get_lead(self.v_ego, self.ready, clusters, leads_v3[0], model_v_ego, low_speed_override=True, mixRadarInfo=self.mixRadarInfo,
-                                    raw_tracks=self.raw_tracks, blocked=blocked)
+                                    raw_tracks=self.raw_tracks, blocked=blocked, sticky_path=path, sticky_used=sticky_used)
+      if sticky_used and self.current_time - self.last_sticky_log >= 1.0:
+        self.last_sticky_log = self.current_time
+        c, match_d, cam_d = sticky_used[0]
+        cam = "none" if cam_d is None else "%.1f" % cam_d
+        match = "none" if match_d is None else "%.1f" % match_d
+        diag_write(f"radar sticky: kept the followed car d={c.dRel:.1f} v={c.vLead:.1f} (camera lead {cam}, "
+                   f"its radar match {match}, ego {self.v_ego:.1f} m/s)")
       radarState.leadTwo = get_lead(self.v_ego, self.ready, clusters, leads_v3[1], model_v_ego, low_speed_override=False, mixRadarInfo=self.mixRadarInfo,
                                     raw_tracks=self.raw_tracks)
       blocked = [b for b in blocked if abs(b[0].yRel) < 1.5]  # log only points in our lane (not guard rails)
