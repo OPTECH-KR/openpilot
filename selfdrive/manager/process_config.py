@@ -26,7 +26,7 @@ def optech_speedcam(started: bool, params: Params, CP: car.CarParams) -> bool:
   return started and (params.get_bool("OptechSpeedCam") or optech_navi_link(params) > 0)
 
 def optech_road_speed_limiter(started: bool, params: Params, CP: car.CarParams) -> bool:
-  # 내비 연동 방식 1-3: listen for the phone navigation app (APM / APN), also with the car off so it can pair
+  # 내비 연동 방식 1 TmapNda / 2 당근내비: listen for the phone navigation app, also with the car off so it can pair
   return optech_navi_link(params) > 0
 
 def notcar(started: bool, params: Params, CP: car.CarParams) -> bool:

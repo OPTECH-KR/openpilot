@@ -27,6 +27,24 @@ import json
 from openpilot.selfdrive.car.fingerprints import all_known_cars, all_legacy_fingerprint_cars
 
 
+def optech_navi_link_migrate(params) -> None:
+  """optech 2026-11-25 (same as optech-hkg): 내비 연동 방식 (OptechNaviLinkMode) names the phone app now: 0 사용 안 함,
+  1 TmapNda (NDA 843 + carrot 7706), 2 당근내비 (carrot 7706). It was 0 내비 안 씀 / 1 APM / 2 APM + 순정 / 3 NDA, and
+  APM (APilotMan + Mappy) is no longer received. Old values move once, like optech-hkg's: 3 NDA -> 1, 1 APM and
+  2 APM + 순정 -> 2, 0 stays. spst has no AutoNaviSpeedCtrl to tell an old 1 from a new 1, so OptechNaviLinkVer "2"
+  marks a device that has the new meaning (a new install gets it before the defaults are written: nothing to move)."""
+  if params.get("OptechNaviLinkVer", encoding="utf8") == "2":
+    return
+  old = params.get("OptechNaviLinkMode", encoding="utf8")
+  if old is not None:
+    try:
+      new = {0: 0, 1: 2, 2: 2, 3: 1}.get(int(old), 1)
+    except ValueError:
+      new = 1  # a broken value: the new default
+    params.put("OptechNaviLinkMode", str(new))
+  params.put("OptechNaviLinkVer", "2")
+
+
 def manager_init() -> None:
   # update system time from panda
   set_time(cloudlog)
@@ -114,7 +132,7 @@ def manager_init() -> None:
     ("LateralTorqueAccelFactor", "2500"),
     ("LateralTorqueFriction", "100"),
     # optech-hkg stage 2 (same first values as optech-hkg)
-    ("OptechNaviLinkMode", "1"),            # 주행 > 과속카메라 > 내비 연동 방식 (0 내비 안 씀, 1 APM, 2 APM + 순정 내비, 3 NDA)
+    ("OptechNaviLinkMode", "1"),            # 주행 > 과속카메라 > 내비 연동 방식 (0 사용 안 함, 1 TmapNda, 2 당근내비)
     ("HapticFeedbackWhenSpeedCamera", "0"), # 과속 단속 알림 (0 off, 1 핸들 진동, 2 계기판, 3 화면)
     ("OptechSignalEnable", "1"),            # 주행 > 신호등 > 신호등 사용
     ("OptechGreenAlert", "1"),              # 주행 > 신호등 > 초록불 알림
@@ -155,6 +173,7 @@ def manager_init() -> None:
       off_s = min((30, 60, 180, 300, 600), key=lambda s: abs(s - mins * 60))
     params.put("OptechOffShutdown", str(off_s))
   params.put_bool("OptechHud", True)  # the OPTECH 주행 화면 is always on, as on optech-hkg (no menu item)
+  optech_navi_link_migrate(params)  # before the defaults: a new install has no old 내비 연동 방식 to move
 
   params.put("dp_car_list", get_support_car_list())
 

@@ -110,6 +110,10 @@ class DriveLog:
     # read once a second (not in SERVICES: modelV2 is big, procLog only comes every 2 s)
     self.model_sock = messaging.sub_sock("modelV2", conflate=True)
     self.proc_sock = messaging.sub_sock("procLog", conflate=True)
+    # navigation link (road_speed_limiter): written when the link, the turn or the camera changes (navi_events)
+    self.navi_sock = messaging.sub_sock("roadLimitSpeed", conflate=True)
+    self.prev_navi = None
+    self.next_navi_event = 0.
     self.proc_prev = None  # (time, {pid: (name, cpu seconds)})
     self.next_cpu_event = time.monotonic() + 30.
     # car SCC / cluster / buttons (parse_opt)
@@ -200,6 +204,26 @@ class DriveLog:
     except (OSError, AttributeError) as e:
       self.event(f"clock not set from GPS: {type(e).__name__}: {e}")
 
+  def navi_events(self, now):
+    """What the navigation link delivers (optech-hkg 2026-11-25). active (see road_speed_limiter): 200+ route guidance /
+    Tmap SDI data, 1-99 an NDA app linked (its cameras come in the NDA fields). naviSource: the port it came in on (the
+    screen's NAVI CARROT / NAVI NDA badge). A line on every change of link, turn or camera, at most every 2 s."""
+    msg = messaging.recv_one_or_none(self.navi_sock)
+    if msg is None:
+      return
+    r = msg.roadLimitSpeed
+    src = {1: "CARROT", 2: "NDA"}.get(r.naviSource, "-")
+    link = ("guidance" if r.active >= 200 else "linked" if r.active > 0 or r.naviSource > 0 else "none") + " via " + src
+    turn = r.xTurnInfo if r.xDistToTurn > 0 else -1
+    cam = (r.xSpdLimit, r.camType) if r.xSpdLimit > 0 and r.xSpdDist > 0 else None
+    key = (link, turn, cam, r.roadLimitSpeed)
+    if key != self.prev_navi and now >= self.next_navi_event:
+      self.prev_navi = key
+      self.next_navi_event = now + 2.
+      self.event(f"navi {link} (active {r.active}): turn {turn} in {r.xDistToTurn} m, camera {r.xSpdLimit} km/h in "
+                 f"{r.xSpdDist} m (type {r.camType}, sign {r.xSignType}), road limit {r.roadLimitSpeed}, "
+                 f"NDA camera {r.camLimitSpeed} in {r.camLimitSpeedLeftDist} m [{r.xRoadName[:40]}]")
+
   def step(self):
     for s, sock in self.socks.items():
       msg = messaging.recv_one_or_none(sock)
@@ -257,6 +281,7 @@ class DriveLog:
           self.dead.discard(p.name)
 
     self.panda_events()
+    self.navi_events(now)
 
     ev = self.last.get("carEvents")
     if ev is not None:

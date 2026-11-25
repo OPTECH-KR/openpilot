@@ -273,6 +273,7 @@ std::unordered_map<std::string, uint32_t> keys = {
     {"LateralTorqueFriction", PERSISTENT},
     // optech-hkg stage 2 (주행 화면, 신호등, APM, GPS 확인, NNFF, 주행 기록, 녹화)
     {"OptechNaviLinkMode", PERSISTENT},
+    {"OptechNaviLinkVer", PERSISTENT},  // "2": 내비 연동 방식 has the 2026-11-25 meaning (manager.py optech_navi_link_migrate)
     {"HapticFeedbackWhenSpeedCamera", PERSISTENT},
     {"OptechSignalEnable", PERSISTENT},
     {"OptechGreenAlert", PERSISTENT},

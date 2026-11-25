@@ -219,7 +219,7 @@ protected:
   bool optech_left_bsd = false, optech_right_bsd = false;
   bool optech_lead = false;
   float optech_lead_d = 0, optech_lead_v = 0;
-  int optech_navi_active = 0, optech_road_limit = 0, optech_turn = 0, optech_turn_dist = 0;
+  int optech_navi_active = 0, optech_navi_source = 0, optech_road_limit = 0, optech_turn = 0, optech_turn_dist = 0;
   bool optech_radar_tracks = false;
   bool optech_scc2 = false;
   void drawOptechRight(QPainter &p);

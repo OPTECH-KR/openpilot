@@ -641,17 +641,18 @@ void AnnotatedCameraWidget::updateState(const UIState &s) {
     optech_lead_v = lead.getVLead();
   }
   optech_radar_tracks = sm.alive("liveTracks") && sm["liveTracks"].getLiveTracks().size() > 1;
-  // navigation app (APM / APN, selfdrive/optech/road_speed_limiter.py): sent about 5 times a second
+  // navigation app (TmapNda / 당근내비, selfdrive/optech/road_speed_limiter.py): sent about 5 times a second
   const bool navi = sm.rcv_frame("roadLimitSpeed") > 0 && (sm.frame - sm.rcv_frame("roadLimitSpeed")) < 2 * UI_FREQ;
   if (navi) {
     const auto road = sm["roadLimitSpeed"].getRoadLimitSpeed();
     optech_navi_active = road.getActive();
+    optech_navi_source = road.getNaviSource();
     const int rl = road.getRoadLimitSpeed();
     optech_road_limit = (rl > 0 && rl < 200) ? rl : 0;
     optech_turn = road.getXTurnInfo();
     optech_turn_dist = road.getXDistToTurn();
   } else {
-    optech_navi_active = optech_road_limit = optech_turn = optech_turn_dist = 0;
+    optech_navi_active = optech_navi_source = optech_road_limit = optech_turn = optech_turn_dist = 0;
   }
   optech_long = s.scene.longitudinal_control;
   switch (car_state.getGearShifter()) {
@@ -1048,15 +1049,25 @@ void AnnotatedCameraWidget::drawOptechHud(QPainter &p) {
   float bx = lx;
   // 1) connection badges, only the ones that are on (SCC on the camera side, navigation app, radar tracks)
   if (optech_show_conn) {
+    // w 0: as wide as the words need (at least 120)
     auto badge = [&](const QString &text, const QColor &c, float w) {
+      if (w <= 0) w = std::max(120.f, (float)optech_text_w(p, text, 36) + 36.f);
       optech_box(p, bx, ry, w, 54, c, 12, 2);
       optech_txt(p, bx + w / 2, ry + 27, text, 36, white, 0, 1);
       bx += w + 15;
     };
     if (optech_scc2) badge("SCC2", QColor(210, 45, 45), 120);
-    if (optech_navi_active >= 200) badge("APN", QColor(120, 40, 220), 120);
-    else if (optech_navi_active >= 100) badge("APM", QColor(40, 110, 220), 120);
-    else if (optech_navi_active % 100 > 0) badge("NDA", QColor(40, 160, 90), 120);
+    // navigation link (optech-hkg 2026-11-25): named by the port the data came in on (roadLimitSpeed.naviSource):
+    // NAVI CARROT (7706: 당근내비, TmapNda in carrot mode), NAVI NDA (843: TmapNda in NDA mode); green while it
+    // delivers, grey while linked with nothing yet. active: 200+ Tmap data, 1-99 an NDA app linked. (APM is gone.)
+    {
+      const QColor app(0, 170, 0), idle(110, 110, 110);
+      const QString name = optech_navi_source == 1 ? "NAVI CARROT" : optech_navi_source == 2 ? "NAVI NDA" : "NAVI";
+      if (optech_navi_active >= 200) badge(name, app, 0);
+      else if (optech_navi_active > 0 && optech_navi_active < 100)
+        badge(optech_navi_source == 1 ? name : QString("NAVI NDA"), app, 0);
+      else if (optech_navi_active >= 100 || optech_navi_source > 0) badge(name, idle, 0);
+    }
     if (optech_radar_tracks) badge("RadarTracks", QColor(239, 140, 30), 240);
   }
   if (optech_show_gps) drawOptechGps(p, bx);
@@ -1192,7 +1203,7 @@ void AnnotatedCameraWidget::drawOptechHud(QPainter &p) {
       if (optech_right_blinker) optech_chevron(p, cx + 270 + i * gap, y, w, h, true, col);
     }
   }
-  // navigation turn guidance (APM / APN)
+  // navigation turn guidance (TmapNda / 당근내비)
   if (optech_navi_active > 0 && optech_turn > 0) {
     int arrow = 0;
     QString label;

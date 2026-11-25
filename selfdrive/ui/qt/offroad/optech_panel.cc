@@ -529,7 +529,8 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
   QLabel *cam_note = optech_note(
     "● 과속카메라 앞 '감속 시작'에 정한 시간(처음 값 22초) 전부터 설정 속도를 조금씩 내려서, '감속 끝'(6초 전)까지 '목표 속도'(제한 속도의 %)에 맞춥니다. "
     "구간단속은 구간이 끝날 때까지 제한 속도를 지킵니다.\n"
-    "● 카메라 정보는 아래 '내장 카메라 DB'에서 받습니다. 기기 GPS와 전국 카메라 위치(약 3만 1천 대)로 찾고, 내비 앱은 필요 없습니다. "
+    "● 내비 연동(1·2): 폰 내비 앱(TmapNda·당근내비)이 보내는 카메라 정보를 먼저 쓰고, 앱 정보가 없을 때는 내장 카메라 DB로 채웁니다.\n"
+    "● 내장 카메라 DB: 내비 앱 없이 기기 GPS와 전국 카메라 위치(약 3만 1천 대)로 찾습니다. "
     "이동식·새 카메라는 모르고, 반대 차로의 카메라에도 줄일 수 있습니다.\n"
     "● openpilot이 가감속을 맡는 차량만 속도를 줄입니다. 차의 순정 크루즈를 쓰는 차량은 화면에 CAM 표시만 됩니다. GPS가 안 잡히면 동작하지 않습니다.");
   cam_note->setStyleSheet("font-size: 36px; color: #E0E0E0; background-color: #333333; border-radius: 10px; padding: 20px; margin: 10px 0px;");
@@ -546,21 +547,30 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
         "카메라 앞과 구간단속 안에서 제한 속도의 몇 %로 달릴지 정합니다. "
         "100이면 제한 속도 그대로(단속 100km/h → 100km/h), 105면 5% 더 빠르게 (100km/h → 105km/h). 단속 기준을 넘지 않게 주의하세요.",
         90, 120, 1, [](int v) { return QString("%1%").arg(v); }));
+  // '과속 단속 알림' text as it really works (like optech-hkg 651c76673): controlsd sets both lane departs for 3 s, pauses
+  // 2 s, 3 s again; the Hyundai carcontroller sends that as the car's lane departure warning (value 1 or 2). 3: alert.
   cam_group.append(value(drive, "HapticFeedbackWhenSpeedCamera", "과속 단속 알림",
-        "과속 단속 카메라 앞에서 감속을 시작할 때 8초 동안 알려 주는 방법입니다.\n"
-        "0:사용 안 함, 1:핸들 진동, 2:계기판 표시 (1·2는 현대·기아·제네시스의 차로 경고 표시를 씁니다), 3:화면에 알림",
+        "과속 단속 카메라 앞에서 감속을 시작할 때 알려 주는 방법입니다.\n"
+        "0: 사용 안 함 (속도만 줄임, 처음 값)\n"
+        "1·2: 현대·기아·제네시스만 - 차의 차선 이탈 경고를 3초씩 두 번 켭니다. 계기판에 경고가 뜨고 경고음이 나며, 핸들 진동이 있는 차는 핸들도 떨립니다. "
+        "숫자에 따라 차마다 경고 모양이 조금 다릅니다.\n"
+        "3: 모든 차 - 주행 화면에 '앞에 과속 단속 카메라가 있어요' 알림을 띄웁니다.",
         0, 3, 1, [](int v) {
-          const char *names[] = {"사용 안 함", "핸들 진동", "계기판 표시", "화면 알림"};
+          const char *names[] = {"사용 안 함", "차선 경고 1", "차선 경고 2", "화면 알림"};
           return QString(names[std::clamp(v, 0, 3)]);
         }));
+  // 내비 연동 방식 (OptechNaviLinkMode, same as optech-hkg since 2026-11-25) names the phone app: 0 사용 안 함, 1 TmapNda
+  // (NDA 843 + carrot 7706), 2 당근내비 (carrot 7706). manager.py moves the old values (0 / 1 APM / 2 APM + 순정 / 3 NDA) once.
   cam_group.append(value(drive, "OptechNaviLinkMode", "내비 연동 방식",
-        "카메라 정보를 어디서 받을지 정합니다.\n0:내비 안 씀 (내장 카메라 DB만, 내비 앱이 보내는 정보는 무시)\n"
-        "1:APM(내비 앱)\n2:APM + 순정 내비게이션\n3:NDA\n"
-        "내비 앱은 폰과 이 기기가 같은 와이파이나 핫스팟에 연결돼 있어야 합니다. 앱 정보가 있으면 먼저 쓰고, 없을 때는 내장 카메라 DB로 채웁니다. "
+        "폰 내비 앱에서 카메라·과속방지턱·길안내 정보를 받습니다. 쓰는 앱에 맞춰 고르세요.\n"
+        "0: 사용 안 함 - 내비 앱 정보를 받지 않고 내장 카메라 DB만 씁니다.\n"
+        "1: TmapNda - 앱의 오픈파일럿 연결이 당근 방식이든 NDA 방식이든 모두 받습니다. 앱에서 NDA 방식으로 두면 주행 화면에 NAVI NDA로 떠서 당근내비(NAVI CARROT)와 구별됩니다.\n"
+        "2: 당근내비 - 당근 방식으로 받습니다.\n"
+        "1·2 공통: 폰과 이 기기가 같은 와이파이(핫스팟)에 붙어 있어야 합니다. 앱 정보가 없을 때는 내장 카메라 DB로 채웁니다.\n"
         "바꾼 뒤 재부팅해야 적용됩니다.",
-        0, 3, 1, [](int v) {
-          const char *names[] = {"내비 안 씀", "APM", "APM+순정", "NDA"};
-          return QString(names[std::clamp(v, 0, 3)]);
+        0, 2, 1, [](int v) {
+          const char *names[] = {"사용 안 함", "TmapNda", "당근내비"};
+          return QString(names[std::clamp(v, 0, 2)]);
         }));
   cam_group.append(toggle(drive, "OptechSpeedCam", "내장 카메라 DB",
          "내비 앱 없이 기기 GPS로 앞쪽 고정식 단속카메라(과속·신호과속·구간단속)를 찾습니다.\n"
@@ -796,8 +806,11 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
     });
     disp->addItem(radar_btn);
   }
-  toggle(disp, "ShowConnInfo", "APM 연결 표시",
-         "주행 화면 왼쪽 위에 연결 상태 표시를 보여 줍니다. APM·APN: 내비 앱 연결, NDA: 차의 고속도로 주행 보조 연결, "
+  toggle(disp, "ShowConnInfo", "연결 상태 표시",
+         "주행 화면 왼쪽 위에 연결 상태를 보여 줍니다.\n"
+         "NAVI CARROT: 당근 방식으로 들어옴 (당근내비, 당근 방식으로 설정한 TmapNda)\n"
+         "NAVI NDA: NDA 방식으로 들어옴 (NDA 방식으로 설정한 TmapNda)\n"
+         "초록은 정보가 들어오는 중, 회색은 연결됐지만 아직 정보가 없음\n"
          "SCC2: 크루즈(SCC)가 카메라 쪽에 있는 차, RadarTracks: 레이더가 여러 물체를 보내는 차.");
   // '운전자 모니터링 아이콘' (ShowDmInfo 0 / 1); the mode itself is chosen on the 토글 page
   dm_icon = new ToggleControl("운전자 모니터링 아이콘",

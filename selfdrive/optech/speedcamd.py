@@ -7,7 +7,7 @@ The slowdown profile is the one optech-hkg uses (road_speed_limiter.get_max_spee
 OptechCamDecelStart seconds before the camera, reaches limit x OptechCamSafetyFactor % at
 OptechCamDecelEnd seconds before it, and holds the limit inside an average-speed section.
 The planner only uses targetSpeed when OptechSpeedCamDecel is on and openpilot controls the speed.
-With a navigation app linked (OptechNaviLinkMode 1-3, selfdrive/optech/road_speed_limiter.py -> roadLimitSpeed) its
+With a navigation app linked (OptechNaviLinkMode 1 TmapNda / 2 당근내비, selfdrive/optech/road_speed_limiter.py -> roadLimitSpeed) its
 camera is used first, the built-in DB (OptechSpeedCam) only while the app gives none, as on optech-hkg.
 """
 import time

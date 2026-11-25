@@ -130,6 +130,9 @@ struct RoadLimitSpeed @0xf98d843bfd7004a3 {
   xCmd @20 :Text;
   xArg @21 :Text;
   xIndex @22 :Int16;
+  # optech 2026-11-25 (optech-hkg): where the navigation data comes from, by the port it came in on (the screen badge):
+  # 0 nothing, 1 carrot protocol (7706: 당근내비, TmapNda in carrot mode), 2 NDA (843: TmapNda in NDA mode)
+  naviSource @23 :Int8;
 }
 
 struct CustomReserved7 @0xb86e6369214c01c8 {
