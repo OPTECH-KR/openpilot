@@ -980,7 +980,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
                                                 "0: 사용 안 함 (속도만 줄임, 처음 값)\n"
                                                 "1~3: 계기판에 차선 이탈 경고가 뜨고 경고음이 납니다. 핸들 진동이 있는 차는 핸들도 떨립니다. 숫자에 따라 차마다 경고 모양이 조금 다릅니다.",
                                                 ROAD_ICON, 0, 3, 1);
-  CValueControl *navi_mode = new CValueControl("OptechNaviLinkMode", "내비 연동 방식", "카메라 정보를 어디서 받을지 정합니다.\n0:내비 안 씀 (내장 카메라 DB만, 내비 앱이 보내는 정보는 무시)\n1:APM(내비 앱)\n2:APM + 순정 내비게이션\n3:NDA\n'카메라 감속'이 켜져 있을 때 적용되고, 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 3, 1);
+  CValueControl *navi_mode = new CValueControl("OptechNaviLinkMode", "내비 연동 방식", "카메라 정보를 어디서 받을지 정합니다.\n0:내비 안 씀 (내장 카메라 DB만, 내비 앱이 보내는 정보는 무시)\n1:APM(내비 앱)\n2:APM + 순정 내비게이션\n3:NDA\n1~3은 당근 방식 내비 앱(티맵 길안내·카메라·방지턱)도 함께 받습니다.\n'카메라 감속'이 켜져 있을 때 적용되고, 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 3, 1);
   QObject::connect(navi_mode, &CValueControl::valueChanged, [=](int cam_v) {
     Params cam_params;
     if (std::atoi(cam_params.get("AutoNaviSpeedCtrl").c_str()) > 0 && cam_v >= 0 && cam_v <= 3) cam_params.put("AutoNaviSpeedCtrl", std::to_string(cam_v == 0 ? 1 : cam_v));
