@@ -48,9 +48,9 @@ static float g_gps_x = 30;  // GPS line x in the top-left badge row, set by draw
 // optech HUD (show_mode 7, user 2026-11-25): the GPS box sits in the left column under the gap / gear box (top y,
 // width), set by drawOptechHud
 static float g_gps_y = 20, g_gps_w = 0;
-// optech HUD: the GPS signal box and the GPS speed under the big speed are off for now (user 2026-11-25: hide both
-// until the layout is settled); true brings both back
-static const bool OPTECH_HUD_GPS = false;
+// optech HUD: the GPS speed beside the big speed is off for now (user 2026-11-25: hidden until the layout is
+// settled; the GPS signal box came back under the badge row); true brings it back
+static const bool OPTECH_HUD_GPS_SPEED = false;
 // optech HUD big speed (user 2026-11-25): baseline of the number (the traffic light sits above it) and its size
 // (190 -> 240); 'km/h' stands on the same baseline right of the number
 static const float OPTECH_SPEED_BASE = 326, OPTECH_SPEED_FS = 240;
@@ -1168,10 +1168,9 @@ static void drawOptechHud(const UIState* s) {
     float col_y = 180;  // next item's top
     const NVGcolor label_c = nvgRGBA(211, 209, 199, 255);
 
-    // 2) GPS box (ui_draw_gps_info, '화면 > GPS 상태'): hidden in this HUD for now (user 2026-11-25: "GPS signal and
-    //    GPS speed out of sight until the layout is settled"); OPTECH_HUD_GPS brings both back here
-    g_gps_x = lx; g_gps_y = col_y; g_gps_w = CW;
-    if (OPTECH_HUD_GPS && s->show_gps_info) col_y += 58 + 16;
+    // 2) GPS box (ui_draw_gps_info, '화면 > GPS 상태'): under the badge row on the left, in the gap above the set
+    //    speed (user 2026-11-25, marked on a screenshot), only as wide as its content. Nothing below moves for it
+    g_gps_x = lx; g_gps_y = ry + BH + 14; g_gps_w = 0;
 
     // 3) set speed box: under the badge row, twice as high as before (user 2026-11-25, marked on a screenshot:
     //    "move it there and make it that big"). Set speed big on the left, '감속 중' + the speed openpilot is
@@ -1301,7 +1300,7 @@ static void drawOptechHud(const UIState* s) {
         const float nw = nb[2] - nb[0];
         optech_text(s, cx, OPTECH_SPEED_BASE, str, OPTECH_SPEED_FS, c, NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
         spd_left = cx - nw / 2;
-        // unit (+ GPS speed, green, while OPTECH_HUD_GPS: the dashboard speed reads a few % high) right of the number
+        // unit (+ GPS speed, green, while OPTECH_HUD_GPS_SPEED: the dashboard speed reads a few % high) right of the number
         const char* unit_str = metric ? "km/h" : "mph";  // like OPKR
         const bool gps_ok = sm.alive("gpsLocationExternal") && (sm["gpsLocationExternal"].getGpsLocationExternal().getFlags() & 1);
         if (gps_ok) snprintf(str, sizeof(str), "GPS %d", (int)(std::max(sm["gpsLocationExternal"].getGpsLocationExternal().getSpeed() * unit, 0.f) + 0.5f));
@@ -1313,7 +1312,7 @@ static void drawOptechHud(const UIState* s) {
         const float ux = cx + nw / 2 + 14, uw = ub[2] - ub[0];
         optech_text(s, ux, OPTECH_SPEED_BASE, unit_str, 40, nvgRGBA(211, 209, 199, 255), NVG_ALIGN_LEFT | NVG_ALIGN_BASELINE);
         spd_right = ux + uw;
-        if (OPTECH_HUD_GPS) {
+        if (OPTECH_HUD_GPS_SPEED) {
             optech_text(s, ux, OPTECH_SPEED_BASE - 48, str, 40, gps_ok ? nvgRGBA(151, 196, 89, 255) : nvgRGBA(136, 135, 128, 255), NVG_ALIGN_LEFT | NVG_ALIGN_BASELINE);
             spd_right = std::max(spd_right, ux + gb[2] - gb[0]);
         }
@@ -2580,7 +2579,6 @@ NVGcolor alert_color;
 // Signal strength = mean C/N0 of the 4 strongest satellites from ublox RXM-RAWX (ubloxGnss.measurementReport).
 static void ui_draw_gps_info(const UIState* s) {
     if (!s->show_gps_info) return;
-    if (s->show_mode == 7 && !OPTECH_HUD_GPS) return;  // optech HUD: hidden for now
     SubMaster& sm = *(s->sm);
     const UIScene& scene = s->scene;
     const int gps_sats = scene.gps_sats, gps_strong = scene.gps_strong, gps_cno = scene.gps_cno;
