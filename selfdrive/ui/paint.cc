@@ -2798,17 +2798,19 @@ static void optech_draw_alert(UIState* s) {
     const bool full = alert.size == cereal::ControlsState::AlertSize::FULL;
     // one-line messages (소프트 오토홀드, 앞을 보세요 ...) much bigger (user 2026-11-25: "too small")
     const bool one_line = alert.text2.isEmpty() && !line3;
-    float fs1 = one_line ? (full ? 124 : 116) : (full ? 104 : 92), fs2 = 58, fs3 = 46;
-    const float maxw = std::min(1200.f, s->fb_w - 2 * 450.f);  // between the left and right columns
+    // user 2026-11-25: all bigger again (one line 116/124 -> 132/144, two lines 92/104 -> 108/124, 2nd 58 -> 70,
+    // 3rd 46 -> 54) and the box as wide as the space between the left and right columns allows
+    float fs1 = one_line ? (full ? 144 : 132) : (full ? 124 : 108), fs2 = 70, fs3 = 54;
+    const float maxw = std::min(1300.f, s->fb_w - 2 * 430.f);  // between the left and right columns
     float b[4], tw = 0;
     nvgFontFace(s->vg, BOLD);
     nvgFontSize(s->vg, fs1); nvgTextBounds(s->vg, 0, 0, t1.c_str(), NULL, b); float w1 = b[2] - b[0];
     nvgFontSize(s->vg, fs2); nvgTextBounds(s->vg, 0, 0, t2.c_str(), NULL, b); float w2 = t2.empty() ? 0 : b[2] - b[0];
-    if (w1 > maxw - 80) { fs1 *= (maxw - 80) / w1; w1 = maxw - 80; }
-    if (w2 > maxw - 80) { fs2 *= (maxw - 80) / w2; w2 = maxw - 80; }
+    if (w1 > maxw - 60) { fs1 *= (maxw - 60) / w1; w1 = maxw - 60; }
+    if (w2 > maxw - 60) { fs2 *= (maxw - 60) / w2; w2 = maxw - 60; }
     tw = std::max(w1, w2);
     const float l1 = fs1 * 0.95f, l2 = t2.empty() ? 0 : fs2 * 0.95f + 14, l3 = line3 ? fs3 * 0.95f + 12 : 0;
-    const float h = 26 + l1 + l2 + l3 + 26, w = std::max(640.f, tw + 120);
+    const float h = 26 + l1 + l2 + l3 + 26, w = std::min(maxw, std::max(640.f, tw + 100));
     const float cx = s->fb_w / 2.f, top = std::min(s->fb_h * 0.75f - h / 2, s->fb_h - 20.f - h), x = cx - w / 2;  // low, like the user's picture
     const bool blink_on = (s->sm->frame % 12) < 7;
     // normal (information, e.g. auto hold): like the other fork's AUTO HOLD box the user liked - see-through dark box,
@@ -2837,12 +2839,15 @@ static void optech_draw_hold(UIState* s) {
     // the same look as a normal alert: see-through dark box, light outline, green letters. In Korean, the wording the
     // alerts already use (user 2026-11-25: "not in English, Korean as before - only the place")
     const char* txt = auto_hold ? "오토 홀드 작동 중" : "소프트 오토홀드";
-    const float fs = 108, h = 156, cx = s->fb_w / 2.f, top = s->fb_h * 0.75f - h / 2;  // big: one short line
+    float fs = 124;  // big: one short line
+    const float h = 172, cx = s->fb_w / 2.f, top = s->fb_h * 0.75f - h / 2;
+    const float maxw = std::min(1300.f, s->fb_w - 2 * 430.f);  // between the left and right columns
     float tb[4];
     nvgFontFace(s->vg, BOLD);
     nvgFontSize(s->vg, fs);
     nvgTextBounds(s->vg, 0, 0, txt, NULL, tb);
-    const float w = std::max(560.f, tb[2] - tb[0] + 120);
+    if (tb[2] - tb[0] > maxw - 60) fs *= (maxw - 60) / (tb[2] - tb[0]);
+    const float w = std::min(maxw, std::max(560.f, tb[2] - tb[0] + 100));
     carrot_round_box(s, cx - w / 2, top, w, h, nvgRGBA(10, 10, 10, 215), nvgRGBA(235, 235, 235, 230), 22, 4);
     optech_text_vc(s, cx, top + h / 2, txt, fs, nvgRGBA(80, 230, 60, 255), NVG_ALIGN_CENTER);
 }
