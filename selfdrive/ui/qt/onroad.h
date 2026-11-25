@@ -26,6 +26,7 @@ class OnroadAlerts : public QWidget {
 public:
   OnroadAlerts(QWidget *parent = 0) : QWidget(parent) {}
   void updateAlert(const Alert &a);
+  void updateHold(bool h);  // optech: the car's auto hold box ('오토 홀드 작동 중') while no alert is up
 
 protected:
   void paintEvent(QPaintEvent*) override;
@@ -33,6 +34,8 @@ protected:
 private:
   QColor bg;
   Alert alert = {};
+  bool hold = false;
+  int blink = 0;
 };
 
 class ExperimentalButton : public QPushButton {
@@ -225,7 +228,13 @@ protected:
   void drawOptechRight(QPainter &p);
   void drawOptechBsd(QPainter &p, bool right, bool danger);
   void drawOptechRadar(QPainter &p);
-  void drawOptechGps(QPainter &p, float x);
+  void drawOptechGps(QPainter &p, float x, float y);
+  // optech-hkg 2026-11-25/26 layout: speed bump sign (roadLimitSpeed), and whether an alert / the auto hold box is up
+  // (the lead info box steps aside meanwhile)
+  QPixmap bump_img;
+  bool optech_bump = false;
+  int optech_bump_dist = 0;
+  bool optech_msg_box = false;
 
   //dp
   void drawKnightScanner(QPainter &p);

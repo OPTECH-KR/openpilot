@@ -564,7 +564,7 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
   cam_group.append(value(drive, "OptechNaviLinkMode", "내비 연동 방식",
         "폰 내비 앱에서 카메라·과속방지턱·길안내 정보를 받습니다. 쓰는 앱에 맞춰 고르세요.\n"
         "0: 사용 안 함 - 내비 앱 정보를 받지 않고 내장 카메라 DB만 씁니다.\n"
-        "1: TmapNda - 앱의 오픈파일럿 연결이 당근 방식이든 NDA 방식이든 모두 받습니다. 앱에서 NDA 방식으로 두면 주행 화면에 NAVI NDA로 떠서 당근내비(NAVI CARROT)와 구별됩니다.\n"
+        "1: TmapNda - 앱의 오픈파일럿 연결이 당근 방식이든 NDA 방식이든 모두 받습니다. 앱에서 NDA 방식으로 두면 주행 화면에 TMAP으로 떠서 당근내비(CARROT)와 구별됩니다.\n"
         "2: 당근내비 - 당근 방식으로 받습니다.\n"
         "1·2 공통: 폰과 이 기기가 같은 와이파이(핫스팟)에 붙어 있어야 합니다. 앱 정보가 없을 때는 내장 카메라 DB로 채웁니다.\n"
         "바꾼 뒤 재부팅해야 적용됩니다.",
@@ -776,16 +776,16 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
     "(녹화 중에는 버튼이 빨갛게 깜빡입니다), 다시 누르면 멈춥니다. 영상은 3분마다 나뉘어 기기 저장공간(videos 폴더)에 남습니다. "
     "주행 영상을 남기고 싶을 때만 켜세요. 끄면 버튼이 사라지고 하던 녹화도 멈춥니다.");
   toggle(disp, "ShowTpms", "타이어 공기압",
-         "주행 화면 오른쪽 맨 아래 칸에 네 바퀴의 타이어 공기압(psi)을 보여 줍니다. 위 줄이 앞바퀴(왼쪽·오른쪽), 아래 줄이 뒷바퀴입니다. "
+         "주행 화면 오른쪽 칸(차간 거리 위)에 네 바퀴의 타이어 공기압(psi)을 보여 줍니다. 위 줄이 앞바퀴(왼쪽·오른쪽), 아래 줄이 뒷바퀴입니다. "
          "현대·기아·제네시스처럼 공기압을 보내는 차에서만 나옵니다.");
   toggle(disp, "ShowGpsInfo", "GPS 상태",
-         "주행 화면 왼쪽 위(연결 표시 옆)에 GPS가 잡혔는지와 신호 세기(막대 4칸)를 보여 줍니다. 초록: 잘 잡힘, 주황: 찾는 중·약함. "
+         "주행 화면 왼쪽 위(연결 표시 아래)에 GPS가 잡혔는지와 신호 세기(막대 4칸)를 보여 줍니다. 초록: 잘 잡힘, 주황: 찾는 중·약함. "
          "GPS는 시동이 켜져 있을 때만 동작합니다.");
   toggle(disp, "OptechShowDeviceState", "기기 상태",
          "주행 화면 오른쪽 가운데 칸에 기기의 CPU 온도와 CPU 사용률을 보여 줍니다. 80°C를 넘거나 사용률이 90%를 넘으면 빨갛게 깜빡입니다.");
   toggle(disp, "ShowBlindSpot", "후측방(BSD) 경고",
-         "옆 차로 뒤쪽에 차가 있으면 화면 양옆에 노란 '차량 주의' 표시가 뜹니다. 그쪽으로 방향지시등을 켜면 빨간 표시와 "
-         "'왼쪽/오른쪽 차량 주의' 글이 깜빡입니다. 시속 30km 이상에서만 보이고, 차에 후측방 감지(BSD)가 있어야 합니다.");
+         "옆 차로 뒤쪽에 차가 있으면 도로 양옆(앞차 정보 옆)에 노란 차량 표시가 뜹니다. 그쪽으로 방향지시등을 켜면 그 표시가 깜빡입니다. "
+         "시속 30km 이상에서만 보이고, 차에 후측방 감지(BSD)가 있어야 합니다.");
   // ShowRadarInfo '레이더 물체 표시': 0 off, 1 moving objects + speed, 2 also how far to the side, 3 also stopped ones
   {
     ButtonControl *radar_btn = new ButtonControl("", "선택",
@@ -808,10 +808,11 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
   }
   toggle(disp, "ShowConnInfo", "연결 상태 표시",
          "주행 화면 왼쪽 위에 연결 상태를 보여 줍니다.\n"
-         "NAVI CARROT: 당근 방식으로 들어옴 (당근내비, 당근 방식으로 설정한 TmapNda)\n"
-         "NAVI NDA: NDA 방식으로 들어옴 (NDA 방식으로 설정한 TmapNda)\n"
+         "TMAP: TmapNda가 NDA 방식으로 보내는 중\n"
+         "CARROT: 당근 방식으로 들어옴 (당근내비, 당근 방식으로 설정한 TmapNda)\n"
          "초록은 정보가 들어오는 중, 회색은 연결됐지만 아직 정보가 없음\n"
-         "SCC2: 크루즈(SCC)가 카메라 쪽에 있는 차, RadarTracks: 레이더가 여러 물체를 보내는 차.");
+         "SCC2(빨강): 크루즈(SCC)가 카메라 쪽에 있는 차\n"
+         "RADAR(주황): 레이더가 여러 물체를 보내는 차");
   // '운전자 모니터링 아이콘' (ShowDmInfo 0 / 1); the mode itself is chosen on the 토글 page
   dm_icon = new ToggleControl("운전자 모니터링 아이콘",
     "주행 화면 왼쪽 위에 운전자 모니터링 아이콘(얼굴 모양)을 보여 줍니다. 토글 화면의 운전자 모니터링이 '기본 사용'일 때만 쓸 수 있습니다.",
