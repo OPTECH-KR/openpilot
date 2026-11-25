@@ -27,6 +27,33 @@ from selfdrive.hardware.eon.apk import system
 sys.path.append(os.path.join(BASEDIR, "pyextra"))
 
 
+def optech_navi_link_migrate(params) -> None:
+  """optech 2026-11-25: 내비 연동 방식 (OptechNaviLinkMode) names the phone app now: 0 사용 안 함, 1 TmapNda, 2 당근내비
+  (it was 0 / 1 APM / 2 APM + 순정 내비 / 3 NDA). AutoNaviSpeedCtrl stays the internal switch road_speed_limiter and
+  cruise_helper read: 0 camera slowdown off, 1 no app (built-in DB only), 3 NDA + carrot protocol + the car's navi
+  (TmapNda speaks both), 2 APM + carrot protocol + the car's navi (당근내비; APM / Mappy keep working there).
+  Old values move once: 3 NDA -> 1, 1 APM (AutoNaviSpeedCtrl 1) -> 2; new values are left as they are, so running
+  this at every boot changes nothing after the first time. (Old 1 with the slowdown off can't be told from the new 1
+  and stays 1: TmapNda's mode takes carrot apps too.)"""
+  try:
+    mode = int(params.get("OptechNaviLinkMode") or b"-1")
+  except ValueError:
+    mode = -1
+  try:
+    ctrl = int(params.get("AutoNaviSpeedCtrl") or b"0")
+  except ValueError:
+    ctrl = 0
+  if mode == 3:
+    mode = 1
+  elif mode == 1 and ctrl == 1:
+    mode = 2
+  elif not 0 <= mode <= 2:
+    mode = 2 if ctrl == 2 else 1
+  params.put("OptechNaviLinkMode", str(mode))
+  if ctrl > 0:
+    params.put("AutoNaviSpeedCtrl", str({0: 1, 1: 3, 2: 2}[mode]))
+
+
 def manager_init() -> None:
   # update system time from panda
   set_time(cloudlog)
@@ -282,6 +309,8 @@ def manager_init() -> None:
     params.put("AutoNaviSpeedCtrlEnd", "6")
     params.put("AutoNaviSpeedSafetyFactor", "100")
     params.put("OptechCamTuneSet", "1")
+
+  optech_navi_link_migrate(params)
 
   # is this dashcam?
   if os.getenv("PASSIVE") is not None:

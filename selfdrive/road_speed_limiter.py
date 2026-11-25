@@ -418,13 +418,14 @@ def main():
       speedcam = None
 
   prev_recvTime = sec_since_boot()
-  autoNaviSpeedCtrl = int(Params().get("AutoNaviSpeedCtrl"))
   # optech: 내비 연동 방식 0 = no navigation app: ignore what an app sends, cameras only from the built-in DB
   try:
     navi_off = int(Params().get("OptechNaviLinkMode") or 1) == 0
   except (TypeError, ValueError):
     navi_off = False
-  sockWaitTime = 1.0 if autoNaviSpeedCtrl == 3 else 0.2
+  # optech 2026-11-25: 0.2 s for NDA too (it was 1.0): 내비 연동 방식 1 TmapNda runs as NDA, and with 1.0 the built-in
+  # camera DB and the distances were recomputed only once a second while no app sends
+  sockWaitTime = 0.2
   send_time = sec_since_boot()
 
   with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
