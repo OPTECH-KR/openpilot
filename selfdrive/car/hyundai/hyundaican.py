@@ -9,9 +9,13 @@ hyundai_checksum = crcmod.mkCrcFun(0x11D, initCrc=0xFD, rev=False, xorOut=0xdf)
 def create_lkas11(packer, frame, car_fingerprint, send_lfa_mfa, apply_steer, steer_req,
                   torque_fault, lkas11, sys_warning, sys_state, enabled,
                   left_lane, right_lane,
-                  left_lane_depart, right_lane_depart, ldws_car=False, noact_warning=False):
+                  left_lane_depart, right_lane_depart, ldws_car=False, noact_warning=False, stock_display=False):
+  # stock_display (optech, K7 HEV tester 2026-11-26): openpilot off and no warning -> keep the stock camera's display
+  # fields (lane state, car icon, lane lines), so the cluster / HUD looks like the car without openpilot. Before, a
+  # faint white car + lanes (SysState 1, FcwOpt_USM 1) showed on the HUD before SCC was set; the camera sends 0 there.
   values = lkas11
-  values["CF_Lkas_LdwsSysState"] = sys_state
+  if not stock_display:
+    values["CF_Lkas_LdwsSysState"] = sys_state
   values["CF_Lkas_SysWarning"] = 0 # ajouatom: 계기판에 안나오게함..   #3 if sys_warning else 0
   values["CF_Lkas_LdwsLHWarning"] = left_lane_depart
   values["CF_Lkas_LdwsRHWarning"] = right_lane_depart
@@ -20,7 +24,9 @@ def create_lkas11(packer, frame, car_fingerprint, send_lfa_mfa, apply_steer, ste
   values["CF_Lkas_ToiFlt"] = torque_fault  # seems to allow actuation on CR_Lkas_StrToqReq
   values["CF_Lkas_MsgCount"] = frame % 0x10
 
-  if send_lfa_mfa:
+  if send_lfa_mfa and stock_display:
+    pass
+  elif send_lfa_mfa:
   #if car_fingerprint in (CAR.SONATA, CAR.PALISADE, CAR.KIA_NIRO_EV, CAR.KIA_NIRO_HEV_2021, CAR.SANTA_FE,
   #                       CAR.IONIQ_EV_2020, CAR.IONIQ_PHEV, CAR.KIA_SELTOS, CAR.ELANTRA_2021, CAR.GENESIS_G70_2020,
   #                       CAR.ELANTRA_HEV_2021, CAR.SONATA_HYBRID, CAR.KONA_EV, CAR.KONA_HEV, CAR.KONA_EV_2022,
@@ -65,7 +71,7 @@ def create_lkas11(packer, frame, car_fingerprint, send_lfa_mfa, apply_steer, ste
     #values["CF_Lkas_SysWarning"] = lkas11["CF_Lkas_SysWarning"] 
 
   # optech '토글 > LDWS 차량' (OPKR LdwsCarFix): cars with lane departure warning only, no lane keeping assist
-  if ldws_car:
+  if ldws_car and not stock_display:
     values["CF_Lkas_LdwsOpt_USM"] = 3
 
   # KIA SOUL EV (SK3), carrot e5cf102: steering is on but the MDPS has not taken our torque for 1 s while moving ->

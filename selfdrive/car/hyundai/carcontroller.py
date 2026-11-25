@@ -309,11 +309,15 @@ class CarController:
                 can_sends.append(hyundaicanfd.create_buttons(self.packer, self.CP, CS.buttons_counter+1, Buttons.RES_ACCEL))
               self.last_button_frame = self.frame
     else:
+      # openpilot off and nothing to warn about: the cluster / HUD shows what the stock camera shows (no faint white
+      # car + lanes before SCC is set, K7 HEV tester 2026-11-26)
+      stock_display = not CC.enabled and not sys_warning and not left_lane_warning and not right_lane_warning
       can_sends.append(hyundaican.create_lkas11(self.packer, self.frame, self.car_fingerprint, self.send_lfa_mfa_lkas, apply_steer, lat_active,
                                                 torque_fault, CS.lkas11, sys_warning, sys_state, CC.enabled,
                                                 hud_control.leftLaneVisible or CC.enabled, hud_control.rightLaneVisible or CC.enabled,
                                                 left_lane_warning, right_lane_warning, ldws_car=self.ldws_car,
-                                                noact_warning=self.lkas_noact_frames >= SK3_NOACT_WARN_FRAMES))
+                                                noact_warning=self.lkas_noact_frames >= SK3_NOACT_WARN_FRAMES,
+                                                stock_display=stock_display))
 
       if not self.CP.openpilotLongitudinalControl:
         if CC.cruiseControl.cancel:
