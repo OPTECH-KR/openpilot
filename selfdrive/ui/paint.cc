@@ -1367,7 +1367,8 @@ static void drawOptechHud(const UIState* s) {
                 const float tw = b[2] - b[0], iw = arrow ? S + 20 : 0, w = tw + iw + 56, h = 96, x = cx - w / 2, y = OPTECH_SPEED_BASE + 30;  // under the big speed
                 carrot_round_box(s, x, y, w, h, nvgRGBA(0, 0, 0, 120), nvgRGBA(0, 0, 0, 0), 12, 0);
                 if (arrow) optech_turn_arrow(s, x + 26, y + (h - S) / 2, S, arrow);
-                optech_text(s, x + 28 + iw, y + h / 2 + 2, str, fs, COLOR_WHITE, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+                // letters centred on the box height (user 2026-11-25: MIDDLE + ui_draw_text's +6 put them too low)
+                optech_text_vc(s, x + 28 + iw, y + h / 2, str, fs, COLOR_WHITE, NVG_ALIGN_LEFT);
             }
         }
     }
