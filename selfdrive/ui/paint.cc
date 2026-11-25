@@ -822,17 +822,18 @@ static void carrot_round_box(const UIState* s, float x, float y, float w, float 
 }
 
 // optech (user 2026-11-25): the navigation badge said APN / APM / NDA / HDA. Now it names the link by the port the data
-// came in on (roadLimitSpeed.naviSource): NAVI CARROT (7706: 당근내비, TmapNda in carrot mode), NAVI NDA (843: TmapNda
+// came in on (roadLimitSpeed.naviSource): CARROT (7706: 당근내비, TmapNda in carrot mode), TMAP (843: TmapNda
 // in NDA mode); green while it delivers, grey while linked with nothing to show yet. (APM / Mappy is not received any
 // more; plain NAVI only if the source is unknown.) HDA (purple): the car's own navigation (Navi_HU) - car_navi_cam while
 // it reports a camera limit, car_navi when the car has one. roadLimitSpeed.active: 200+ Tmap data, 1-99 an NDA app
 // linked (its cameras come in the road_limit fields). Same order as the old images. nullptr: nothing to show.
 static const char* optech_nav_badge(int active, int source, bool car_navi_cam, bool car_navi, NVGcolor* fill) {
     const NVGcolor app = nvgRGBA(0, 170, 0, 230), idle = nvgRGBA(110, 110, 110, 220), car = nvgRGBA(140, 80, 200, 220);
-    const char* name = source == 1 ? "NAVI CARROT" : source == 2 ? "NAVI NDA" : "NAVI";
+    // user 2026-11-25: the app names of the menu, short (NAVI CARROT / NAVI NDA were too long)
+    const char* name = source == 1 ? "CARROT" : source == 2 ? "TMAP" : "NAVI";
     if (active >= 200) { *fill = app; return name; }
     if (car_navi_cam) { *fill = car; return "HDA"; }
-    if (active > 0 && active < 100) { *fill = app; return source == 0 || source == 2 ? "NAVI NDA" : name; }
+    if (active > 0 && active < 100) { *fill = app; return source == 0 || source == 2 ? "TMAP" : name; }
     if (active >= 100 || source > 0) { *fill = idle; return name; }
     if (car_navi) { *fill = car; return "HDA"; }
     return nullptr;
@@ -1154,12 +1155,13 @@ static void drawOptechHud(const UIState* s) {
         const int hda_limit = car_state.getSpeedLimit(), hda_dist = car_state.getSpeedLimitDistance();
         const int naviCluster = (int)car_params.getNaviCluster();
         const bool radar_tracks = s->radar_tracks;
-        const float iw = 120.f * BH / 54.f;
-        if (sccBus == 2) { ui_draw_image(s, {(int)bx, (int)ry, (int)iw, (int)BH}, "ic_scc2", 1.0f); bx += iw + 14; }
+        // user 2026-11-25: every badge as a text box in the same font and shape (the SCC2 / RadarTracks pictures
+        // had their own old lettering); RadarTracks shortened to RADAR
+        if (sccBus == 2) bx += optech_badge(s, bx, ry, BH, "SCC2", nvgRGBA(200, 40, 40, 235)) + 14;
         NVGcolor nav_fill;
         const char* nav = optech_nav_badge(activeNDA, road.getNaviSource(), hda_limit > 0 && hda_dist > 0, naviCluster > 0, &nav_fill);
         if (nav) bx += optech_badge(s, bx, ry, BH, nav, nav_fill) + 14;
-        if (radar_tracks) { ui_draw_image(s, {(int)bx, (int)ry, (int)(2 * iw), (int)BH}, "ic_radartracks", 1.0f); bx += 2 * iw + 14; }
+        if (radar_tracks) bx += optech_badge(s, bx, ry, BH, "RADAR", nvgRGBA(230, 130, 20, 235)) + 14;
     }
     float col_y = s->show_conn_info ? ry + BH + 16 : ry;  // next item's top
     const NVGcolor label_c = nvgRGBA(211, 209, 199, 255);
