@@ -13,7 +13,6 @@ from cereal import messaging, log
 from common.numpy_fast import clip
 from common.realtime import sec_since_boot
 from common.conversions import Conversions as CV
-from selfdrive.hardware import TICI
 from common.params import Params
 
 CAMERA_SPEED_FACTOR = 1.05
@@ -56,13 +55,12 @@ class RoadLimitSpeedServer:
     self.last_time_location = 0
     self.carrot_addr = None       # phone app that sent carrot-protocol data (7706)
     self.carrot_updated = 0.
-    self.sock_updated = 0.        # last packet from an NDA (843) / APM (7707) app, for roadLimitSpeed.naviSource
+    self.sock_updated = 0.        # last packet from an NDA (843) app, for roadLimitSpeed.naviSource
     self.json_carrot = None
     self.cmd_ignored = False
-
-    if int(Params().get("AutoNaviSpeedCtrl")) != 3:
-      Port.BROADCAST_PORT = 7708
-      Port.RECEIVE_PORT = 7707
+    # optech 2026-11-25: APM (APilotMan, UDP 7707 / beacon 7708) is no longer received (user: APilotMan + Mappy can't
+    # be used any more). Only NDA (843 / beacon 2899) uses the app socket, in 내비 연동 방식 1 (AutoNaviSpeedCtrl 3)
+    self.nda = int(Params().get("AutoNaviSpeedCtrl")) == 3
 
     broadcast = Thread(target=self.broadcast_thread, args=[])
     broadcast.setDaemon(True)
@@ -156,14 +154,9 @@ class RoadLimitSpeedServer:
 
             print('broadcast_address', broadcast_address)
 
-            if broadcast_address is not None:
+            if broadcast_address is not None and self.nda:   # NDA beacon only (the APM one is gone)
               address = (broadcast_address, Port.BROADCAST_PORT)
-                  
-              if int(Params().get("AutoNaviSpeedCtrl")) != 3:
-                msg = 'APMSERVICE:C3:V1' if TICI else 'APMSERVICE:C2:V1'
-              else:        
-                msg = 'EON:ROAD_LIMIT_SERVICE:v1'
-              sock.sendto(msg.encode(), address)
+              sock.sendto('EON:ROAD_LIMIT_SERVICE:v1'.encode(), address)
           except:
             pass
 
@@ -235,31 +228,34 @@ class RoadLimitSpeedServer:
       return self.get_json_val(self.json_carrot, key, default)
     return self.get_apilot_val(key, default)
 
-  def navi_source(self, nda_port):
+  def navi_source(self):
     """roadLimitSpeed.naviSource, by the port the data came in on (user 2026-11-25: show which link is on, not
-    APM / APN): 1 carrot (7706) while it sends - its Tmap values are the ones used -, else 2 NDA (843) or 3 APM (7707)
-    while that app sends, else 0. 6 s like the other timeouts in this file."""
+    APM / APN): 1 carrot (7706) while it sends - its Tmap values are the ones used -, else 2 NDA (843) while that app
+    sends, else 0. 6 s like the other timeouts in this file. (3 was APM, no longer received.)"""
     now = sec_since_boot()
     if self.json_carrot is not None and now - self.carrot_updated < 6.:
       return 1
     if now - self.sock_updated < 6.:
-      return 2 if nda_port else 3
+      return 2
     return 0
 
   def send_sdp(self, sock):
+    """Tell the NDA app that sent data where this device is (every second)."""
+    if sock is None or not self.nda:
+      return
     try:
-      if int(Params().get("AutoNaviSpeedCtrl")) != 3:
-        msg = 'APMSERVICE:C3:V1' if TICI else 'APMSERVICE:C2:V1'
-      else:        
-        msg = 'EON:ROAD_LIMIT_SERVICE:v1'
-      sock.sendto(msg.encode(), (self.remote_addr[0], Port.BROADCAST_PORT))
+      sock.sendto('EON:ROAD_LIMIT_SERVICE:v1'.encode(), (self.remote_addr[0], Port.BROADCAST_PORT))
     except:
       pass
 
   def udp_recv(self, sock, wait_time, carrot_sock=None):
+    """sock: the NDA app socket (843), None when NDA is not used; carrot_sock: 7706."""
     ret = False
     try:
-      socks = [sock] if carrot_sock is None else [sock, carrot_sock]
+      socks = [s for s in (sock, carrot_sock) if s is not None]
+      if not socks:
+        time.sleep(wait_time)
+        return False
       ready = select.select(socks, [], [], wait_time)
       ret = bool(ready[0])
       if ret and carrot_sock is not None and carrot_sock in ready[0]:
@@ -267,7 +263,7 @@ class RoadLimitSpeedServer:
           self.carrot_recv(carrot_sock)
         except Exception as e:
           print("carrot recv error:", e)
-        if sock not in ready[0]:
+        if sock is None or sock not in ready[0]:
           return True
       if ret:
         data, self.remote_addr = sock.recvfrom(2048)
@@ -439,26 +435,23 @@ def main():
   # optech 2026-11-25: 0.2 s for NDA too (it was 1.0): 내비 연동 방식 1 TmapNda runs as NDA, and with 1.0 the built-in
   # camera DB and the distances were recomputed only once a second while no app sends
   sockWaitTime = 0.2
-  nda_port = int(Params().get("AutoNaviSpeedCtrl")) == 3   # the app socket is NDA's 843 (else APM's 7707)
   send_time = sec_since_boot()
 
   with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
     try:
-      if int(Params().get("AutoNaviSpeedCtrl")) != 3:
-        sock.bind(('0.0.0.0', Port.RECEIVE_PORT))
-        print("AutoNaviSpeed != 3")
-
-      else:
+      # the NDA app socket (843, else 2843) only in 내비 연동 방식 1 (AutoNaviSpeedCtrl 3). optech 2026-11-25: the APM
+      # port 7707 is no longer opened (APilotMan + Mappy can't be used any more; it was also where a remote 'cmd' came in)
+      app_sock = None
+      if server.nda and not navi_off:
         print("AutoNaviSpeed == 3")
         try:
           sock.bind(('0.0.0.0', 843))
         except:
           sock.bind(('0.0.0.0', Port.RECEIVE_PORT))
+        sock.setblocking(False)
+        app_sock = sock
 
-
-      sock.setblocking(False)
-
-      # optech: carrot protocol (CarrotNavi / TmapNda) next to APM or NDA, whenever a navigation app is in use
+      # optech: carrot protocol (CarrotNavi / TmapNda) next to NDA, whenever a navigation app is in use
       carrot_sock = None
       if not navi_off:
         try:
@@ -477,7 +470,7 @@ def main():
           time.sleep(sockWaitTime)
           ret = False
         else:
-          ret = server.udp_recv(sock, sockWaitTime, carrot_sock)
+          ret = server.udp_recv(app_sock, sockWaitTime, carrot_sock)
 
         try:
           carState = messaging.recv_sock(sock_carState, wait=False)
@@ -491,7 +484,7 @@ def main():
         dat = messaging.new_message()
         dat.init('roadLimitSpeed')
         dat.roadLimitSpeed.active = server.active
-        dat.roadLimitSpeed.naviSource = 0 if navi_off else server.navi_source(nda_port)
+        dat.roadLimitSpeed.naviSource = 0 if navi_off else server.navi_source()
         dat.roadLimitSpeed.roadLimitSpeed = server.get_limit_val("road_limit_speed", 0)
         dat.roadLimitSpeed.isHighway = server.get_limit_val("is_highway", False)
         dat.roadLimitSpeed.camType = server.get_limit_val("cam_type", 0)
@@ -768,7 +761,7 @@ def main():
 
         roadLimitSpeed.send(dat.to_bytes())
         if now - send_time > 1.0:
-          server.send_sdp(sock)
+          server.send_sdp(app_sock)
           send_time = now
         server.check()
         #time.sleep(0.03)

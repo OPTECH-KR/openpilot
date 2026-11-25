@@ -814,10 +814,10 @@ static void carrot_round_box(const UIState* s, float x, float y, float w, float 
 
 // optech (user 2026-11-25): the navigation badge said APN / APM / NDA / HDA. Now it names the link by the port the data
 // came in on (roadLimitSpeed.naviSource): NAVI CARROT (7706: 당근내비, TmapNda in carrot mode), NAVI NDA (843: TmapNda
-// in NDA mode), NAVI (7707: APilotMan + Mappy); green while it delivers, grey while linked with nothing to show yet.
-// HDA (purple): the car's own navigation (Navi_HU) - car_navi_cam while it reports a camera limit, car_navi when the
-// car has one. roadLimitSpeed.active: 200+ Tmap / Mappy data, 100-199 APM linked without data, 1-99 an NDA app linked
-// (its cameras come in the road_limit fields). Same order as the old images. nullptr: nothing to show.
+// in NDA mode); green while it delivers, grey while linked with nothing to show yet. (APM / Mappy is not received any
+// more; plain NAVI only if the source is unknown.) HDA (purple): the car's own navigation (Navi_HU) - car_navi_cam while
+// it reports a camera limit, car_navi when the car has one. roadLimitSpeed.active: 200+ Tmap data, 1-99 an NDA app
+// linked (its cameras come in the road_limit fields). Same order as the old images. nullptr: nothing to show.
 static const char* optech_nav_badge(int active, int source, bool car_navi_cam, bool car_navi, NVGcolor* fill) {
     const NVGcolor app = nvgRGBA(0, 170, 0, 230), idle = nvgRGBA(110, 110, 110, 220), car = nvgRGBA(140, 80, 200, 220);
     const char* name = source == 1 ? "NAVI CARROT" : source == 2 ? "NAVI NDA" : "NAVI";
@@ -2484,7 +2484,7 @@ void DrawApilot::drawDebugText(UIState* s, bool show) {
     QString latDebugText = QString::fromStdString(lateralPlan.getLatDebugText());
 
 
-    sprintf(str, "Mappy: Turn(%d,%d), Spd(%d,%d),Sign(%d), Road(%d,%d), LW:%.1f", xTurnInfo, xDistToTurn, xSpdDist, xSpdLimit, xSignType, xRoadSignType, xRoadLimitSpeed, laneWidth);
+    sprintf(str, "Navi: Turn(%d,%d), Spd(%d,%d),Sign(%d), Road(%d,%d), LW:%.1f", xTurnInfo, xDistToTurn, xSpdDist, xSpdLimit, xSignType, xRoadSignType, xRoadLimitSpeed, laneWidth);
     y += dy;
     ui_draw_text(s, text_x, y, str, 35, COLOR_WHITE, BOLD, 0.0f, 0.0f);
     sprintf(str, "Edge(%d), %s",  roadEdgeStat, latDebugText.toStdString().c_str());

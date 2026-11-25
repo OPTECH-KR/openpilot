@@ -31,7 +31,7 @@ def optech_navi_link_migrate(params) -> None:
   """optech 2026-11-25: 내비 연동 방식 (OptechNaviLinkMode) names the phone app now: 0 사용 안 함, 1 TmapNda, 2 당근내비
   (it was 0 / 1 APM / 2 APM + 순정 내비 / 3 NDA). AutoNaviSpeedCtrl stays the internal switch road_speed_limiter and
   cruise_helper read: 0 camera slowdown off, 1 no app (built-in DB only), 3 NDA + carrot protocol + the car's navi
-  (TmapNda speaks both), 2 APM + carrot protocol + the car's navi (당근내비; APM / Mappy keep working there).
+  (TmapNda speaks both), 2 carrot protocol + the car's navi (당근내비). APM (APilotMan + Mappy) is no longer received.
   Old values move once: 3 NDA -> 1, 1 APM (AutoNaviSpeedCtrl 1) -> 2; new values are left as they are, so running
   this at every boot changes nothing after the first time. (Old 1 with the slowdown off can't be told from the new 1
   and stays 1: TmapNda's mode takes carrot apps too.)"""
