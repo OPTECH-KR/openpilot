@@ -51,8 +51,9 @@ static float g_gps_y = 20, g_gps_w = 0;
 // optech HUD: the GPS signal box and the GPS speed under the big speed are off for now (user 2026-11-25: hide both
 // until the layout is settled); true brings both back
 static const bool OPTECH_HUD_GPS = false;
-// optech HUD: bottom of the big speed number (user 2026-11-25: moved down from 190; the traffic light sits above it)
-static const float OPTECH_SPEED_BOTTOM = 322;
+// optech HUD big speed (user 2026-11-25): baseline of the number (the traffic light sits above it) and its size
+// (190 -> 240); 'km/h' stands on the same baseline right of the number
+static const float OPTECH_SPEED_BASE = 326, OPTECH_SPEED_FS = 240;
 
 #if 0
 static void ui_print(UIState *s, int x, int y,  const char* fmt, ... )
@@ -1266,30 +1267,38 @@ static void drawOptechHud(const UIState* s) {
 
     // ======================= top centre =======================
     const float cx = s->fb_w / 2.f;
+    float spd_left = cx, spd_right = cx;  // the big number's left edge / the unit's right edge (turn signal arrows)
     {
-        // big speed: white steady, red braking / slowing, green speeding up. User 2026-11-25: moved down to where the
-        // unit / GPS line and the traffic light were (the traffic light is above it now); number centred near y 254
+        // big speed: white steady, red braking / slowing, green speeding up. User 2026-11-25: under the traffic light,
+        // bigger (240), 'km/h' at its old size right of the number on the same baseline
         const float a = car_state.getAEgo();
         NVGcolor c = COLOR_WHITE;
         if (car_state.getBrakePressed() || a < -0.3f) c = nvgRGBA(240, 149, 149, 255);
         else if (a > 0.3f) c = nvgRGBA(151, 196, 89, 255);
         snprintf(str, sizeof(str), "%.0f", cur_speed);
-        optech_text(s, cx, OPTECH_SPEED_BOTTOM, str, 190, c, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
-        // unit + GPS speed (green; the dashboard speed reads a few % high) as one line centred under the number
+        float nb[4];
+        nvgFontFace(s->vg, BOLD);
+        nvgFontSize(s->vg, OPTECH_SPEED_FS);
+        nvgTextBounds(s->vg, 0, 0, str, NULL, nb);
+        const float nw = nb[2] - nb[0];
+        optech_text(s, cx, OPTECH_SPEED_BASE, str, OPTECH_SPEED_FS, c, NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
+        spd_left = cx - nw / 2;
+        // unit (+ GPS speed, green, while OPTECH_HUD_GPS: the dashboard speed reads a few % high) right of the number
         const char* unit_str = metric ? "km/h" : "mph";  // like OPKR
         const bool gps_ok = sm.alive("gpsLocationExternal") && (sm["gpsLocationExternal"].getGpsLocationExternal().getFlags() & 1);
         if (gps_ok) snprintf(str, sizeof(str), "GPS %d", (int)(std::max(sm["gpsLocationExternal"].getGpsLocationExternal().getSpeed() * unit, 0.f) + 0.5f));
         else snprintf(str, sizeof(str), "GPS --");
-        nvgFontFace(s->vg, BOLD);
         nvgFontSize(s->vg, 40);
         float ub[4], gb[4];
         nvgTextBounds(s->vg, 0, 0, unit_str, NULL, ub);
         nvgTextBounds(s->vg, 0, 0, str, NULL, gb);
-        // GPS speed hidden for now (OPTECH_HUD_GPS): the unit alone, centred
-        const float uw = ub[2] - ub[0], gw = OPTECH_HUD_GPS ? gb[2] - gb[0] : 0.f, sp = OPTECH_HUD_GPS ? 24.f : 0.f;
-        const float x0 = cx - (uw + sp + gw) / 2, uy = OPTECH_SPEED_BOTTOM + 46;
-        optech_text(s, x0, uy, unit_str, 40, nvgRGBA(211, 209, 199, 255), NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
-        if (OPTECH_HUD_GPS) optech_text(s, x0 + uw + sp, uy, str, 40, gps_ok ? nvgRGBA(151, 196, 89, 255) : nvgRGBA(136, 135, 128, 255), NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
+        const float ux = cx + nw / 2 + 14, uw = ub[2] - ub[0];
+        optech_text(s, ux, OPTECH_SPEED_BASE, unit_str, 40, nvgRGBA(211, 209, 199, 255), NVG_ALIGN_LEFT | NVG_ALIGN_BASELINE);
+        spd_right = ux + uw;
+        if (OPTECH_HUD_GPS) {
+            optech_text(s, ux, OPTECH_SPEED_BASE - 48, str, 40, gps_ok ? nvgRGBA(151, 196, 89, 255) : nvgRGBA(136, 135, 128, 255), NVG_ALIGN_LEFT | NVG_ALIGN_BASELINE);
+            spd_right = std::max(spd_right, ux + gb[2] - gb[0]);
+        }
     }
     {
         // traffic light (the driving model's stop / go guess, controls/lib/optech_signal.py): horizontal
@@ -1317,12 +1326,14 @@ static void drawOptechHud(const UIState* s) {
         const bool lb = car_state.getLeftBlinker(), rb = car_state.getRightBlinker();
         if (lb || rb) {
             const int step = (sm.frame / 4) % 4;  // 0..3
-            const float w = 60, h = 110, gap = 44, y = OPTECH_SPEED_BOTTOM - 68 - 55;  // beside the big number
+            // beside the big number (its middle about 0.36 size above the baseline), never closer than before (270)
+            const float w = 60, h = 110, gap = 44, y = OPTECH_SPEED_BASE - 0.36f * OPTECH_SPEED_FS - h / 2;
+            const float lx0 = std::min(cx - 270, spd_left - 50), rx0 = std::max(cx + 270, spd_right + 40);
             for (int i = 0; i < 3; i++) {
                 const int a = (step > i) ? 255 : 70;
                 const NVGcolor col = nvgRGBA(239, 159, 39, a);
-                if (lb) optech_chevron(s, cx - 270 - i * gap - w, y, w, h, false, col);
-                if (rb) optech_chevron(s, cx + 270 + i * gap, y, w, h, true, col);
+                if (lb) optech_chevron(s, lx0 - i * gap - w, y, w, h, false, col);
+                if (rb) optech_chevron(s, rx0 + i * gap, y, w, h, true, col);
             }
         }
     }
@@ -1351,7 +1362,7 @@ static void drawOptechHud(const UIState* s) {
                 nvgFontSize(s->vg, 48);
                 float b[4]; nvgTextBounds(s->vg, 0, 0, str, NULL, b);
                 const float S = 72;  // arrow size
-                const float tw = b[2] - b[0], iw = arrow ? S + 18 : 0, w = tw + iw + 50, h = 96, x = cx - w / 2, y = OPTECH_SPEED_BOTTOM + 62;  // under the big speed + unit
+                const float tw = b[2] - b[0], iw = arrow ? S + 18 : 0, w = tw + iw + 50, h = 96, x = cx - w / 2, y = OPTECH_SPEED_BASE + 30;  // under the big speed
                 carrot_round_box(s, x, y, w, h, nvgRGBA(0, 0, 0, 120), nvgRGBA(0, 0, 0, 0), 12, 0);
                 if (arrow) optech_turn_arrow(s, x + 22, y + (h - S) / 2, S, arrow);
                 optech_text(s, x + 25 + iw, y + h / 2 + 2, str, 48, COLOR_WHITE, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
