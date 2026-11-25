@@ -45,6 +45,9 @@
 
 int g_fps= 0;
 static float g_gps_x = 30;  // GPS line x in the top-left badge row, set by drawLeadApilot after its badges
+// optech HUD (show_mode 7, user 2026-11-25): the GPS box sits in the left column under the gap / gear box (top y,
+// width), set by drawOptechHud
+static float g_gps_y = 20, g_gps_w = 0;
 
 #if 0
 static void ui_print(UIState *s, int x, int y,  const char* fmt, ... )
@@ -997,15 +1000,15 @@ static void optech_text_vc(const UIState* s, float x, float cy, const char* str,
     optech_text(s, x, cy + 0.36f * size - 6, str, size, color, halign | NVG_ALIGN_BASELINE);
 }
 
-// a connection badge drawn as text (replaces the APN / APM / NDA / HDA images): as high as the old images (h), at
-// least as wide (120), wider when the words need it. Returns its width.
+// a connection badge drawn as text (replaces the APN / APM / NDA / HDA images): h high, at least as wide as the
+// old images (120 at 54 high), wider when the words need it. Font size follows the height. Returns its width.
 static float optech_badge(const UIState* s, float x, float y, float h, const char* label, NVGcolor fill) {
-    const float fs = 34;
+    const float fs = h * 0.62f;
     float tb[4];
     nvgFontFace(s->vg, BOLD);
     nvgFontSize(s->vg, fs);
     nvgTextBounds(s->vg, 0, 0, label, NULL, tb);
-    const float w = std::max(120.f, (tb[2] - tb[0]) + 36.f);
+    const float w = std::max(h * 2.22f, (tb[2] - tb[0]) + h * 0.6f);
     carrot_round_box(s, x, y, w, h, fill, COLOR_WHITE, 12, 2);
     optech_text_vc(s, x + w / 2, y + h / 2, label, fs, COLOR_WHITE, NVG_ALIGN_CENTER);
     return w;
@@ -1129,78 +1132,37 @@ static void drawOptechHud(const UIState* s) {
     const int road_limit = (roadLimitSpeed > 0 && roadLimitSpeed < 200) ? roadLimitSpeed : 0;
 
     // ======================= top left =======================
-    const float lx = 30;
-    float ry = 20;  // badge row top (badges are 54 high)
+    // user 2026-11-25: every item of the left column has a fixed place and is a bit bigger. Top down: the badge row
+    // (its space is kept while '연결 상태 표시' is on, so a badge coming and going moves nothing), set speed, gap +
+    // gear, GPS, and at the bottom the road limit / camera signs (they used to sit above the set speed and pushed it
+    // down and up whenever the navigation data came and went)
+    const float lx = 30, CW = 370;  // column x, width (was 340)
+    const float BH = 62;            // badge row height (was 54)
+    const float ry = 20;            // badge row top
     float bx = lx;
     nvgFontFace(s->vg, BOLD);
     // (no time / date in this HUD: user 2026-11-23)
-    // 2) badges, only the ones that are on, packed from the left
+    // 1) badges, only the ones that are on, packed from the left (the SCC2 / RadarTracks pictures scaled to the row)
     if (s->show_conn_info) {
         const int sccBus = (int)car_params.getSccBus();
         const int hda_limit = car_state.getSpeedLimit(), hda_dist = car_state.getSpeedLimitDistance();
         const int naviCluster = (int)car_params.getNaviCluster();
         const bool radar_tracks = s->radar_tracks;
-        if (sccBus == 2) { ui_draw_image(s, {(int)bx, (int)ry, 120, 54}, "ic_scc2", 1.0f); bx += 135; }
+        const float iw = 120.f * BH / 54.f;
+        if (sccBus == 2) { ui_draw_image(s, {(int)bx, (int)ry, (int)iw, (int)BH}, "ic_scc2", 1.0f); bx += iw + 14; }
         NVGcolor nav_fill;
         const char* nav = optech_nav_badge(activeNDA, road.getNaviSource(), hda_limit > 0 && hda_dist > 0, naviCluster > 0, &nav_fill);
-        if (nav) bx += optech_badge(s, bx, ry, 54, nav, nav_fill) + 15;
-        if (radar_tracks) { ui_draw_image(s, {(int)bx, (int)ry, 240, 54}, "ic_radartracks", 1.0f); bx += 255; }
+        if (nav) bx += optech_badge(s, bx, ry, BH, nav, nav_fill) + 14;
+        if (radar_tracks) { ui_draw_image(s, {(int)bx, (int)ry, (int)(2 * iw), (int)BH}, "ic_radartracks", 1.0f); bx += 2 * iw + 14; }
     }
-    g_gps_x = bx;  // ui_draw_gps_info draws the GPS bars + text right after
-
-    // 3) road limit + camera / bump sign (second row, only with navigation data). Every left item is CW wide and
-    //    the two signs sit in equal cells, so the column lines up (user: the left side looked untidy)
-    const float CW = 340, cellw = (CW - 20) / 2, sg = 124;  // column width, sign cell width, sign size (both signs)
-    const float pill_h = 56;  // "550m 남음" box height
+    float col_y = s->show_conn_info ? ry + BH + 16 : ry;  // next item's top
     const NVGcolor label_c = nvgRGBA(211, 209, 199, 255);
-    float y2 = ry + 54 + 18;
-    const bool sign_row = road_limit > 0 || limit_speed > 0;
-    if (sign_row) {
-        if (road_limit > 0) {
-            const float ccx = lx + cellw / 2, cy = y2 + 50 + sg / 2, d = sg + 8;  // as big as the camera sign + outline
-            optech_text(s, ccx, y2 + 32, "도로 제한", 32, label_c, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
-            nvgBeginPath(s->vg); nvgCircle(s->vg, ccx, cy, d / 2); nvgFillColor(s->vg, nvgRGBA(226, 75, 74, 255)); nvgFill(s->vg);
-            nvgBeginPath(s->vg); nvgCircle(s->vg, ccx, cy, d / 2 - 14); nvgFillColor(s->vg, COLOR_WHITE); nvgFill(s->vg);
-            snprintf(str, sizeof(str), "%d", metric ? road_limit : (int)(road_limit * KM_TO_MILE + 0.5));
-            optech_text(s, ccx, cy + 0.36f * 64 - 6, str, 64, nvgRGBA(44, 44, 42, 255), NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
-        }
-        if (limit_speed > 0) {
-            const float cellx = lx + cellw + 20, ccx = cellx + cellw / 2, top = y2 + 50, sx = ccx - sg / 2;
-            optech_text(s, ccx, y2 + 32, bump ? "방지턱" : section ? "구간 단속" : "단속 속도", 32, COLOR_WHITE, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
-            if (bump) {
-                ui_draw_image(s, {(int)sx, (int)top, (int)sg, (int)sg}, "ic_speed_bump", 1.0f);
-            } else {
-                carrot_round_box(s, sx, top, sg, sg, nvgRGBA(250, 199, 117, 255), nvgRGBA(44, 44, 42, 255), 14, 5);
-                nvgBeginPath(s->vg); nvgRoundedRect(s->vg, sx - 4, top - 4, sg + 8, sg + 8, 17);
-                nvgStrokeColor(s->vg, COLOR_WHITE); nvgStrokeWidth(s->vg, 3); nvgStroke(s->vg);
-                snprintf(str, sizeof(str), "%d", metric ? limit_speed : (int)(limit_speed * KM_TO_MILE + 0.5));
-                optech_text(s, ccx, top + sg / 2 + 0.36f * 68 - 6, str, 68, nvgRGBA(44, 44, 42, 255), NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
-                optech_camera_icon(s, sx + sg - 20, top + 20, 15);  // small, inside the sign's top right corner
-            }
-            if (left_dist > 0) {
-                optech_dist_text(str, sizeof(str), left_dist, " 남음");
-                // whole cell wide (its right edge lines up with the set speed box), text as big as fits
-                // (user 2026-11-23: it was too small)
-                const float bw = cellw, bh = pill_h, btop = top + sg + 12;
-                const float a = std::clamp((600.f - left_dist) / 600.f, 0.25f, 1.f);  // fills redder as it gets close
-                carrot_round_box(s, ccx - bw / 2, btop, bw, bh, nvgRGBA(226, 75, 74, (int)(255 * a)), COLOR_WHITE, 12, 3);
-                float fs = 36, tb[4];
-                nvgFontFace(s->vg, BOLD);
-                nvgFontSize(s->vg, fs);
-                nvgTextBounds(s->vg, 0, 0, str, NULL, tb);
-                const float maxw = bw - 16;
-                if (tb[2] - tb[0] > maxw) fs *= maxw / (tb[2] - tb[0]);
-                optech_text(s, ccx, btop + bh / 2 - fs * 0.2f, str, fs, COLOR_WHITE, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-            }
-        }
-    }
 
-    // 4) set speed box (moves up when there is no navigation sign row)
+    // 2) set speed box
     const float applyMaxSpeed = controls_state.getVCruiseOut();
     const float cruiseMaxSpeed = controls_state.getVCruiseCluster();
-    float y3 = sign_row ? y2 + 50 + sg + 12 + pill_h + 18 : y2;
     {
-        const float w = CW, h = 124;
+        const float w = CW, h = 138;
         NVGcolor fill = nvgRGBA(95, 94, 90, 230), line = nvgRGBA(136, 135, 128, 255);
         NVGcolor txt = COLOR_WHITE;
         bool draw = true;
@@ -1215,33 +1177,35 @@ static void drawOptechHud(const UIState* s) {
         } else {
             txt = nvgRGBA(180, 178, 169, 255);
         }
-        if (draw) carrot_round_box(s, lx, y3, w, h, fill, line, 16, 3);
-        optech_text(s, lx + 20, y3 + 42, "설정 속도", 32, txt, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
+        if (draw) carrot_round_box(s, lx, col_y, w, h, fill, line, 16, 3);
+        optech_text(s, lx + 22, col_y + 46, "설정 속도", 35, txt, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
         if (enabled && cruiseMaxSpeed > 0 && cruiseMaxSpeed < 255) {
             snprintf(str, sizeof(str), "%d", (int)(cruiseMaxSpeed * (metric ? 1.0 : KM_TO_MILE) + 0.5));
         } else {
             snprintf(str, sizeof(str), "--");
         }
-        optech_text(s, lx + 20, y3 + h - 4, str, 80, txt, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
+        optech_text(s, lx + 22, col_y + h - 4, str, 90, txt, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
         const bool slowing = enabled && longActiveUser > 0 && applyMaxSpeed > 0 && applyMaxSpeed + 0.5f < cruiseMaxSpeed;
         if (slowing) {
-            optech_text(s, lx + w - 20, y3 + 42, "감속 중", 32, nvgRGBA(250, 199, 117, 255), NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
+            optech_text(s, lx + w - 22, col_y + 46, "감속 중", 35, nvgRGBA(250, 199, 117, 255), NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
             snprintf(str, sizeof(str), "%d", (int)(applyMaxSpeed * (metric ? 1.0 : KM_TO_MILE) + 0.5));
-            optech_text(s, lx + w - 20, y3 + h - 8, str, 64, nvgRGBA(250, 199, 117, 255), NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
+            optech_text(s, lx + w - 22, col_y + h - 8, str, 72, nvgRGBA(250, 199, 117, 255), NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
         }
+        col_y += h + 14;
     }
 
-    // 5) following distance + gear in one box (user 2026-11-23): left "차간 거리" with 4 steps like the car's
+    // 3) following distance + gear in one box (user 2026-11-23): left "차간 거리" with 4 steps like the car's
     //    cluster, right the gear letter on a coloured tile (D green, R red, N amber, P grey)
     {
-        const float w = CW, h = 96, top = y3 + 124 + 14;
+        const float w = CW, h = 106, top = col_y;
         carrot_round_box(s, lx, top, w, h, nvgRGBA(0, 0, 0, 90), nvgRGBA(136, 135, 128, 255), 14, 2);
         // stock SCC: the car's own gap setting (SCC11 TauGapSet); openpilot long: openpilot's gap
         const int gap = car_params.getOpenpilotLongitudinalControl() ? (int)controls_state.getLongCruiseGap()
                                                                      : (int)car_state.getCruiseGap();
-        const float gl = lx + 20, gr = lx + 214;  // left part
-        optech_text_vc(s, gl, top + 30, "차간 거리", 30, label_c, NVG_ALIGN_LEFT);  // the lit steps show the setting
-        const float sgap = 8, segw = (gr - gl - 3 * sgap) / 4, segh = 24, segy = top + 55;
+        const float dv = lx + 256;  // divider x
+        const float gl = lx + 22, gr = dv - 22;  // left part
+        optech_text_vc(s, gl, top + 33, "차간 거리", 33, label_c, NVG_ALIGN_LEFT);  // the lit steps show the setting
+        const float sgap = 8, segw = (gr - gl - 3 * sgap) / 4, segh = 26, segy = top + 61;
         for (int i = 0; i < 4; i++) {
             nvgBeginPath(s->vg);
             nvgRoundedRect(s->vg, gl + i * (segw + sgap), segy, segw, segh, 6);
@@ -1250,7 +1214,7 @@ static void drawOptechHud(const UIState* s) {
         }
         // divider
         nvgBeginPath(s->vg);
-        nvgMoveTo(s->vg, lx + 234, top + 16); nvgLineTo(s->vg, lx + 234, top + h - 16);
+        nvgMoveTo(s->vg, dv, top + 16); nvgLineTo(s->vg, dv, top + h - 16);
         nvgStrokeColor(s->vg, nvgRGBA(136, 135, 128, 255)); nvgStrokeWidth(s->vg, 2); nvgStroke(s->vg);
         // gear tile
         const auto gear = car_state.getGearShifter();
@@ -1259,9 +1223,61 @@ static void drawOptechHud(const UIState* s) {
             gear == cereal::CarState::GearShifter::LOW || gear == cereal::CarState::GearShifter::ECO) gfill = nvgRGBA(59, 109, 17, 255);
         else if (gear == cereal::CarState::GearShifter::REVERSE) gfill = nvgRGBA(226, 75, 74, 255);
         else if (gear == cereal::CarState::GearShifter::NEUTRAL) gfill = nvgRGBA(186, 117, 23, 255);
-        const float ts = 68, tcx = (lx + 234 + lx + w) / 2, tcy = top + h / 2;
+        const float ts = 76, tcx = (dv + lx + w) / 2, tcy = top + h / 2;
         carrot_round_box(s, tcx - ts / 2, tcy - ts / 2, ts, ts, gfill, COLOR_WHITE, 12, 3);
-        optech_text_vc(s, tcx, tcy, carrot_gear_text(gear), 54, COLOR_WHITE, NVG_ALIGN_CENTER);
+        optech_text_vc(s, tcx, tcy, carrot_gear_text(gear), 60, COLOR_WHITE, NVG_ALIGN_CENTER);
+        col_y += h + 14;
+    }
+
+    // 4) GPS box (drawn by ui_draw_gps_info, '화면 > GPS 상태'): here in the column, so the bigger badges have the top
+    //    row to themselves and nothing runs into the big speed
+    g_gps_x = lx; g_gps_y = col_y; g_gps_w = CW;
+    if (s->show_gps_info) col_y += 58 + 16;
+
+    // 5) road limit + camera / bump sign, only with navigation data. Last in the column: coming and going moves
+    //    nothing. The two signs sit in equal cells (user: the left side looked untidy)
+    const float cellw = (CW - 20) / 2, sg = 136;  // sign cell width, sign size (both signs)
+    const float pill_h = 60;  // "550m 남음" box height
+    const float y2 = col_y;
+    const bool sign_row = road_limit > 0 || limit_speed > 0;
+    if (sign_row) {
+        if (road_limit > 0) {
+            const float ccx = lx + cellw / 2, cy = y2 + 52 + sg / 2, d = sg + 8;  // as big as the camera sign + outline
+            optech_text(s, ccx, y2 + 34, "도로 제한", 34, label_c, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+            nvgBeginPath(s->vg); nvgCircle(s->vg, ccx, cy, d / 2); nvgFillColor(s->vg, nvgRGBA(226, 75, 74, 255)); nvgFill(s->vg);
+            nvgBeginPath(s->vg); nvgCircle(s->vg, ccx, cy, d / 2 - 15); nvgFillColor(s->vg, COLOR_WHITE); nvgFill(s->vg);
+            snprintf(str, sizeof(str), "%d", metric ? road_limit : (int)(road_limit * KM_TO_MILE + 0.5));
+            optech_text(s, ccx, cy + 0.36f * 70 - 6, str, 70, nvgRGBA(44, 44, 42, 255), NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
+        }
+        if (limit_speed > 0) {
+            const float cellx = lx + cellw + 20, ccx = cellx + cellw / 2, top = y2 + 52, sx = ccx - sg / 2;
+            optech_text(s, ccx, y2 + 34, bump ? "방지턱" : section ? "구간 단속" : "단속 속도", 34, COLOR_WHITE, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+            if (bump) {
+                ui_draw_image(s, {(int)sx, (int)top, (int)sg, (int)sg}, "ic_speed_bump", 1.0f);
+            } else {
+                carrot_round_box(s, sx, top, sg, sg, nvgRGBA(250, 199, 117, 255), nvgRGBA(44, 44, 42, 255), 15, 5);
+                nvgBeginPath(s->vg); nvgRoundedRect(s->vg, sx - 4, top - 4, sg + 8, sg + 8, 18);
+                nvgStrokeColor(s->vg, COLOR_WHITE); nvgStrokeWidth(s->vg, 3); nvgStroke(s->vg);
+                snprintf(str, sizeof(str), "%d", metric ? limit_speed : (int)(limit_speed * KM_TO_MILE + 0.5));
+                optech_text(s, ccx, top + sg / 2 + 0.36f * 74 - 6, str, 74, nvgRGBA(44, 44, 42, 255), NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
+                optech_camera_icon(s, sx + sg - 22, top + 22, 16);  // small, inside the sign's top right corner
+            }
+            if (left_dist > 0) {
+                optech_dist_text(str, sizeof(str), left_dist, " 남음");
+                // whole cell wide (its right edge lines up with the set speed box), text as big as fits
+                // (user 2026-11-23: it was too small)
+                const float bw = cellw, bh = pill_h, btop = top + sg + 12;
+                const float a = std::clamp((600.f - left_dist) / 600.f, 0.25f, 1.f);  // fills redder as it gets close
+                carrot_round_box(s, ccx - bw / 2, btop, bw, bh, nvgRGBA(226, 75, 74, (int)(255 * a)), COLOR_WHITE, 12, 3);
+                float fs = 38, tb[4];
+                nvgFontFace(s->vg, BOLD);
+                nvgFontSize(s->vg, fs);
+                nvgTextBounds(s->vg, 0, 0, str, NULL, tb);
+                const float maxw = bw - 16;
+                if (tb[2] - tb[0] > maxw) fs *= maxw / (tb[2] - tb[0]);
+                optech_text(s, ccx, btop + bh / 2 - fs * 0.2f, str, fs, COLOR_WHITE, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+            }
+        }
     }
 
     // ======================= top centre =======================
@@ -2545,25 +2561,26 @@ static void ui_draw_gps_info(const UIState* s) {
 
     const int bars = gps_cno >= 35 ? 4 : gps_cno >= 30 ? 3 : gps_cno >= 25 ? 2 : gps_cno >= 20 ? 1 : 0;
     if (s->show_mode == 7) {
-        // optech HUD: a box as high as the APN badge beside it, styled like the other HUD boxes (user 2026-11-23:
-        // the loose bars + text sat off centre and looked untidy). Bars and text both centred in the box.
-        const float bx = g_gps_x, by0 = 20, bh = 54, cy = by0 + bh / 2, fs = 30;
-        const float bw = 8, gap = 4, barsw = 4 * bw + 3 * gap, maxbar = 30;
+        // optech HUD: a box styled like the other HUD boxes (user 2026-11-23: the loose bars + text sat off centre
+        // and looked untidy). Since 2026-11-25 it is a row of the left column (drawOptechHud sets g_gps_x / y / w),
+        // as wide as the boxes above it; bars and text centred on the row.
+        const float bx = g_gps_x, by0 = g_gps_y, bh = 58, cy = by0 + bh / 2, fs = 34;
+        const float bw = 9, gap = 5, barsw = 4 * bw + 3 * gap, maxbar = 34;
         nvgFontFace(s->vg, BOLD);
         nvgFontSize(s->vg, fs);
         float tb[4];
         nvgTextBounds(s->vg, 0, 0, str, NULL, tb);
-        const float w = 18 + barsw + 14 + (tb[2] - tb[0]) + 20;
+        const float w = std::max(g_gps_w, 20 + barsw + 16 + (tb[2] - tb[0]) + 22);
         carrot_round_box(s, bx, by0, w, bh, nvgRGBA(0, 0, 0, 110), nvgRGBA(136, 135, 128, 255), 14, 2);
         const float bottom = cy + maxbar / 2;
         for (int i = 0; i < 4; i++) {
-            const float h = 12 + i * 6;
+            const float h = 13 + i * 7;
             nvgBeginPath(s->vg);
-            nvgRoundedRect(s->vg, bx + 18 + i * (bw + gap), bottom - h, bw, h, 2);
+            nvgRoundedRect(s->vg, bx + 22 + i * (bw + gap), bottom - h, bw, h, 2);
             nvgFillColor(s->vg, i < bars ? color : nvgRGBA(255, 255, 255, 55));
             nvgFill(s->vg);
         }
-        optech_text_vc(s, bx + 18 + barsw + 14, cy, str, fs, color, NVG_ALIGN_LEFT);
+        optech_text_vc(s, bx + 22 + barsw + 16, cy, str, fs, color, NVG_ALIGN_LEFT);
         return;
     }
 
@@ -2584,21 +2601,22 @@ static void ui_draw_gps_info(const UIState* s) {
     ui_draw_text(s, g_gps_x + 4 * (bw + gap) + 12, by, str, fsize, color, BOLD, 2.0f, 0.0f);
 }
 
-// optech 후측방 경고 (화면 탭 '후측방(BSD) 경고'): a big mark at the screen edge on the side of the car in the
-// blind spot, so it can be seen from the corner of the eye like a mirror light. Yellow and steady while a car is
-// there; red and blinking with '왼쪽/오른쪽 차량 주의' once the turn signal is on towards it. Hidden below 30 km/h
-// (parking lots, queues) where the sensor fires all the time
+// optech 후측방 경고 (화면 탭 '후측방(BSD) 경고'): a mark beside the road on the side of the car in the blind spot,
+// like a mirror light. Hidden below 30 km/h (parking lots, queues) where the sensor fires all the time.
+// User 2026-11-25: moved in from the screen edges to either side of the lead car info (cx -/+ 350), one colour for
+// both sides (amber, like the cars' mirror lights) and no '왼쪽/오른쪽 차량 주의' text: steady while a car is there,
+// blinking once the turn signal is on towards it
 static void ui_draw_bsd_mark(const UIState* s, bool right, bool danger) {
-    // rounded box with a car seen from the side and a warning triangle under it: yellow and steady while a car is
-    // there, red and blinking with '왼쪽/오른쪽 차량 주의' once the turn signal is on towards it
+    // rounded box with a car seen from the side and a warning triangle under it
     const float w = 140, h = 170;
-    const float x = right ? s->fb_w - w - 20 : 20;
-    const float y = s->fb_h * 0.60f;  // under the right column (wheel, CPU, tyres)
+    const float cxs = s->fb_w / 2.f + (right ? 350.f : -350.f);
+    const float x = cxs - w / 2;
+    const float y = s->fb_h * 0.60f;
     const bool blink_on = (s->sm->frame % 12) < 7;
     if (danger && !blink_on) return;
 
-    const NVGcolor bg = danger ? nvgRGBA(226, 75, 74, 235) : nvgRGBA(239, 159, 39, 235);
-    const NVGcolor fg = danger ? COLOR_WHITE : nvgRGBA(65, 36, 2, 255);
+    const NVGcolor bg = nvgRGBA(239, 159, 39, 235);
+    const NVGcolor fg = nvgRGBA(65, 36, 2, 255);
     nvgBeginPath(s->vg);
     nvgRoundedRect(s->vg, x, y, w, h, 20);
     nvgFillColor(s->vg, bg);
@@ -2645,8 +2663,7 @@ static void ui_draw_bsd_mark(const UIState* s, bool right, bool danger) {
         nvgFill(s->vg);
     }
 
-    // warning triangle with an exclamation mark under the car, filling the lower half of the box:
-    // yellow with a black rim in the yellow box, white with a red rim in the red box
+    // warning triangle with an exclamation mark under the car, filling the lower half of the box (yellow, black rim)
     const float triW = 92, triH = 76, triX = cx - triW / 2, triY = y + h - triH - 8;
     nvgBeginPath(s->vg);
     nvgMoveTo(s->vg, cx, triY);
@@ -2654,28 +2671,16 @@ static void ui_draw_bsd_mark(const UIState* s, bool right, bool danger) {
     nvgLineTo(s->vg, triX, triY + triH);
     nvgClosePath(s->vg);
     nvgLineJoin(s->vg, NVG_ROUND);
-    nvgFillColor(s->vg, danger ? COLOR_WHITE : nvgRGBA(250, 184, 0, 255));
+    nvgFillColor(s->vg, nvgRGBA(250, 184, 0, 255));
     nvgFill(s->vg);
-    nvgStrokeColor(s->vg, danger ? nvgRGBA(200, 0, 0, 255) : nvgRGBA(20, 20, 20, 255));
-    nvgStrokeWidth(s->vg, danger ? 9 : 6);
+    nvgStrokeColor(s->vg, nvgRGBA(20, 20, 20, 255));
+    nvgStrokeWidth(s->vg, 6);
     nvgStroke(s->vg);
     nvgBeginPath(s->vg);
     nvgRoundedRect(s->vg, cx - 5.5f, triY + 24, 11, 30, 5.5f);
     nvgCircle(s->vg, cx, triY + 64, 6);
     nvgFillColor(s->vg, nvgRGBA(20, 20, 20, 255));
     nvgFill(s->vg);
-
-    if (danger) {
-        const char* txt = right ? "오른쪽 차량 주의" : "왼쪽 차량 주의";
-        const float tw = 360, th = 80;
-        const float tx = right ? x - tw - 16 : x + w + 16, ty = y + h / 2 - th / 2;
-        nvgBeginPath(s->vg);
-        nvgRoundedRect(s->vg, tx, ty, tw, th, 14);
-        nvgFillColor(s->vg, nvgRGBA(162, 45, 45, 235));
-        nvgFill(s->vg);
-        nvgTextAlign(s->vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-        ui_draw_text(s, tx + tw / 2, ty + th / 2 + 2, txt, 48, COLOR_WHITE, BOLD, 0.0f, 0.0f);
-    }
 }
 
 static void ui_draw_bsd_edge(const UIState* s) {
