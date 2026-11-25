@@ -640,10 +640,12 @@ void AnnotatedCameraWidget::drawDriverState(QPainter &painter, const UIState *s)
   int x = rightHandDM ? rect().right() -  (btn_size - 24) / 2 - (bdr_s * 2) : (btn_size - 24) / 2 + (bdr_s * 2);
   int y = rect().bottom() - footer_h / 2;
   if (s->show_mode == 7) {
-    // optech HUD: bottom left corner, centred under the yellow '차량 주의' mark (paint.cc ui_draw_bsd_mark: x 20,
-    // 140 wide), 170 across, its centre level with the REC button's (user 2026-11-23)
+    // optech HUD: 170 across, bottom right, just left of the REC button (140 wide, right margin 20, bottom margin 40,
+    // OnroadWindow::updateState), its centre level with the REC button's; in the corner itself while REC is hidden.
+    // User 2026-11-26: it was bottom left and covered the '550m 남음' box under the bigger speed camera sign.
     const float k = 170.f / btn_size;
-    painter.translate(20 + 70, height() - 40 - 70);
+    const float cx = s->show_record_btn ? width() - 20 - 140 - 24 - 85 : width() - 20 - 85;
+    painter.translate(cx, height() - 40 - 70);
     painter.scale(k, k);
     x = 0;
     y = 0;
