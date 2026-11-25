@@ -20,6 +20,7 @@ class Track():
     self.cnt = 0
     self.seen = 0           # optech: radar frames since this track id appeared (cnt restarts on a speed jump)
     self.vision_frames = 0  # optech: frames in a row the camera's lead sat on this track (radard, raw tracks only)
+    self.selected = 0       # optech sticky lead: frames this track was the camera-confirmed lead (radard, raw tracks)
     self.aLeadTau = _LEAD_ACCEL_TAU
     self.K_A = kalman_params.A
     self.K_C = kalman_params.C
@@ -28,6 +29,11 @@ class Track():
     self.vLead = v_lead
 
   def update(self, d_rel, y_rel, v_rel, v_lead, measured):
+    # optech sticky lead (carrot c3-wip): an id that jumps or is no longer measured is not the followed car any more
+    if self.seen > 0 and (not measured or abs(d_rel - self.dRel) > 5.0 or abs(y_rel - self.yRel) > 2.0 or
+                          abs(v_lead - self.vLead) > 7.0):
+      self.selected = 0
+
     #apilot: changed radar target
     if abs(self.vLead - v_lead) > 0.5:
       self.cnt = 0
