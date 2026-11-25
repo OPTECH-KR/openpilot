@@ -48,6 +48,11 @@ static float g_gps_x = 30;  // GPS line x in the top-left badge row, set by draw
 // optech HUD (show_mode 7, user 2026-11-25): the GPS box sits in the left column under the gap / gear box (top y,
 // width), set by drawOptechHud
 static float g_gps_y = 20, g_gps_w = 0;
+// optech HUD: the GPS signal box and the GPS speed under the big speed are off for now (user 2026-11-25: hide both
+// until the layout is settled); true brings both back
+static const bool OPTECH_HUD_GPS = false;
+// optech HUD: bottom of the big speed number (user 2026-11-25: moved down from 190; the traffic light sits above it)
+static const float OPTECH_SPEED_BOTTOM = 322;
 
 #if 0
 static void ui_print(UIState *s, int x, int y,  const char* fmt, ... )
@@ -1158,47 +1163,12 @@ static void drawOptechHud(const UIState* s) {
     float col_y = s->show_conn_info ? ry + BH + 16 : ry;  // next item's top
     const NVGcolor label_c = nvgRGBA(211, 209, 199, 255);
 
-    // 2) following distance + gear in one box (user 2026-11-23): left "차간 거리" with 4 steps like the car's
-    //    cluster, right the gear letter on a coloured tile (D green, R red, N amber, P grey)
-    {
-        const float w = CW, h = 106, top = col_y;
-        carrot_round_box(s, lx, top, w, h, nvgRGBA(0, 0, 0, 90), nvgRGBA(136, 135, 128, 255), 14, 2);
-        // stock SCC: the car's own gap setting (SCC11 TauGapSet); openpilot long: openpilot's gap
-        const int gap = car_params.getOpenpilotLongitudinalControl() ? (int)controls_state.getLongCruiseGap()
-                                                                     : (int)car_state.getCruiseGap();
-        const float dv = lx + 256;  // divider x
-        const float gl = lx + 22, gr = dv - 22;  // left part
-        optech_text_vc(s, gl, top + 33, "차간 거리", 33, label_c, NVG_ALIGN_LEFT);  // the lit steps show the setting
-        const float sgap = 8, segw = (gr - gl - 3 * sgap) / 4, segh = 26, segy = top + 61;
-        for (int i = 0; i < 4; i++) {
-            nvgBeginPath(s->vg);
-            nvgRoundedRect(s->vg, gl + i * (segw + sgap), segy, segw, segh, 6);
-            nvgFillColor(s->vg, i < gap ? nvgRGBA(151, 196, 89, 255) : nvgRGBA(255, 255, 255, 45));
-            nvgFill(s->vg);
-        }
-        // divider
-        nvgBeginPath(s->vg);
-        nvgMoveTo(s->vg, dv, top + 16); nvgLineTo(s->vg, dv, top + h - 16);
-        nvgStrokeColor(s->vg, nvgRGBA(136, 135, 128, 255)); nvgStrokeWidth(s->vg, 2); nvgStroke(s->vg);
-        // gear tile
-        const auto gear = car_state.getGearShifter();
-        NVGcolor gfill = nvgRGBA(95, 94, 90, 255);
-        if (gear == cereal::CarState::GearShifter::DRIVE || gear == cereal::CarState::GearShifter::SPORT ||
-            gear == cereal::CarState::GearShifter::LOW || gear == cereal::CarState::GearShifter::ECO) gfill = nvgRGBA(59, 109, 17, 255);
-        else if (gear == cereal::CarState::GearShifter::REVERSE) gfill = nvgRGBA(226, 75, 74, 255);
-        else if (gear == cereal::CarState::GearShifter::NEUTRAL) gfill = nvgRGBA(186, 117, 23, 255);
-        const float ts = 76, tcx = (dv + lx + w) / 2, tcy = top + h / 2;
-        carrot_round_box(s, tcx - ts / 2, tcy - ts / 2, ts, ts, gfill, COLOR_WHITE, 12, 3);
-        optech_text_vc(s, tcx, tcy, carrot_gear_text(gear), 60, COLOR_WHITE, NVG_ALIGN_CENTER);
-        col_y += h + 14;
-    }
-
-    // 3) GPS box (drawn by ui_draw_gps_info, '화면 > GPS 상태'): here in the column, so the bigger badges have the top
-    //    row to themselves and nothing runs into the big speed
+    // 2) GPS box (ui_draw_gps_info, '화면 > GPS 상태'): hidden in this HUD for now (user 2026-11-25: "GPS signal and
+    //    GPS speed out of sight until the layout is settled"); OPTECH_HUD_GPS brings both back here
     g_gps_x = lx; g_gps_y = col_y; g_gps_w = CW;
-    if (s->show_gps_info) col_y += 58 + 16;
+    if (OPTECH_HUD_GPS && s->show_gps_info) col_y += 58 + 16;
 
-    // 4) set speed box: under the GPS box and twice as high as before (user 2026-11-25, marked on a screenshot:
+    // 3) set speed box: under the badge row, twice as high as before (user 2026-11-25, marked on a screenshot:
     //    "move it there and make it that big"). Set speed big on the left, '감속 중' + the speed openpilot is
     //    actually holding on the right; both numbers shrink together when they would not fit (3-digit speeds)
     const float applyMaxSpeed = controls_state.getVCruiseOut();
@@ -1248,7 +1218,7 @@ static void drawOptechHud(const UIState* s) {
         col_y += h + 16;
     }
 
-    // 5) road limit + camera / bump sign, only with navigation data. Last in the column: coming and going moves
+    // 4) road limit + camera / bump sign, only with navigation data. Last in the column: coming and going moves
     //    nothing. The two signs sit in equal cells (user: the left side looked untidy)
     const float cellw = (CW - 20) / 2, sg = 136;  // sign cell width, sign size (both signs)
     const float pill_h = 60;  // "550m 남음" box height
@@ -1297,13 +1267,14 @@ static void drawOptechHud(const UIState* s) {
     // ======================= top centre =======================
     const float cx = s->fb_w / 2.f;
     {
-        // big speed: white steady, red braking / slowing, green speeding up
+        // big speed: white steady, red braking / slowing, green speeding up. User 2026-11-25: moved down to where the
+        // unit / GPS line and the traffic light were (the traffic light is above it now); number centred near y 254
         const float a = car_state.getAEgo();
         NVGcolor c = COLOR_WHITE;
         if (car_state.getBrakePressed() || a < -0.3f) c = nvgRGBA(240, 149, 149, 255);
         else if (a > 0.3f) c = nvgRGBA(151, 196, 89, 255);
         snprintf(str, sizeof(str), "%.0f", cur_speed);
-        optech_text(s, cx, 190, str, 190, c, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+        optech_text(s, cx, OPTECH_SPEED_BOTTOM, str, 190, c, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
         // unit + GPS speed (green; the dashboard speed reads a few % high) as one line centred under the number
         const char* unit_str = metric ? "km/h" : "mph";  // like OPKR
         const bool gps_ok = sm.alive("gpsLocationExternal") && (sm["gpsLocationExternal"].getGpsLocationExternal().getFlags() & 1);
@@ -1314,18 +1285,21 @@ static void drawOptechHud(const UIState* s) {
         float ub[4], gb[4];
         nvgTextBounds(s->vg, 0, 0, unit_str, NULL, ub);
         nvgTextBounds(s->vg, 0, 0, str, NULL, gb);
-        const float uw = ub[2] - ub[0], gw = gb[2] - gb[0], sp = 24, x0 = cx - (uw + sp + gw) / 2;
-        optech_text(s, x0, 236, unit_str, 40, nvgRGBA(211, 209, 199, 255), NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
-        optech_text(s, x0 + uw + sp, 236, str, 40, gps_ok ? nvgRGBA(151, 196, 89, 255) : nvgRGBA(136, 135, 128, 255), NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
+        // GPS speed hidden for now (OPTECH_HUD_GPS): the unit alone, centred
+        const float uw = ub[2] - ub[0], gw = OPTECH_HUD_GPS ? gb[2] - gb[0] : 0.f, sp = OPTECH_HUD_GPS ? 24.f : 0.f;
+        const float x0 = cx - (uw + sp + gw) / 2, uy = OPTECH_SPEED_BOTTOM + 46;
+        optech_text(s, x0, uy, unit_str, 40, nvgRGBA(211, 209, 199, 255), NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
+        if (OPTECH_HUD_GPS) optech_text(s, x0 + uw + sp, uy, str, 40, gps_ok ? nvgRGBA(151, 196, 89, 255) : nvgRGBA(136, 135, 128, 255), NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
     }
     {
         // traffic light (the driving model's stop / go guess, controls/lib/optech_signal.py): horizontal
-        // red / yellow / green, right under the unit + GPS line (user 2026-11-23). Shown whenever it has something,
+        // red / yellow / green, at the top above the big speed (user 2026-11-25; it was under the unit + GPS line).
+        // Shown whenever it has something,
         // also without openpilot's speed control (display only, like carrot's signal modes)
         const int ts = lp.getTrafficState() % 1000;
         const int mode = ts >= 100 ? 3 : (ts % 100);
         if (mode >= 1 && mode <= 3) {
-            const float w = 264, h = 88, x = cx - w / 2, y = 250, r = 31;
+            const float w = 264, h = 88, x = cx - w / 2, y = 30, r = 31;
             carrot_round_box(s, x, y, w, h, nvgRGBA(44, 44, 42, 240), COLOR_WHITE, 14, 3);
             const NVGcolor off = nvgRGBA(95, 94, 90, 255);
             const NVGcolor on[3] = {nvgRGBA(226, 75, 74, 255), nvgRGBA(239, 159, 39, 255), nvgRGBA(99, 153, 34, 255)};
@@ -1343,7 +1317,7 @@ static void drawOptechHud(const UIState* s) {
         const bool lb = car_state.getLeftBlinker(), rb = car_state.getRightBlinker();
         if (lb || rb) {
             const int step = (sm.frame / 4) % 4;  // 0..3
-            const float w = 60, h = 110, gap = 44, y = 84;
+            const float w = 60, h = 110, gap = 44, y = OPTECH_SPEED_BOTTOM - 68 - 55;  // beside the big number
             for (int i = 0; i < 3; i++) {
                 const int a = (step > i) ? 255 : 70;
                 const NVGcolor col = nvgRGBA(239, 159, 39, a);
@@ -1377,7 +1351,7 @@ static void drawOptechHud(const UIState* s) {
                 nvgFontSize(s->vg, 48);
                 float b[4]; nvgTextBounds(s->vg, 0, 0, str, NULL, b);
                 const float S = 72;  // arrow size
-                const float tw = b[2] - b[0], iw = arrow ? S + 18 : 0, w = tw + iw + 50, h = 96, x = cx - w / 2, y = 352;  // under the traffic light
+                const float tw = b[2] - b[0], iw = arrow ? S + 18 : 0, w = tw + iw + 50, h = 96, x = cx - w / 2, y = OPTECH_SPEED_BOTTOM + 62;  // under the big speed + unit
                 carrot_round_box(s, x, y, w, h, nvgRGBA(0, 0, 0, 120), nvgRGBA(0, 0, 0, 0), 12, 0);
                 if (arrow) optech_turn_arrow(s, x + 22, y + (h - S) / 2, S, arrow);
                 optech_text(s, x + 25 + iw, y + h / 2 + 2, str, 48, COLOR_WHITE, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
@@ -1459,6 +1433,34 @@ static void drawOptechHud(const UIState* s) {
                 std::string v = get_tpms_text(t[i]);
                 optech_text_vc(s, px, py, v.c_str(), 44, get_tpms_color(t[i]), NVG_ALIGN_CENTER);
             }
+        }
+
+        // following distance + gear (user 2026-11-25: moved from the left column to here, under the tyres), as big
+        // as the other right boxes: "차간 거리", the 4 steps like the car's cluster, the gear letter on a coloured tile
+        // (D green, R red, N amber, P grey)
+        {
+            top += boxh + gap;
+            carrot_round_box(s, rx, top, colw, boxh, box_fill, box_line, 14, 3);
+            // stock SCC: the car's own gap setting (SCC11 TauGapSet); openpilot long: openpilot's gap
+            const int cgap = car_params.getOpenpilotLongitudinalControl() ? (int)controls_state.getLongCruiseGap()
+                                                                          : (int)car_state.getCruiseGap();
+            optech_text_vc(s, rcx, top + 26, "차간 거리", 30, lab, NVG_ALIGN_CENTER);
+            const float gl = rx + 16, gr = rx + colw - 16, sgap = 6, segw = (gr - gl - 3 * sgap) / 4, segh = 20, segy = top + 48;
+            for (int i = 0; i < 4; i++) {
+                nvgBeginPath(s->vg);
+                nvgRoundedRect(s->vg, gl + i * (segw + sgap), segy, segw, segh, 5);
+                nvgFillColor(s->vg, i < cgap ? nvgRGBA(151, 196, 89, 255) : nvgRGBA(255, 255, 255, 45));
+                nvgFill(s->vg);
+            }
+            const auto gear = car_state.getGearShifter();
+            NVGcolor gfill = nvgRGBA(95, 94, 90, 255);
+            if (gear == cereal::CarState::GearShifter::DRIVE || gear == cereal::CarState::GearShifter::SPORT ||
+                gear == cereal::CarState::GearShifter::LOW || gear == cereal::CarState::GearShifter::ECO) gfill = nvgRGBA(59, 109, 17, 255);
+            else if (gear == cereal::CarState::GearShifter::REVERSE) gfill = nvgRGBA(226, 75, 74, 255);
+            else if (gear == cereal::CarState::GearShifter::NEUTRAL) gfill = nvgRGBA(186, 117, 23, 255);
+            const float ts = 72, tcy = top + 80 + ts / 2;
+            carrot_round_box(s, rcx - ts / 2, tcy - ts / 2, ts, ts, gfill, COLOR_WHITE, 12, 3);
+            optech_text_vc(s, rcx, tcy, carrot_gear_text(gear), 56, COLOR_WHITE, NVG_ALIGN_CENTER);
         }
 
         // path offset panel (opened by tapping the wheel): − / + move the path left / right, 1 cm a tap
@@ -2542,6 +2544,7 @@ NVGcolor alert_color;
 // Signal strength = mean C/N0 of the 4 strongest satellites from ublox RXM-RAWX (ubloxGnss.measurementReport).
 static void ui_draw_gps_info(const UIState* s) {
     if (!s->show_gps_info) return;
+    if (s->show_mode == 7 && !OPTECH_HUD_GPS) return;  // optech HUD: hidden for now
     SubMaster& sm = *(s->sm);
     const UIScene& scene = s->scene;
     const int gps_sats = scene.gps_sats, gps_strong = scene.gps_strong, gps_cno = scene.gps_cno;
