@@ -812,18 +812,20 @@ static void carrot_round_box(const UIState* s, float x, float y, float w, float 
     }
 }
 
-// optech (user 2026-11-25): the navigation badge said APN / APM / NDA / HDA, which drivers did not understand.
-// roadLimitSpeed.active: 200+ a phone app sends camera / road limit / turn data (old APN), 100-199 an app (APM) is linked
-// but sends none of that (old APM), 1-99 an NDA-protocol app is linked (old NDA; its cameras come in the road_limit
-// fields). car_navi_cam: the car's own navigation reports a camera limit now (Navi_HU, old HDA); car_navi: the car has
-// that navigation. Same order as the old images. Returns nullptr when there is nothing to show.
-static const char* optech_nav_badge(int active, bool car_navi_cam, bool car_navi, NVGcolor* fill) {
-    const NVGcolor app = nvgRGBA(0, 170, 0, 230), wait = nvgRGBA(0, 120, 255, 210), car = nvgRGBA(140, 80, 200, 220);
-    if (active >= 200) { *fill = app; return "내비"; }
-    if (car_navi_cam) { *fill = car; return "순정 내비"; }
-    if (active >= 100) { *fill = wait; return "내비 대기"; }
-    if (active % 100 > 0) { *fill = app; return "내비"; }
-    if (car_navi) { *fill = car; return "순정 내비"; }
+// optech (user 2026-11-25): the navigation badge said APN / APM / NDA / HDA. Now it names the link by the port the data
+// came in on (roadLimitSpeed.naviSource): NAVI CARROT (7706: 당근내비, TmapNda in carrot mode), NAVI NDA (843: TmapNda
+// in NDA mode), NAVI (7707: APilotMan + Mappy); green while it delivers, grey while linked with nothing to show yet.
+// HDA (purple): the car's own navigation (Navi_HU) - car_navi_cam while it reports a camera limit, car_navi when the
+// car has one. roadLimitSpeed.active: 200+ Tmap / Mappy data, 100-199 APM linked without data, 1-99 an NDA app linked
+// (its cameras come in the road_limit fields). Same order as the old images. nullptr: nothing to show.
+static const char* optech_nav_badge(int active, int source, bool car_navi_cam, bool car_navi, NVGcolor* fill) {
+    const NVGcolor app = nvgRGBA(0, 170, 0, 230), idle = nvgRGBA(110, 110, 110, 220), car = nvgRGBA(140, 80, 200, 220);
+    const char* name = source == 1 ? "NAVI CARROT" : source == 2 ? "NAVI NDA" : "NAVI";
+    if (active >= 200) { *fill = app; return name; }
+    if (car_navi_cam) { *fill = car; return "HDA"; }
+    if (active > 0 && active < 100) { *fill = app; return source == 0 || source == 2 ? "NAVI NDA" : name; }
+    if (active >= 100 || source > 0) { *fill = idle; return name; }
+    if (car_navi) { *fill = car; return "HDA"; }
     return nullptr;
 }
 
@@ -944,10 +946,11 @@ static void carrot_hud_lower(const UIState* s, int bx, int by, int my_driving_mo
     mode_last = my_driving_mode;
     gap_last = gap;
 
-    // navigation link: 내비 (green) / 내비 대기 (blue), between the limit tile and the gap bars (was APN / APM)
+    // navigation link: NAVI, green while it delivers / grey while linked (was APN / APM), between the limit tile and
+    // the gap bars. The box is small here: no link name (source 0)
     const int nx = bx + 200, ny = by + 175;
     NVGcolor nav_fill;
-    const char* nav = optech_nav_badge(active_nda, false, false, &nav_fill);
+    const char* nav = optech_nav_badge(active_nda, 0, false, false, &nav_fill);
     if (nav) {
         const float bw = 124;
         float fs = 36, tb[4];
@@ -1139,7 +1142,7 @@ static void drawOptechHud(const UIState* s) {
         const bool radar_tracks = s->radar_tracks;
         if (sccBus == 2) { ui_draw_image(s, {(int)bx, (int)ry, 120, 54}, "ic_scc2", 1.0f); bx += 135; }
         NVGcolor nav_fill;
-        const char* nav = optech_nav_badge(activeNDA, hda_limit > 0 && hda_dist > 0, naviCluster > 0, &nav_fill);
+        const char* nav = optech_nav_badge(activeNDA, road.getNaviSource(), hda_limit > 0 && hda_dist > 0, naviCluster > 0, &nav_fill);
         if (nav) bx += optech_badge(s, bx, ry, 54, nav, nav_fill) + 15;
         if (radar_tracks) { ui_draw_image(s, {(int)bx, (int)ry, 240, 54}, "ic_radartracks", 1.0f); bx += 255; }
     }
@@ -2171,7 +2174,8 @@ void DrawApilot::drawLeadApilot(const UIState* s) {
             if (sccBus) ui_draw_image(s, { 30, 20, 120, 54 }, "ic_scc2", 1.0f);
             // navigation badge as words (was the APN / HDA / APM / NDA images), then the radar badge after it
             NVGcolor nav_fill;
-            const char* nav = optech_nav_badge(activeNDA, hda_speedLimit > 0 && hda_speedLimitDistance > 0, naviCluster > 0, &nav_fill);
+            const char* nav = optech_nav_badge(activeNDA, road_limit_speed.getNaviSource(), hda_speedLimit > 0 && hda_speedLimitDistance > 0,
+                                               naviCluster > 0, &nav_fill);
             const float nav_w = nav ? optech_badge(s, 30 + 135, 20, 54, nav, nav_fill) : 120;
             const int radar_x = 30 + 135 + (int)nav_w + 15;
             if (radar_tracks) ui_draw_image(s, { radar_x, 20, 240, 54 }, "ic_radartracks", 1.0f);

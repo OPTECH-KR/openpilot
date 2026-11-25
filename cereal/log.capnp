@@ -2026,6 +2026,10 @@ struct RoadLimitSpeed {
     xCmd @20 : Text;
     xArg @21 : Text;
     xIndex @22 : Int16;
+    # optech 2026-11-25: where the navigation data comes from, by the port it came in on (the screen badge):
+    # 0 nothing, 1 carrot protocol (7706: 당근내비, TmapNda in carrot mode), 2 NDA (843: TmapNda in NDA mode),
+    # 3 APM (7707: APilotMan + Mappy)
+    naviSource @23 : Int8;
 }
 
 struct Event {
