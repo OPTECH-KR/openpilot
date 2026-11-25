@@ -874,6 +874,13 @@ static void optech_txt_base(QPainter &p, float x, float base, const QString &tex
   p.drawText(QPointF(left, base), text);
 }
 
+// text placed like optech-hkg's NVG_ALIGN_BOTTOM: y is just under the letters (Qt's AlignBottom puts the font's
+// descent there too, which drew every such label 10-20 px higher than on optech-hkg). Measured on both screens.
+static void optech_txt_hb(QPainter &p, float x, float y, const QString &text, int px, const QColor &color,
+                          int halign = 0) {
+  optech_txt_base(p, x, y - 0.06f * px, text, px, color, halign);
+}
+
 // font size that makes text fit max_w (never bigger than px)
 static int optech_fit(QPainter &p, const QString &text, int px, float max_w) {
   const int w = optech_text_w(p, text, px);
@@ -1161,7 +1168,7 @@ void AnnotatedCameraWidget::drawOptechHud(QPainter &p) {
       txt = QColor(180, 178, 169);
     }
     if (draw) optech_box(p, lx, col_y, w, h, fill, 18, 3, line);
-    optech_txt(p, lx + pad, col_y + 58, "설정 속도", 44, txt, -1);
+    optech_txt_hb(p, lx + pad, col_y + 58, "설정 속도", 44, txt, -1);
     const QString set_s = is_cruise_set ? QString::number((int)std::nearbyint(setSpeed)) : "--";
     const float target = optech_cam_target * to_unit;
     const bool slowing = optech_enabled && optech_long && target > 0 && target + 0.5f < setSpeed;
@@ -1173,10 +1180,10 @@ void AnnotatedCameraWidget::drawOptechHud(QPainter &p) {
       fs_set = (int)(fs_set * k);
       fs_hold = (int)(fs_hold * k);
     }
-    optech_txt(p, lx + pad, col_y + h - 12, set_s, fs_set, txt, -1);
+    optech_txt_hb(p, lx + pad, col_y + h - 12, set_s, fs_set, txt, -1);
     if (slowing) {
-      optech_txt(p, lx + w - pad, col_y + 58, "감속 중", 44, amber, 1);
-      optech_txt(p, lx + w - pad, col_y + h - 18, hold_s, fs_hold, amber, 1);
+      optech_txt_hb(p, lx + w - pad, col_y + 58, "감속 중", 44, amber, 1);
+      optech_txt_hb(p, lx + w - pad, col_y + h - 18, hold_s, fs_hold, amber, 1);
     }
     col_y += h + 16;
   }
@@ -1192,7 +1199,7 @@ void AnnotatedCameraWidget::drawOptechHud(QPainter &p) {
     const bool cam = cam_disp > 0, bump = !cam && optech_bump;
     if (cam || bump || road_disp > 0) {
       const QString lab = cam ? (optech_cam_section ? "구간 단속" : "단속 속도") : bump ? "방지턱" : "제한 속도";
-      optech_txt(p, ccx, lab_y, lab, 56, cam || bump ? white : label_c);
+      optech_txt_hb(p, ccx, lab_y, lab, 56, cam || bump ? white : label_c);
       if (bump) {
         p.drawPixmap(QRectF(ccx - d / 2, top, d, d), bump_img, QRectF(bump_img.rect()));
       } else {
@@ -1306,11 +1313,11 @@ void AnnotatedCameraWidget::drawOptechHud(QPainter &p) {
     const float tgap = gap_ok ? optech_lead_d / optech_v_ego : 0.f;
     const float w = 250, h = gap_ok ? 150 : 104, top = y + 44;
     optech_box(p, x - w / 2, top, w, h, QColor(0, 0, 0, 110), 12, 0);
-    optech_txt(p, x, top + 46, "거리 " + QString::number((int)std::nearbyint(optech_lead_d)) + "m", 40, white);
-    optech_txt(p, x, top + 92, "앞차 " + QString::number((int)std::nearbyint(vl)) + (is_metric ? "km/h" : "mph"), 40, white);
+    optech_txt_hb(p, x, top + 46, "거리 " + QString::number((int)std::nearbyint(optech_lead_d)) + "m", 40, white);
+    optech_txt_hb(p, x, top + 92, "앞차 " + QString::number((int)std::nearbyint(vl)) + (is_metric ? "km/h" : "mph"), 40, white);
     if (gap_ok) {
       const QColor gc = tgap < 1.0f ? soft_red : (tgap < 2.0f ? amber : white);
-      optech_txt(p, x, top + 138, "도달 " + QString::number(tgap, 'f', 1) + "초", 40, gc);
+      optech_txt_hb(p, x, top + 138, "도달 " + QString::number(tgap, 'f', 1) + "초", 40, gc);
     }
   }
 
