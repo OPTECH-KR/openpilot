@@ -1224,62 +1224,49 @@ static void drawOptechHud(const UIState* s) {
         col_y += h + 16;
     }
 
-    // 4) road limit + camera / bump sign, only with navigation data. Last in the column: coming and going moves
-    //    nothing. The two signs sit in equal cells (user: the left side looked untidy). User 2026-11-25: much bigger,
-    //    filling the column below the set speed (signs 136 -> 170, labels 34 -> 42, numbers 70 / 74 -> 92 / 96,
-    //    "550m 남음" box 60 -> 76 high)
-    const float cellw = (CW - 16) / 2, sg = 170;  // sign cell width, sign size (both signs)
-    const float pill_h = 76;  // "550m 남음" box height
-    const float y2 = col_y + 50;  // user 2026-11-25: "a little lower" than right under the set speed
-    const bool sign_row = road_limit > 0 || limit_speed > 0;
-    if (sign_row) {
-        const float lab_fs = 42, lab_y = y2 + 42, top = y2 + 56;
-        if (road_limit > 0) {
-            const float ccx = lx + cellw / 2, cy = top + sg / 2, d = sg + 6;  // as big as the camera sign + outline
-            optech_text(s, ccx, lab_y, "도로 제한", lab_fs, label_c, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
-            nvgBeginPath(s->vg); nvgCircle(s->vg, ccx, cy, d / 2); nvgFillColor(s->vg, nvgRGBA(226, 75, 74, 255)); nvgFill(s->vg);
-            nvgBeginPath(s->vg); nvgCircle(s->vg, ccx, cy, d / 2 - 19); nvgFillColor(s->vg, COLOR_WHITE); nvgFill(s->vg);
-            snprintf(str, sizeof(str), "%d", metric ? road_limit : (int)(road_limit * KM_TO_MILE + 0.5));
-            float nfs = 92, tb[4];  // 3-digit limits (100, 110) shrink to fit the white disc
-            nvgFontFace(s->vg, BOLD);
-            nvgFontSize(s->vg, nfs);
-            nvgTextBounds(s->vg, 0, 0, str, NULL, tb);
-            const float maxw = d - 2 * 19 - 16;
-            if (tb[2] - tb[0] > maxw) nfs *= maxw / (tb[2] - tb[0]);
-            optech_text(s, ccx, cy + 0.36f * nfs - 6, str, nfs, nvgRGBA(44, 44, 42, 255), NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
-        }
-        if (limit_speed > 0) {
-            const float cellx = lx + cellw + 16, ccx = cellx + cellw / 2, sx = ccx - sg / 2;
-            optech_text(s, ccx, lab_y, bump ? "방지턱" : section ? "구간 단속" : "단속 속도", lab_fs, COLOR_WHITE, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
-            if (bump) {
-                ui_draw_image(s, {(int)sx, (int)top, (int)sg, (int)sg}, "ic_speed_bump", 1.0f);
+    // 4) ONE sign under the set speed, centred on the column (user 2026-11-25: "merge the two, one line down with the
+    //    set speed"), only with navigation data. Last in the column: coming and going moves nothing.
+    //    - camera ahead: yellow disc in a red ring, the enforced speed, a small camera, label 단속 속도 / 구간 단속,
+    //      "550m 남음" under it (redder as it gets close)
+    //    - speed bump: the bump picture, label 방지턱, the distance under it
+    //    - otherwise the road limit: white disc in a red ring, label 제한 속도
+    {
+        const float d = 210, pill_h = 76, pill_w = 300;  // sign diameter, "550m 남음" box
+        const float y2 = col_y + 50;  // user 2026-11-25: "a little lower" than right under the set speed
+        const float ccx = lx + CW / 2, lab_y = y2 + 44, top = y2 + 58, cy = top + d / 2;
+        const bool show_cam = limit_speed > 0;           // camera / section / bump from the navigation or the built-in DB
+        if (show_cam || road_limit > 0) {
+            const char* lab = show_cam ? (bump ? "방지턱" : section ? "구간 단속" : "단속 속도") : "제한 속도";
+            optech_text(s, ccx, lab_y, lab, 44, show_cam ? COLOR_WHITE : label_c, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+            if (show_cam && bump) {
+                ui_draw_image(s, {(int)(ccx - d / 2), (int)top, (int)d, (int)d}, "ic_speed_bump", 1.0f);
             } else {
-                carrot_round_box(s, sx, top, sg, sg, nvgRGBA(250, 199, 117, 255), nvgRGBA(44, 44, 42, 255), 18, 6);
-                nvgBeginPath(s->vg); nvgRoundedRect(s->vg, sx - 4, top - 4, sg + 8, sg + 8, 21);
-                nvgStrokeColor(s->vg, COLOR_WHITE); nvgStrokeWidth(s->vg, 3); nvgStroke(s->vg);
-                snprintf(str, sizeof(str), "%d", metric ? limit_speed : (int)(limit_speed * KM_TO_MILE + 0.5));
-                float nfs = 96, tb[4];
+                const int v = show_cam ? limit_speed : road_limit;
+                nvgBeginPath(s->vg); nvgCircle(s->vg, ccx, cy, d / 2 + 4); nvgFillColor(s->vg, COLOR_WHITE); nvgFill(s->vg);  // thin white rim
+                nvgBeginPath(s->vg); nvgCircle(s->vg, ccx, cy, d / 2); nvgFillColor(s->vg, nvgRGBA(226, 75, 74, 255)); nvgFill(s->vg);
+                nvgBeginPath(s->vg); nvgCircle(s->vg, ccx, cy, d / 2 - 22);
+                nvgFillColor(s->vg, show_cam ? nvgRGBA(250, 199, 117, 255) : COLOR_WHITE); nvgFill(s->vg);
+                snprintf(str, sizeof(str), "%d", metric ? v : (int)(v * KM_TO_MILE + 0.5));
+                float nfs = 112, tb[4];  // 3-digit limits shrink to fit the disc
                 nvgFontFace(s->vg, BOLD);
                 nvgFontSize(s->vg, nfs);
                 nvgTextBounds(s->vg, 0, 0, str, NULL, tb);
-                if (tb[2] - tb[0] > sg - 24) nfs *= (sg - 24) / (tb[2] - tb[0]);
-                optech_text(s, ccx, top + sg / 2 + 0.36f * nfs - 6, str, nfs, nvgRGBA(44, 44, 42, 255), NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
-                optech_camera_icon(s, sx + sg - 26, top + 26, 19);  // small, inside the sign's top right corner
+                const float maxw = d - 2 * 22 - 24;
+                if (tb[2] - tb[0] > maxw) nfs *= maxw / (tb[2] - tb[0]);
+                optech_text(s, ccx, cy + 0.36f * nfs - 6 + (show_cam ? 10 : 0), str, nfs, nvgRGBA(44, 44, 42, 255), NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
+                if (show_cam) optech_camera_icon(s, ccx, top + 44, 17);  // small camera above the number
             }
-            if (left_dist > 0) {
+            if (show_cam && left_dist > 0) {
                 optech_dist_text(str, sizeof(str), left_dist, " 남음");
-                // whole cell wide (its right edge lines up with the set speed box), text as big as fits
-                // (user 2026-11-23: it was too small)
-                const float bw = cellw, bh = pill_h, btop = top + sg + 14;
+                const float btop = top + d + 16;
                 const float a = std::clamp((600.f - left_dist) / 600.f, 0.25f, 1.f);  // fills redder as it gets close
-                carrot_round_box(s, ccx - bw / 2, btop, bw, bh, nvgRGBA(226, 75, 74, (int)(255 * a)), COLOR_WHITE, 14, 3);
-                float fs = 48, tb[4];
+                carrot_round_box(s, ccx - pill_w / 2, btop, pill_w, pill_h, nvgRGBA(226, 75, 74, (int)(255 * a)), COLOR_WHITE, 14, 3);
+                float fs = 52, tb[4];
                 nvgFontFace(s->vg, BOLD);
                 nvgFontSize(s->vg, fs);
                 nvgTextBounds(s->vg, 0, 0, str, NULL, tb);
-                const float maxw = bw - 16;
-                if (tb[2] - tb[0] > maxw) fs *= maxw / (tb[2] - tb[0]);
-                optech_text_vc(s, ccx, btop + bh / 2, str, fs, COLOR_WHITE, NVG_ALIGN_CENTER);
+                if (tb[2] - tb[0] > pill_w - 20) fs *= (pill_w - 20) / (tb[2] - tb[0]);
+                optech_text_vc(s, ccx, btop + pill_h / 2, str, fs, COLOR_WHITE, NVG_ALIGN_CENTER);
             }
         }
     }
