@@ -301,7 +301,9 @@ class Controls:
       pass
     if self.sm['deviceState'].thermalStatus >= ThermalStatus.red:
       self.events.add(EventName.overheat)
-    if self.sm['deviceState'].freeSpacePercent < 7 and not SIMULATION:
+    # optech (2026-11-26): only from a real deviceState. With thermald stopped nothing arrives and the default 0 showed
+    # '저장 공간 부족 100% 사용 중' although the storage was fine (processNotRunning / commIssue name the real problem)
+    if self.sm.rcv_frame['deviceState'] and self.sm['deviceState'].freeSpacePercent < 7 and not SIMULATION:
       # under 7% of space free no enable allowed
       self.events.add(EventName.outOfSpace)
     # TODO: make tici threshold the same

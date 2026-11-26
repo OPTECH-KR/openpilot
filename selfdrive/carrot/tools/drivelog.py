@@ -321,14 +321,18 @@ class DriveLog:
     else:
       parts.append("- -")
     ds = self.last.get("deviceState")
+    # optech (2026-11-26): free storage measured here, so it is in the log even when thermald (deviceState) is down
+    try:
+      st = os.statvfs("/data")
+      free_gb = f"{st.f_bavail * st.f_frsize / 1e9:5.1f}"
+    except OSError:
+      free_gb = "-"
     if ds is not None:
       cpu = sum(ds.cpuUsagePercent) // len(ds.cpuUsagePercent) if len(ds.cpuUsagePercent) else 0
       temp = max(ds.cpuTempC) if len(ds.cpuTempC) else 0
-      st = os.statvfs("/data")
-      free_gb = st.f_bavail * st.f_frsize / 1e9
-      parts.append(f"{cpu:3d} {temp:4.0f} {ds.memoryUsagePercent:3d} {free_gb:5.1f}")
+      parts.append(f"{cpu:3d} {temp:4.0f} {ds.memoryUsagePercent:3d} {free_gb}")
     else:
-      parts.append("- - - -")
+      parts.append(f"- - - {free_gb}")
     parts.append(f"{ctl.cumLagMs:5.0f}" if ctl is not None else "-")
     if now - self.gnss_t < 3. or loc_alive:
       acc = f"{loc.accuracy:5.0f}" if fix else "    -"
