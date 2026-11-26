@@ -1238,52 +1238,71 @@ static void drawOptechHud(const UIState* s) {
         col_y += h + 16;
     }
 
-    // 4) ONE sign under the set speed, centred on the column (user 2026-11-25: "merge the two, one line down with the
-    //    set speed"), only with navigation data. Last in the column: coming and going moves nothing.
-    //    - camera ahead: yellow disc in a red ring, the enforced speed, a small camera, label 단속 속도 / 구간 단속,
-    //      "550m 남음" under it (redder as it gets close)
-    //    - speed bump: the bump picture, label 방지턱, the distance under it
-    //    - otherwise the road limit: white disc in a red ring, label 제한 속도
+    // 4) road limit | speed camera box under the set speed (user + testers 2026-11-26: the one big sign, d 330, was
+    //    too big, and it came and went with the data). Built like the set speed box and always there: two fixed
+    //    halves with a dotted line, left '제한속도' + a small road limit sign, right '단속속도' / '구간단속' / '방지턱'
+    //    + a small yellow camera sign (or the bump picture) and the distance left under it. Without data a half
+    //    shows a dim grey sign with '--' in the same place, so nothing comes and goes.
     {
-        // sign diameter (user 2026-11-25: 210 -> 260, 11-26: 330, near the set speed box width 370), red ring width,
-        // "550m 남음" box
-        const float d = 330, ring = 34, pill_h = 76, pill_w = 300;
-        const float y2 = col_y + 50;  // user 2026-11-25: "a little lower" than right under the set speed
-        const float ccx = lx + CW / 2, lab_y = y2 + 56, top = y2 + 72, cy = top + d / 2;  // label 44 -> 56 (user 2026-11-25)
-        const bool show_cam = limit_speed > 0;           // camera / section / bump from the navigation or the built-in DB
-        if (show_cam || road_limit > 0) {
-            const char* lab = show_cam ? (bump ? "방지턱" : section ? "구간 단속" : "단속 속도") : "제한 속도";
-            optech_text(s, ccx, lab_y, lab, 56, show_cam ? COLOR_WHITE : label_c, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
-            if (show_cam && bump) {
-                ui_draw_image(s, {(int)(ccx - d / 2), (int)top, (int)d, (int)d}, "ic_speed_bump", 1.0f);
-            } else {
-                const int v = show_cam ? limit_speed : road_limit;
-                nvgBeginPath(s->vg); nvgCircle(s->vg, ccx, cy, d / 2 + 4); nvgFillColor(s->vg, COLOR_WHITE); nvgFill(s->vg);  // thin white rim
-                nvgBeginPath(s->vg); nvgCircle(s->vg, ccx, cy, d / 2); nvgFillColor(s->vg, nvgRGBA(226, 75, 74, 255)); nvgFill(s->vg);
-                nvgBeginPath(s->vg); nvgCircle(s->vg, ccx, cy, d / 2 - ring);
-                nvgFillColor(s->vg, show_cam ? nvgRGBA(250, 199, 117, 255) : COLOR_WHITE); nvgFill(s->vg);
-                snprintf(str, sizeof(str), "%d", metric ? v : (int)(v * KM_TO_MILE + 0.5));
-                float nfs = 175, tb[4];  // 3-digit limits shrink to fit the disc
-                nvgFontFace(s->vg, BOLD);
-                nvgFontSize(s->vg, nfs);
-                nvgTextBounds(s->vg, 0, 0, str, NULL, tb);
-                const float maxw = d - 2 * ring - 34;
-                if (tb[2] - tb[0] > maxw) nfs *= maxw / (tb[2] - tb[0]);
-                optech_text(s, ccx, cy + 0.36f * nfs - 8 + (show_cam ? 15 : 0), str, nfs, nvgRGBA(44, 44, 42, 255), NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
-                if (show_cam) optech_camera_icon(s, ccx, top + 68, 27);  // small camera above the number
-            }
-            if (show_cam && left_dist > 0) {
-                optech_dist_text(str, sizeof(str), left_dist, " 남음");
-                const float btop = top + d + 16;
-                const float a = std::clamp((600.f - left_dist) / 600.f, 0.25f, 1.f);  // fills redder as it gets close
-                carrot_round_box(s, ccx - pill_w / 2, btop, pill_w, pill_h, nvgRGBA(226, 75, 74, (int)(255 * a)), COLOR_WHITE, 14, 3);
-                float fs = 52, tb[4];
-                nvgFontFace(s->vg, BOLD);
-                nvgFontSize(s->vg, fs);
-                nvgTextBounds(s->vg, 0, 0, str, NULL, tb);
-                if (tb[2] - tb[0] > pill_w - 20) fs *= (pill_w - 20) / (tb[2] - tb[0]);
-                optech_text_vc(s, ccx, btop + pill_h / 2, str, fs, COLOR_WHITE, NVG_ALIGN_CENTER);
-            }
+        const float bw = CW, bh = 250, bpad = 22, bt = col_y;
+        carrot_round_box(s, lx, bt, bw, bh, nvgRGBA(20, 20, 20, 170), nvgRGBA(235, 235, 235, 200), 18, 3);
+        const float bhalf = (bw - 2 * bpad - 20) / 2;
+        const float sc1 = lx + bpad + bhalf / 2, sc2 = lx + bw - bpad - bhalf / 2;
+        nvgBeginPath(s->vg);
+        for (float dy = bt + 20; dy <= bt + bh - 20; dy += 13) nvgCircle(s->vg, lx + bw / 2, dy, 2.6f);
+        nvgFillColor(s->vg, nvgRGBA(255, 255, 255, 150));
+        nvgFill(s->vg);
+        const float sd = 128, sring = 14, scy = bt + 66 + sd / 2;  // sign diameter, red ring width, sign centre
+        const NVGcolor dim = nvgRGBA(255, 255, 255, 110);
+        // a round sign at x: sv > 0 -> red ring, inner colour, the number (a small camera on top for a camera);
+        // sv <= 0 -> dim grey sign with '--'
+        auto round_sign = [&](float sx, int sv, NVGcolor sinner, bool scam) {
+            const bool lit = sv > 0;
+            nvgBeginPath(s->vg); nvgCircle(s->vg, sx, scy, sd / 2 + 3);
+            nvgFillColor(s->vg, lit ? COLOR_WHITE : nvgRGBA(255, 255, 255, 60)); nvgFill(s->vg);
+            nvgBeginPath(s->vg); nvgCircle(s->vg, sx, scy, sd / 2);
+            nvgFillColor(s->vg, lit ? nvgRGBA(226, 75, 74, 255) : nvgRGBA(120, 120, 120, 120)); nvgFill(s->vg);
+            nvgBeginPath(s->vg); nvgCircle(s->vg, sx, scy, sd / 2 - sring);
+            nvgFillColor(s->vg, lit ? sinner : nvgRGBA(70, 70, 70, 140)); nvgFill(s->vg);
+            char nb[16];
+            if (lit) snprintf(nb, sizeof(nb), "%d", metric ? sv : (int)(sv * KM_TO_MILE + 0.5));
+            else snprintf(nb, sizeof(nb), "--");
+            float sfs = 70, sbb[4];
+            nvgFontFace(s->vg, BOLD);
+            nvgFontSize(s->vg, sfs);
+            nvgTextBounds(s->vg, 0, 0, nb, NULL, sbb);
+            const float smax = sd - 2 * sring - 16;
+            if (sbb[2] - sbb[0] > smax) sfs *= smax / (sbb[2] - sbb[0]);
+            optech_text(s, sx, scy + 0.36f * sfs - 6 + (lit && scam ? 9 : 0), nb, sfs,
+                        lit ? nvgRGBA(44, 44, 42, 255) : nvgRGBA(200, 200, 200, 150), NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
+            if (lit && scam) optech_camera_icon(s, sx, scy - sd / 2 + sring + 13, 11);
+        };
+        const bool show_cam = limit_speed > 0;  // camera / section / bump from the navigation or the built-in DB
+        const char* rlab = bump ? "방지턱" : section ? "구간단속" : "단속속도";
+        // labels: the same size on both sides, shrunk only to fit a half
+        float slab_fs = 44, lbb[4];
+        nvgFontFace(s->vg, BOLD);
+        nvgFontSize(s->vg, slab_fs);
+        nvgTextBounds(s->vg, 0, 0, "제한속도", NULL, lbb);
+        float lw = lbb[2] - lbb[0];
+        nvgTextBounds(s->vg, 0, 0, rlab, NULL, lbb);
+        lw = std::max(lw, lbb[2] - lbb[0]);
+        if (lw > bhalf) slab_fs *= bhalf / lw;
+        optech_text(s, sc1, bt + 54, "제한속도", slab_fs, road_limit > 0 ? label_c : dim, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+        optech_text(s, sc2, bt + 54, rlab, slab_fs, show_cam ? COLOR_WHITE : dim, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+        round_sign(sc1, road_limit, COLOR_WHITE, false);
+        if (show_cam && bump) {
+            ui_draw_image(s, {(int)(sc2 - sd / 2), (int)(scy - sd / 2), (int)sd, (int)sd}, "ic_speed_bump", 1.0f);
+        } else {
+            round_sign(sc2, show_cam ? limit_speed : 0, nvgRGBA(250, 199, 117, 255), true);
+        }
+        if (show_cam && left_dist > 0) {  // distance left, redder when close
+            optech_dist_text(str, sizeof(str), left_dist, " 남음");
+            float dfs = 34, dbb[4];
+            nvgFontSize(s->vg, dfs);
+            nvgTextBounds(s->vg, 0, 0, str, NULL, dbb);
+            if (dbb[2] - dbb[0] > bhalf) dfs *= bhalf / (dbb[2] - dbb[0]);
+            optech_text_vc(s, sc2, bt + bh - 26, str, dfs, left_dist < 200 ? nvgRGBA(255, 120, 110, 255) : COLOR_WHITE, NVG_ALIGN_CENTER);
         }
     }
 
