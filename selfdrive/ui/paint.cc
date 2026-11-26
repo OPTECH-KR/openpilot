@@ -1207,60 +1207,34 @@ static void drawOptechHud(const UIState* s) {
         // (tester 2026-11-26)
         const bool slowing = enabled && longActiveUser > 0 && applyMaxSpeed > 0 && applyMaxSpeed + 0.5f < cruiseMaxSpeed &&
                              cur_speed >= 3.f;
-        snprintf(hold_s, sizeof(hold_s), "%d", (int)(applyMaxSpeed * (metric ? 1.0 : KM_TO_MILE) + 0.5));
-        float fs_set = 150, fs_hold = 110, b1[4], b2[4];
+        if (slowing) snprintf(hold_s, sizeof(hold_s), "%d", (int)(applyMaxSpeed * (metric ? 1.0 : KM_TO_MILE) + 0.5));
+        else snprintf(hold_s, sizeof(hold_s), "--");
+        // fixed layout (user 2026-11-26): left half '설정속도' + the set speed, a dotted line in the middle, right half
+        // '감속목표' + the speed openpilot is slowing to for a camera / curve (was '감속 중'; yellow while slowing, a dim
+        // '--' otherwise). Each label is centred over its number in its half and only shrinks to fit the half, so
+        // nothing moves when the target comes and goes. Both numbers share one baseline.
+        const float half = (w - 2 * pad - 20) / 2;  // 20: room for the dotted line
+        const float c1 = lx + pad + half / 2, c2 = lx + w - pad - half / 2, dot_x = lx + w / 2;
         nvgFontFace(s->vg, BOLD);
-        nvgFontSize(s->vg, fs_set);
-        nvgTextBounds(s->vg, 0, 0, set_s, NULL, b1);
-        float need = b1[2] - b1[0];
-        if (slowing) {
-            nvgFontSize(s->vg, fs_hold);
-            nvgTextBounds(s->vg, 0, 0, hold_s, NULL, b2);
-            need += (b2[2] - b2[0]) + 30;
-        }
-        if (need > w - 2 * pad) { const float k = (w - 2 * pad) / need; fs_set *= k; fs_hold *= k; }
-        // labels: '설정 속도' left, '감속 목표' right while slowing (user 2026-11-26: was '감속 중', read as 'slowing now'
-        // even at 0 km/h; the yellow number is the speed openpilot is slowing to). Written without the space then
-        // ('설정속도' / '감속목표', user: fine when they would collide); both shrink together only if still too wide
-        const char* set_lab = slowing ? "설정속도" : "설정 속도";
-        const char* hold_lab = "감속목표";
-        float lab_fs = 44, lb1[4], lb2[4];
-        if (slowing) {
-            nvgFontSize(s->vg, lab_fs);
-            nvgTextBounds(s->vg, 0, 0, set_lab, NULL, lb1);
-            nvgTextBounds(s->vg, 0, 0, hold_lab, NULL, lb2);
-            const float lab_need = (lb1[2] - lb1[0]) + (lb2[2] - lb2[0]) + 18;
-            if (lab_need > w - 2 * pad) lab_fs *= (w - 2 * pad) / lab_need;
-        }
-        // two columns, each label centred over its number (user 2026-11-26: '설정속도' / '110' and '감속목표' / '100'
-        // did not line up - left / right aligned text starts at the glyph box, and a '1' sits inside a wide box).
-        // Column = the wider of label and number; set speed on the left edge, the target on the right edge
-        float sb[4];
-        nvgFontSize(s->vg, lab_fs);
-        nvgTextBounds(s->vg, 0, 0, set_lab, NULL, sb);
-        float col1 = sb[2] - sb[0], col2 = 0;
-        nvgFontSize(s->vg, fs_set);
-        nvgTextBounds(s->vg, 0, 0, set_s, NULL, sb);
-        col1 = std::max(col1, sb[2] - sb[0]);
-        if (slowing) {
-            nvgFontSize(s->vg, lab_fs);
-            nvgTextBounds(s->vg, 0, 0, hold_lab, NULL, sb);
-            col2 = sb[2] - sb[0];
-            nvgFontSize(s->vg, fs_hold);
-            nvgTextBounds(s->vg, 0, 0, hold_s, NULL, sb);
-            col2 = std::max(col2, sb[2] - sb[0]);
-            const float avail = w - 2 * pad, cols = col1 + col2 + 12;
-            if (cols > avail) { const float k = avail / cols; lab_fs *= k; fs_set *= k; fs_hold *= k; col1 *= k; col2 *= k; }
-        }
-        const float c1 = lx + pad + col1 / 2, c2 = lx + w - pad - col2 / 2;
-        optech_text(s, c1, col_y + 58, set_lab, lab_fs, txt, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
-        // both numbers on one baseline (was bottom-aligned with a 6 px nudge for the smaller one)
+        auto fit = [&](const char* t, float fsz) {
+            float bb[4];
+            nvgFontSize(s->vg, fsz);
+            nvgTextBounds(s->vg, 0, 0, t, NULL, bb);
+            const float tw = bb[2] - bb[0];
+            return tw > half ? fsz * half / tw : fsz;
+        };
+        const float lab_fs = std::min(fit("설정속도", 44), fit("감속목표", 44));
+        const float fs_set = fit(set_s, 150), fs_hold = fit(hold_s, 110);
+        nvgBeginPath(s->vg);
+        for (float dy = col_y + 20; dy <= col_y + h - 20; dy += 13) nvgCircle(s->vg, dot_x, dy, 2.6f);
+        nvgFillColor(s->vg, nvgRGBA(255, 255, 255, 150));
+        nvgFill(s->vg);
+        const NVGcolor hold_c = slowing ? nvgRGBA(250, 199, 117, 255) : nvgRGBA(255, 255, 255, 110);
         const float num_base = col_y + h - 42;
+        optech_text(s, c1, col_y + 58, "설정속도", lab_fs, txt, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
         optech_text(s, c1, num_base, set_s, fs_set, txt, NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
-        if (slowing) {
-            optech_text(s, c2, col_y + 58, hold_lab, lab_fs, nvgRGBA(250, 199, 117, 255), NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
-            optech_text(s, c2, num_base, hold_s, fs_hold, nvgRGBA(250, 199, 117, 255), NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
-        }
+        optech_text(s, c2, col_y + 58, "감속목표", lab_fs, hold_c, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+        optech_text(s, c2, num_base, hold_s, fs_hold, hold_c, NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
         col_y += h + 16;
     }
 
