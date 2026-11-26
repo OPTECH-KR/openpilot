@@ -160,6 +160,7 @@ def manager_init() -> None:
     ("OptechSettingsTimeout", "180"),  # 화면 > 화면 유지 시간 (seconds, -1 항상)
     ("OptechDriveDim", "0"),  # 화면 > 주행 중 밝기 (%, 0 off)
     ("OptechShowRecordBtn", "0"),  # 화면 > 녹화 버튼 (0 hidden)
+    ("OptechShowGpsSpeed", "1"),  # 화면 > GPS 속도 (설정 속도 칸 오른쪽, 1 shown)
     ("OptechLatMethod", "0"),
     ("OptechPidKp", "25"),
     ("OptechPidKi", "40"),
