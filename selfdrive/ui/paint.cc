@@ -1197,7 +1197,6 @@ static void drawOptechHud(const UIState* s) {
             txt = nvgRGBA(180, 178, 169, 255);
         }
         if (draw) carrot_round_box(s, lx, col_y, w, h, fill, line, 18, 3);
-        optech_text(s, lx + pad, col_y + 58, "설정 속도", 44, txt, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
         char set_s[16], hold_s[16];
         if (enabled && cruiseMaxSpeed > 0 && cruiseMaxSpeed < 255) {
             snprintf(set_s, sizeof(set_s), "%d", (int)(cruiseMaxSpeed * (metric ? 1.0 : KM_TO_MILE) + 0.5));
@@ -1220,9 +1219,23 @@ static void drawOptechHud(const UIState* s) {
             need += (b2[2] - b2[0]) + 30;
         }
         if (need > w - 2 * pad) { const float k = (w - 2 * pad) / need; fs_set *= k; fs_hold *= k; }
+        // labels: '설정 속도' left, '감속 목표' right while slowing (user 2026-11-26: was '감속 중', read as 'slowing now'
+        // even at 0 km/h; the yellow number is the speed openpilot is slowing to). Written without the space then
+        // ('설정속도' / '감속목표', user: fine when they would collide); both shrink together only if still too wide
+        const char* set_lab = slowing ? "설정속도" : "설정 속도";
+        const char* hold_lab = "감속목표";
+        float lab_fs = 44, lb1[4], lb2[4];
+        if (slowing) {
+            nvgFontSize(s->vg, lab_fs);
+            nvgTextBounds(s->vg, 0, 0, set_lab, NULL, lb1);
+            nvgTextBounds(s->vg, 0, 0, hold_lab, NULL, lb2);
+            const float lab_need = (lb1[2] - lb1[0]) + (lb2[2] - lb2[0]) + 18;
+            if (lab_need > w - 2 * pad) lab_fs *= (w - 2 * pad) / lab_need;
+        }
+        optech_text(s, lx + pad, col_y + 58, set_lab, lab_fs, txt, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
         optech_text(s, lx + pad, col_y + h - 12, set_s, fs_set, txt, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
         if (slowing) {
-            optech_text(s, lx + w - pad, col_y + 58, "감속 중", 44, nvgRGBA(250, 199, 117, 255), NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
+            optech_text(s, lx + w - pad, col_y + 58, hold_lab, lab_fs, nvgRGBA(250, 199, 117, 255), NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
             optech_text(s, lx + w - pad, col_y + h - 18, hold_s, fs_hold, nvgRGBA(250, 199, 117, 255), NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
         }
         col_y += h + 16;
