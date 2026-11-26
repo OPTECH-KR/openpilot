@@ -53,14 +53,40 @@ def vision_on_track(t, lead_msg):
   return abs(t.dRel - cam_d) <= max(VISION_SUPPORT_MIN_DIST_M, 0.2 * cam_d) and abs(t.yRel + lead_msg.y[0]) <= VISION_SUPPORT_MAX_Y
 
 
-def shielded_stationary(c, lead):
+# optech ghost guard, Kia Soul EV SK3 only (2026-11-26 18:42, tester dashcam): crawling at 7 km/h on a bridge 8 m behind
+# a van, the Mando radar reported a stationary point 1.7 m ahead for under a second - the steel expansion joint across
+# the road right in front of the bumper. The low-speed override took it: FCW '브레이크! 충돌 위험' and 7 -> 2 km/h in a
+# second. carrot c3-wip runs leadOne with low_speed_override=False altogether; here the safety net stays, but on the Soul
+#  1) a stationary point first measured already this close (never seen coming from farther away), while we move, is not
+#     taken by the low-speed override until the camera's lead has sat on it SHIELD_VISION_FRAMES frames in a row
+#  2) the moving-lead shield also works behind a crawling lead (jam: the van moved 1.6-1.9 m/s, close to 1.5)
+GHOST_GUARD_CAR = "KIA SOUL EV (SK3)"  # selfdrive/car/hyundai/values.py CAR.KIA_SOUL_EV_SK3
+GHOST_BORN_MAX_D = 5.0                # [m] first measured closer than this: a road-level reflection, not a car we reach
+GHOST_MIN_EGO = 0.5                   # [m/s] only while we move (stopped, a point in front keeps us stopped)
+CRAWL_LEAD_MIN_VLEAD = 0.5            # [m/s] shielding lead speed on the Soul (default SHIELD_LEAD_MIN_VLEAD 1.5)
+CRAWL_LEAD_MIN_SPEED_GAP = 0.5        # [m/s] ... and that much faster than the point (default 1.0)
+
+
+def near_born_stationary(c, v_ego):
+  """Ghost guard 1): c is stationary, all its tracks were first measured within GHOST_BORN_MAX_D, we move, and the
+  camera has not confirmed it."""
+  return (v_ego > GHOST_MIN_EGO
+          and abs(c.vLead) <= SHIELD_STATIONARY_MAX_VLEAD
+          and max(t.first_d if t.first_d is not None else t.dRel for t in c.tracks) < GHOST_BORN_MAX_D
+          and max(t.vision_frames for t in c.tracks) < SHIELD_VISION_FRAMES)
+
+
+def shielded_stationary(c, lead, crawl=False):
   """carrot-wip moving-lead shield: c is a stationary radar point clearly closer than lead = (dRel, vLead, yRel) of a
-  moving lead in our lane, and the camera has not confirmed c for SHIELD_VISION_FRAMES frames. lead None: no shield."""
+  moving lead in our lane, and the camera has not confirmed c for SHIELD_VISION_FRAMES frames. lead None: no shield.
+  crawl (ghost guard 2, Soul only): the lead only has to be crawling."""
   if lead is None:
     return False
   d, v, y = lead
+  min_v = CRAWL_LEAD_MIN_VLEAD if crawl else SHIELD_LEAD_MIN_VLEAD
+  min_gap = CRAWL_LEAD_MIN_SPEED_GAP if crawl else SHIELD_LEAD_MIN_SPEED_GAP
   return (abs(c.vLead) <= SHIELD_STATIONARY_MAX_VLEAD
-          and v >= SHIELD_LEAD_MIN_VLEAD and v - c.vLead >= SHIELD_LEAD_MIN_SPEED_GAP
+          and v >= min_v and v - c.vLead >= min_gap
           and abs(y) <= SHIELD_LEAD_MAX_Y
           and c.dRel + SHIELD_MIN_GAP_M < d <= c.dRel + SHIELD_MAX_GAP_M
           and max(t.vision_frames for t in c.tracks) < SHIELD_VISION_FRAMES)
@@ -223,13 +249,15 @@ def get_path_adjacent_leads(v_ego, md, lane_width, clusters):
   return [ll,lc,lr]
 
 def get_lead(v_ego, ready, clusters, lead_msg, model_v_ego, low_speed_override=True, mixRadarInfo=0, raw_tracks=False,
-             blocked=None, sticky_path=None, sticky_used=None):
+             blocked=None, sticky_path=None, sticky_used=None, ghost_guard=False, low_log=None):
   # optech raw radar tracks: stationary points shielded by the camera's moving lead may not be its radar match
-  # (blocked collects them for the diag log)
+  # (blocked collects them for the diag log). ghost_guard: Soul EV SK3 rules above (raw tracks only), low_log collects
+  # what the low-speed override did for the diag log
+  ghost_guard = ghost_guard and raw_tracks
   match_clusters = clusters
   if raw_tracks and ready and lead_msg.prob > .5:
     cam = (lead_msg.x[0] - RADAR_TO_CAMERA, lead_msg.v[0], -lead_msg.y[0])
-    match_clusters = [c for c in clusters if not shielded_stationary(c, cam)]
+    match_clusters = [c for c in clusters if not shielded_stationary(c, cam, crawl=ghost_guard)]
     if blocked is not None:
       blocked += [(c, cam) for c in clusters if c not in match_clusters]
 
@@ -273,24 +301,34 @@ def get_lead(v_ego, ready, clusters, lead_msg, model_v_ego, low_speed_override=T
       shield = (lead_dict['dRel'], lead_dict['vLead'], lead_dict['yRel']) if lead_dict['status'] else None
       candidates = [c for c in low_speed_clusters if raw_seen_enough(c)]
       if blocked is not None and shield is not None:
-        blocked += [(c, shield) for c in candidates if shielded_stationary(c, shield)]
-      low_speed_clusters = [c for c in candidates if not shielded_stationary(c, shield)]
+        blocked += [(c, shield) for c in candidates if shielded_stationary(c, shield, crawl=ghost_guard)]
+      low_speed_clusters = [c for c in candidates if not shielded_stationary(c, shield, crawl=ghost_guard)]
+      if ghost_guard:
+        ghosts = [c for c in low_speed_clusters if near_born_stationary(c, v_ego)]
+        if low_log is not None:
+          low_log += [("ghost", c, shield) for c in ghosts if not lead_dict['status'] or c.dRel < lead_dict['dRel']]
+        low_speed_clusters = [c for c in low_speed_clusters if c not in ghosts]
     if len(low_speed_clusters) > 0:
       closest_cluster = min(low_speed_clusters, key=lambda c: c.dRel)
 
       # Only choose new cluster if it is actually closer than the previous one
       if (not lead_dict['status']) or (closest_cluster.dRel < lead_dict['dRel']):
+        if low_log is not None and ghost_guard:
+          low_log.append(("took", closest_cluster, (lead_dict['dRel'], lead_dict['vLead'], lead_dict['yRel'])
+                          if lead_dict['status'] else None))
         lead_dict = closest_cluster.get_RadarState2(lead_msg.prob, lead_msg, mixRadarInfo)
 
   return lead_dict
 
 
 class RadarD():
-  def __init__(self, radar_ts, delay=0, raw_tracks=False):
+  def __init__(self, radar_ts, delay=0, raw_tracks=False, ghost_guard=False):
     self.current_time = 0
     self.raw_tracks = raw_tracks  # optech: Mando front radar tracks (lead shield + seen-3-frames rule)
+    self.ghost_guard = ghost_guard and raw_tracks  # optech: Soul EV SK3 only (GHOST_GUARD_CAR)
     self.last_block_log = 0.
     self.last_sticky_log = 0.
+    self.last_low_log = 0.
 
     self.tracks = defaultdict(dict)
     self.kalman_params = KalmanParams(radar_ts)
@@ -388,8 +426,20 @@ class RadarD():
       pos = sm['modelV2'].position
       path = (list(pos.x), list(pos.y)) if self.ready and len(pos.x) == TRAJECTORY_SIZE else None
       sticky_used = []
+      low_log = []
       radarState.leadOne = get_lead(self.v_ego, self.ready, clusters, leads_v3[0], model_v_ego, low_speed_override=True, mixRadarInfo=self.mixRadarInfo,
-                                    raw_tracks=self.raw_tracks, blocked=blocked, sticky_path=path, sticky_used=sticky_used)
+                                    raw_tracks=self.raw_tracks, blocked=blocked, sticky_path=path, sticky_used=sticky_used,
+                                    ghost_guard=self.ghost_guard, low_log=low_log)
+      if low_log and self.current_time - self.last_low_log >= 1.0:
+        # ghost guard 3): why the low-speed override took a radar point, or which one it ignored as a ghost
+        self.last_low_log = self.current_time
+        what, c, lead = low_log[0]
+        t = max(c.tracks, key=lambda t: t.seen)
+        first = max(tr.first_d if tr.first_d is not None else tr.dRel for tr in c.tracks)
+        lead_txt = "none" if lead is None else "d=%.1f v=%.1f y=%.1f" % lead
+        diag_write(f"radar low-speed {'ghost ignored' if what == 'ghost' else 'took point'}: d={c.dRel:.1f} y={c.yRel:.1f} "
+                   f"v={c.vLead:.1f} first_d={first:.1f} seen={t.seen} cam={t.vision_frames} (lead {lead_txt}, "
+                   f"ego {self.v_ego:.1f} m/s)")
       if sticky_used and self.current_time - self.last_sticky_log >= 1.0:
         self.last_sticky_log = self.current_time
         c, match_d, cam_d = sticky_used[0]
@@ -468,7 +518,11 @@ def radard_thread(sm=None, pm=None, can_sock=None):
     pm = messaging.PubMaster(['radarState', 'liveTracks'])
 
   rk = Ratekeeper(1.0 / CP.radarTimeStep, print_delay_threshold=None)
-  RD = RadarD(CP.radarTimeStep, RI.delay, raw_tracks=bool(getattr(RI, "new_radar", False)))
+  raw_tracks = bool(getattr(RI, "new_radar", False))
+  ghost_guard = raw_tracks and CP.carFingerprint == GHOST_GUARD_CAR
+  RD = RadarD(CP.radarTimeStep, RI.delay, raw_tracks=raw_tracks, ghost_guard=ghost_guard)
+  if ghost_guard:
+    diag_write(f"radar ghost guard on ({CP.carFingerprint}): near-born stationary points and crawling-lead shield")
   last_diag = None
 
   while 1:

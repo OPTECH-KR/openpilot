@@ -721,6 +721,7 @@ UIState::UIState(QObject *parent) : QObject(parent) {
     "wideRoadCameraState", "managerState", "navInstruction", "navRoute", "uiPlan",
     "lateralPlan", "longitudinalPlan", "gpsLocationExternal", "carControl", "liveParameters", "roadLimitSpeed",
     "liveTorqueParameters", "sensorEvents", "ubloxGnss",
+    "peripheralState",  // optech: sidebar '전압' (car battery voltage, like optech-spst)
   });
 
   Params params;
@@ -747,6 +748,7 @@ void UIState::update() {
     settings_timeout_s = std::atoi(params.get("OptechSettingsTimeout").c_str());
     drive_dim = std::atoi(params.get("OptechDriveDim").c_str());
     show_record_btn = params.getBool("OptechShowRecordBtn");
+    show_gps_speed = params.getBool("OptechShowGpsSpeed");
     radar_tracks = params.getBool("EnableRadarTracks");
     path_offset = std::atoi(params.get("PathOffset").c_str());
   }
@@ -817,11 +819,21 @@ void Device::updateBrightness(const UIState &s) {
   }
 
   // optech '주행 중 밝기' (화면 탭): while driving, after 30 s without a touch fade down to this % (never brighter
-  // than the auto brightness). A touch or a warning brings it back at once
-  const bool want_dim = s.scene.started && s.drive_dim > 0 && idle_frames >= 30 * UI_FREQ &&
+  // than the auto brightness), -1 '화면 밝기 0%': backlight off. A touch or a warning brings it back at once.
+  // Soul EV tester / user 2026-11-26: only in D - N / P / R are always full brightness, and the 30 s start again
+  // after shifting back to D (a gear the car does not report counts as D, so the feature still works there)
+  bool driving_gear = true;
+  if (s.scene.started && s.drive_dim != 0) {
+    const auto gear = (*s.sm)["carState"].getCarState().getGearShifter();
+    driving_gear = gear != cereal::CarState::GearShifter::PARK && gear != cereal::CarState::GearShifter::REVERSE &&
+                   gear != cereal::CarState::GearShifter::NEUTRAL;
+    if (!driving_gear) idle_frames = 0;
+  }
+  const bool want_dim = s.scene.started && s.drive_dim != 0 && driving_gear && idle_frames >= 30 * UI_FREQ &&
                         s.status != STATUS_WARNING && s.status != STATUS_ALERT;
   if (want_dim) {
-    clipped_brightness = std::min(clipped_brightness, (float)s.drive_dim);
+    clipped_brightness = s.drive_dim < 0 ? 0.f : std::min(clipped_brightness, (float)s.drive_dim);
+    if (s.drive_dim < 0) brightness_filter.reset(0.f);  // '화면 밝기 0%': off at once, not a 40 s fade
   } else if (dimmed) {
     brightness_filter.reset(clipped_brightness);
   }

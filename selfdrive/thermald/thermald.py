@@ -94,6 +94,37 @@ def set_offroad_alert_if_changed(offroad_alert: str, show_alert: bool, extra_tex
   set_offroad_alert(offroad_alert, show_alert, extra_text)
 
 
+# optech (2026-11-26): thermald's work runs in threads, and an exception there never reached the manager's launcher
+# (which keeps python crashes in /data/drivelog/crash-*.txt): the thread just ended and the process exited with 0, with
+# no traceback anywhere on a C2. Same file naming as selfdrive/manager/process.py so the drive log page lists them.
+# Each different error is kept once, at most a few files per run
+crash_seen: set = set()
+
+def save_crash(where: str) -> None:
+  import traceback
+  text = traceback.format_exc()
+  cloudlog.exception(f"thermald {where} error")
+  if text in crash_seen or len(crash_seen) >= 5:
+    return
+  crash_seen.add(text)
+  try:
+    os.makedirs("/data/drivelog", exist_ok=True)
+    with open(f"/data/drivelog/crash-{datetime.datetime.now():%Y%m%d-%H%M%S}-thermald-{where}.txt", "w") as f:
+      f.write(text)
+  except Exception:
+    pass
+
+
+def guarded(target, where: str):
+  def run(*args):
+    try:
+      target(*args)
+    except Exception:
+      save_crash(where)
+      raise
+  return run
+
+
 def hw_state_thread(end_event, hw_queue):
   """Handles non critical hardware state, and sends over queue"""
   count = 0
@@ -230,263 +261,272 @@ def thermald_thread(end_event, hw_queue):
   #  battery_charging_max = int(params.get("OpkrBatteryChargingMax", encoding="utf8"))
 
   while not end_event.is_set():
-    ts = sec_since_boot()
-    sm.update(PANDA_STATES_TIMEOUT)
-
-    pandaStates = sm['pandaStates']
-    peripheralState = sm['peripheralState']
-
-    msg = read_thermal(thermal_config)
-
-    # neokii
-    if sec_since_boot() - restart_triggered_ts < 5.:
-      onroad_conditions["not_restart_triggered"] = False
-    else:
-      onroad_conditions["not_restart_triggered"] = True
-
-      if params.get_bool("SoftRestartTriggered"):
-        params.put_bool("SoftRestartTriggered", False)
-        restart_triggered_ts = sec_since_boot()
-
-    if sm.updated['pandaStates'] and len(pandaStates) > 0:
-
-      # Set ignition based on any panda connected
-      onroad_conditions["ignition"] = any(ps.ignitionLine or ps.ignitionCan for ps in pandaStates if ps.pandaType != log.PandaState.PandaType.unknown)
-
-      pandaState = pandaStates[0]
-
-      if pandaState.pandaType != log.PandaState.PandaType.unknown:
-        panda_state_ts = sec_since_boot()
-
-      in_car = pandaState.harnessStatus != log.PandaState.HarnessStatus.notConnected
-      usb_power = peripheralState.usbPowerMode != log.PeripheralState.UsbPowerMode.client
-
-      # Setup fan handler on first connect to panda
-      if fan_controller is None and peripheralState.pandaType != log.PandaState.PandaType.unknown:
-        is_uno = peripheralState.pandaType == log.PandaState.PandaType.uno
-
-        if TICI:
-          fan_controller = TiciFanController()
-        elif is_uno or PC:
-          fan_controller = UnoFanController()
-        else:
-          fan_controller = EonFanController()
-    #sunny
-    #elif params.get_bool("IsOpenpilotViewEnabled") and is_openpilot_view_enabled == 0:
-    #  is_openpilot_view_enabled = 1
-    #  onroad_conditions["ignition"] = True
-    #elif not params.get_bool("IsOpenpilotViewEnabled") and is_openpilot_view_enabled == 1:
-    #  is_openpilot_view_enabled = 0
-    #  onroad_conditions["ignition"] = False  
-    #elif not params.get_bool("IsOpenpilotViewEnabled"):
-    #  if sec_since_boot() - panda_state_ts > 3.:
-    #    if onroad_conditions["ignition"]:
-    #      cloudlog.error("Lost panda connection while onroad")
-    #    onroad_conditions["ignition"] = False
-    if sec_since_boot() - panda_state_ts > 3.:
-      if onroad_conditions["ignition"]:
-        cloudlog.error("Lost panda connection while onroad")
-      onroad_conditions["ignition"] = False
-
     try:
-      last_hw_state = hw_queue.get_nowait()
-    except queue.Empty:
-      pass
+      ts = sec_since_boot()
+      sm.update(PANDA_STATES_TIMEOUT)
 
-    msg.deviceState.freeSpacePercent = get_available_percent(default=100.0)
-    msg.deviceState.memoryUsagePercent = int(round(psutil.virtual_memory().percent))
-    msg.deviceState.cpuUsagePercent = [int(round(n)) for n in psutil.cpu_percent(percpu=True)]
-    msg.deviceState.gpuUsagePercent = int(round(HARDWARE.get_gpu_usage_percent()))
+      pandaStates = sm['pandaStates']
+      peripheralState = sm['peripheralState']
 
-    msg.deviceState.networkType = last_hw_state.network_type
-    msg.deviceState.networkMetered = last_hw_state.network_metered
-    msg.deviceState.networkStrength = last_hw_state.network_strength
-    if last_hw_state.network_info is not None:
-      msg.deviceState.networkInfo = last_hw_state.network_info
+      msg = read_thermal(thermal_config)
 
-    msg.deviceState.nvmeTempC = last_hw_state.nvme_temps
-    msg.deviceState.modemTempC = last_hw_state.modem_temps
-    msg.deviceState.wifiIpAddress = last_hw_state.wifi_address
+      # neokii
+      if sec_since_boot() - restart_triggered_ts < 5.:
+        onroad_conditions["not_restart_triggered"] = False
+      else:
+        onroad_conditions["not_restart_triggered"] = True
 
-    msg.deviceState.screenBrightnessPercent = HARDWARE.get_screen_brightness()
-    msg.deviceState.batteryPercent = HARDWARE.get_battery_capacity()
-    msg.deviceState.batteryCurrent = HARDWARE.get_battery_current()
-    msg.deviceState.usbOnline = HARDWARE.get_usb_present()
-    current_filter.update(msg.deviceState.batteryCurrent / 1e6)
+        if params.get_bool("SoftRestartTriggered"):
+          params.put_bool("SoftRestartTriggered", False)
+          restart_triggered_ts = sec_since_boot()
 
-    max_comp_temp = temp_filter.update(
-      max(max(msg.deviceState.cpuTempC), msg.deviceState.memoryTempC, max(msg.deviceState.gpuTempC))
-    )
+      if sm.updated['pandaStates'] and len(pandaStates) > 0:
 
-    if fan_controller is not None:
-      msg.deviceState.fanSpeedPercentDesired = fan_controller.update(max_comp_temp, onroad_conditions["ignition"])
+        # Set ignition based on any panda connected
+        onroad_conditions["ignition"] = any(ps.ignitionLine or ps.ignitionCan for ps in pandaStates if ps.pandaType != log.PandaState.PandaType.unknown)
 
-    is_offroad_for_5_min = (started_ts is None) and ((not started_seen) or (off_ts is None) or (sec_since_boot() - off_ts > 60 * 5))
-    if is_offroad_for_5_min and max_comp_temp > OFFROAD_DANGER_TEMP:
-      # If device is offroad we want to cool down before going onroad
-      # since going onroad increases load and can make temps go over 107
-      thermal_status = ThermalStatus.danger
-    else:
-      current_band = THERMAL_BANDS[thermal_status]
-      band_idx = list(THERMAL_BANDS.keys()).index(thermal_status)
-      if current_band.min_temp is not None and max_comp_temp < current_band.min_temp:
-        thermal_status = list(THERMAL_BANDS.keys())[band_idx - 1]
-      elif current_band.max_temp is not None and max_comp_temp > current_band.max_temp:
-        thermal_status = list(THERMAL_BANDS.keys())[band_idx + 1]
+        pandaState = pandaStates[0]
 
-    # **** starting logic ****
+        if pandaState.pandaType != log.PandaState.PandaType.unknown:
+          panda_state_ts = sec_since_boot()
 
-    # Ensure date/time are valid
-    now = datetime.datetime.utcnow()
-    startup_conditions["time_valid"] = True #(now.year > 2020) or (now.year == 2020 and now.month >= 10)
-    set_offroad_alert_if_changed("Offroad_InvalidTime", (not startup_conditions["time_valid"]))
+        in_car = pandaState.harnessStatus != log.PandaState.HarnessStatus.notConnected
+        usb_power = peripheralState.usbPowerMode != log.PeripheralState.UsbPowerMode.client
 
-    startup_conditions["up_to_date"] = True #params.get("Offroad_ConnectivityNeeded") is None or params.get_bool("DisableUpdates") or params.get_bool("SnoozeUpdate")
-    startup_conditions["not_uninstalling"] = not params.get_bool("DoUninstall")
-    startup_conditions["accepted_terms"] = params.get("HasAcceptedTerms") == terms_version
+        # Setup fan handler on first connect to panda
+        if fan_controller is None and peripheralState.pandaType != log.PandaState.PandaType.unknown:
+          is_uno = peripheralState.pandaType == log.PandaState.PandaType.uno
 
-    # with 2% left, we killall, otherwise the phone will take a long time to boot
-    startup_conditions["free_space"] = msg.deviceState.freeSpacePercent > 2
-    startup_conditions["completed_training"] = params.get("CompletedTrainingVersion") == training_version or \
-                                               params.get_bool("Passive")
-    startup_conditions["not_driver_view"] = not params.get_bool("IsDriverViewEnabled")
-    startup_conditions["not_taking_snapshot"] = not params.get_bool("IsTakingSnapshot")
-    # if any CPU gets above 107 or the battery gets above 63, kill all processes
-    # controls will warn with CPU above 95 or battery above 60
-    onroad_conditions["device_temp_good"] = thermal_status < ThermalStatus.danger
-    set_offroad_alert_if_changed("Offroad_TemperatureTooHigh", (not onroad_conditions["device_temp_good"]))
-
-    # TODO: this should move to TICI.initialize_hardware, but we currently can't import params there
-    if TICI:
-      if not os.path.isfile("/persist/comma/living-in-the-moment"):
-        if not Path("/data/media").is_mount():
-          set_offroad_alert_if_changed("Offroad_StorageMissing", True)
-        else:
-          # check for bad NVMe
-          try:
-            with open("/sys/block/nvme0n1/device/model") as f:
-              model = f.read().strip()
-            if not model.startswith("Samsung SSD 980") and params.get("Offroad_BadNvme") is None:
-              set_offroad_alert_if_changed("Offroad_BadNvme", True)
-              cloudlog.event("Unsupported NVMe", model=model, error=True)
-          except Exception:
-            pass
-
-    # Handle offroad/onroad transition
-    should_start = all(onroad_conditions.values())
-    if started_ts is None:
-      should_start = should_start and all(startup_conditions.values())
-
-    if should_start != should_start_prev or (count == 0):
-      params.put_bool("IsOnroad", should_start)
-      params.put_bool("IsOffroad", not should_start)
-
-      params.put_bool("IsEngaged", False)
-      engaged_prev = False
-      HARDWARE.set_power_save(not should_start)
-
-    if sm.updated['controlsState']:
-      engaged = sm['controlsState'].enabled
-      if engaged != engaged_prev:
-        params.put_bool("IsEngaged", engaged)
-        engaged_prev = engaged
+          if TICI:
+            fan_controller = TiciFanController()
+          elif is_uno or PC:
+            fan_controller = UnoFanController()
+          else:
+            fan_controller = EonFanController()
+      #sunny
+      #elif params.get_bool("IsOpenpilotViewEnabled") and is_openpilot_view_enabled == 0:
+      #  is_openpilot_view_enabled = 1
+      #  onroad_conditions["ignition"] = True
+      #elif not params.get_bool("IsOpenpilotViewEnabled") and is_openpilot_view_enabled == 1:
+      #  is_openpilot_view_enabled = 0
+      #  onroad_conditions["ignition"] = False  
+      #elif not params.get_bool("IsOpenpilotViewEnabled"):
+      #  if sec_since_boot() - panda_state_ts > 3.:
+      #    if onroad_conditions["ignition"]:
+      #      cloudlog.error("Lost panda connection while onroad")
+      #    onroad_conditions["ignition"] = False
+      if sec_since_boot() - panda_state_ts > 3.:
+        if onroad_conditions["ignition"]:
+          cloudlog.error("Lost panda connection while onroad")
+        onroad_conditions["ignition"] = False
 
       try:
-        with open('/dev/kmsg', 'w') as kmsg:
-          kmsg.write(f"<3>[thermald] engaged: {engaged}\n")
-      except Exception:
+        last_hw_state = hw_queue.get_nowait()
+      except queue.Empty:
         pass
 
-    if should_start:
-      off_ts = None
+      msg.deviceState.freeSpacePercent = get_available_percent(default=100.0)
+      msg.deviceState.memoryUsagePercent = int(round(psutil.virtual_memory().percent))
+      msg.deviceState.cpuUsagePercent = [int(round(n)) for n in psutil.cpu_percent(percpu=True)]
+      msg.deviceState.gpuUsagePercent = int(round(HARDWARE.get_gpu_usage_percent()))
+
+      msg.deviceState.networkType = last_hw_state.network_type
+      msg.deviceState.networkMetered = last_hw_state.network_metered
+      msg.deviceState.networkStrength = last_hw_state.network_strength
+      if last_hw_state.network_info is not None:
+        msg.deviceState.networkInfo = last_hw_state.network_info
+
+      msg.deviceState.nvmeTempC = last_hw_state.nvme_temps
+      msg.deviceState.modemTempC = last_hw_state.modem_temps
+      msg.deviceState.wifiIpAddress = last_hw_state.wifi_address
+
+      msg.deviceState.screenBrightnessPercent = HARDWARE.get_screen_brightness()
+      msg.deviceState.batteryPercent = HARDWARE.get_battery_capacity()
+      msg.deviceState.batteryCurrent = HARDWARE.get_battery_current()
+      msg.deviceState.usbOnline = HARDWARE.get_usb_present()
+      current_filter.update(msg.deviceState.batteryCurrent / 1e6)
+
+      max_comp_temp = temp_filter.update(
+        max(max(msg.deviceState.cpuTempC), msg.deviceState.memoryTempC, max(msg.deviceState.gpuTempC))
+      )
+
+      if fan_controller is not None:
+        msg.deviceState.fanSpeedPercentDesired = fan_controller.update(max_comp_temp, onroad_conditions["ignition"])
+
+      is_offroad_for_5_min = (started_ts is None) and ((not started_seen) or (off_ts is None) or (sec_since_boot() - off_ts > 60 * 5))
+      if is_offroad_for_5_min and max_comp_temp > OFFROAD_DANGER_TEMP:
+        # If device is offroad we want to cool down before going onroad
+        # since going onroad increases load and can make temps go over 107
+        thermal_status = ThermalStatus.danger
+      else:
+        current_band = THERMAL_BANDS[thermal_status]
+        band_idx = list(THERMAL_BANDS.keys()).index(thermal_status)
+        if current_band.min_temp is not None and max_comp_temp < current_band.min_temp:
+          thermal_status = list(THERMAL_BANDS.keys())[band_idx - 1]
+        elif current_band.max_temp is not None and max_comp_temp > current_band.max_temp:
+          thermal_status = list(THERMAL_BANDS.keys())[band_idx + 1]
+
+      # **** starting logic ****
+
+      # Ensure date/time are valid
+      now = datetime.datetime.utcnow()
+      startup_conditions["time_valid"] = True #(now.year > 2020) or (now.year == 2020 and now.month >= 10)
+      set_offroad_alert_if_changed("Offroad_InvalidTime", (not startup_conditions["time_valid"]))
+
+      startup_conditions["up_to_date"] = True #params.get("Offroad_ConnectivityNeeded") is None or params.get_bool("DisableUpdates") or params.get_bool("SnoozeUpdate")
+      startup_conditions["not_uninstalling"] = not params.get_bool("DoUninstall")
+      startup_conditions["accepted_terms"] = params.get("HasAcceptedTerms") == terms_version
+
+      # with 2% left, we killall, otherwise the phone will take a long time to boot
+      startup_conditions["free_space"] = msg.deviceState.freeSpacePercent > 2
+      startup_conditions["completed_training"] = params.get("CompletedTrainingVersion") == training_version or \
+                                                 params.get_bool("Passive")
+      startup_conditions["not_driver_view"] = not params.get_bool("IsDriverViewEnabled")
+      startup_conditions["not_taking_snapshot"] = not params.get_bool("IsTakingSnapshot")
+      # if any CPU gets above 107 or the battery gets above 63, kill all processes
+      # controls will warn with CPU above 95 or battery above 60
+      onroad_conditions["device_temp_good"] = thermal_status < ThermalStatus.danger
+      set_offroad_alert_if_changed("Offroad_TemperatureTooHigh", (not onroad_conditions["device_temp_good"]))
+
+      # TODO: this should move to TICI.initialize_hardware, but we currently can't import params there
+      if TICI:
+        if not os.path.isfile("/persist/comma/living-in-the-moment"):
+          if not Path("/data/media").is_mount():
+            set_offroad_alert_if_changed("Offroad_StorageMissing", True)
+          else:
+            # check for bad NVMe
+            try:
+              with open("/sys/block/nvme0n1/device/model") as f:
+                model = f.read().strip()
+              if not model.startswith("Samsung SSD 980") and params.get("Offroad_BadNvme") is None:
+                set_offroad_alert_if_changed("Offroad_BadNvme", True)
+                cloudlog.event("Unsupported NVMe", model=model, error=True)
+            except Exception:
+              pass
+
+      # Handle offroad/onroad transition
+      should_start = all(onroad_conditions.values())
       if started_ts is None:
-        started_ts = sec_since_boot()
-        started_seen = True
-    else:
-      if onroad_conditions["ignition"] and (startup_conditions != startup_conditions_prev):
-        cloudlog.event("Startup blocked", startup_conditions=startup_conditions, onroad_conditions=onroad_conditions)
+        should_start = should_start and all(startup_conditions.values())
 
-      started_ts = None
-      if off_ts is None:
-        off_ts = sec_since_boot()
-        
-    # opkr hotspot
-    if hotspot_on_boot and not hotspot_run and sec_since_boot() > 80:
-      os.system("service call wifi 37 i32 0 i32 1 &")
-      hotspot_run = True
+      if should_start != should_start_prev or (count == 0):
+        params.put_bool("IsOnroad", should_start)
+        params.put_bool("IsOffroad", not should_start)
 
-    # Offroad power monitoring
-    power_monitor.calculate(peripheralState, onroad_conditions["ignition"])
-    msg.deviceState.offroadPowerUsageUwh = power_monitor.get_power_used()
-    msg.deviceState.carBatteryCapacityUwh = max(0, power_monitor.get_car_battery_capacity())
-    current_power_draw = HARDWARE.get_current_power_draw()  # pylint: disable=assignment-from-none
-    if current_power_draw is not None:
-      statlog.sample("power_draw", current_power_draw)
-      msg.deviceState.powerDrawW = current_power_draw
-    else:
-      msg.deviceState.powerDrawW = 0
+        params.put_bool("IsEngaged", False)
+        engaged_prev = False
+        HARDWARE.set_power_save(not should_start)
 
-    # Check if we need to disable charging (handled by boardd)
-    msg.deviceState.chargingDisabled = power_monitor.should_disable_charging(onroad_conditions["ignition"], in_car, off_ts)
+      if sm.updated['controlsState']:
+        engaged = sm['controlsState'].enabled
+        if engaged != engaged_prev:
+          params.put_bool("IsEngaged", engaged)
+          engaged_prev = engaged
 
-    # Check if we need to shut down
-    if power_monitor.should_shutdown(peripheralState, onroad_conditions["ignition"], in_car, off_ts, started_seen):
-      cloudlog.warning(f"shutting device down, offroad since {off_ts}")
-      params.put_bool("DoShutdown", True)
+        try:
+          with open('/dev/kmsg', 'w') as kmsg:
+            kmsg.write(f"<3>[thermald] engaged: {engaged}\n")
+        except Exception:
+          pass
 
-    msg.deviceState.chargingError = current_filter.x > 0. and msg.deviceState.batteryPercent < 90  # if current is positive, then battery is being discharged
-    msg.deviceState.started = started_ts is not None
-    msg.deviceState.startedMonoTime = int(1e9*(started_ts or 0))
+      if should_start:
+        off_ts = None
+        if started_ts is None:
+          started_ts = sec_since_boot()
+          started_seen = True
+      else:
+        if onroad_conditions["ignition"] and (startup_conditions != startup_conditions_prev):
+          cloudlog.event("Startup blocked", startup_conditions=startup_conditions, onroad_conditions=onroad_conditions)
 
-    last_ping = params.get("LastAthenaPingTime")
-    if last_ping is not None:
-      msg.deviceState.lastAthenaPingTime = int(last_ping)
+        started_ts = None
+        if off_ts is None:
+          off_ts = sec_since_boot()
+          
+      # opkr hotspot
+      if hotspot_on_boot and not hotspot_run and sec_since_boot() > 80:
+        os.system("service call wifi 37 i32 0 i32 1 &")
+        hotspot_run = True
 
-    msg.deviceState.thermalStatus = thermal_status
-    pm.send("deviceState", msg)
+      # Offroad power monitoring
+      power_monitor.calculate(peripheralState, onroad_conditions["ignition"])
+      msg.deviceState.offroadPowerUsageUwh = power_monitor.get_power_used()
+      msg.deviceState.carBatteryCapacityUwh = max(0, power_monitor.get_car_battery_capacity())
+      current_power_draw = HARDWARE.get_current_power_draw()  # pylint: disable=assignment-from-none
+      if current_power_draw is not None:
+        statlog.sample("power_draw", current_power_draw)
+        msg.deviceState.powerDrawW = current_power_draw
+      else:
+        msg.deviceState.powerDrawW = 0
 
-    if EON and not is_uno:
-      set_offroad_alert_if_changed("Offroad_ChargeDisabled", (not usb_power))
+      # Check if we need to disable charging (handled by boardd)
+      msg.deviceState.chargingDisabled = power_monitor.should_disable_charging(onroad_conditions["ignition"], in_car, off_ts)
 
-    should_start_prev = should_start
-    startup_conditions_prev = startup_conditions.copy()
+      # Check if we need to shut down
+      if power_monitor.should_shutdown(peripheralState, onroad_conditions["ignition"], in_car, off_ts, started_seen):
+        cloudlog.warning(f"shutting device down, offroad since {off_ts}")
+        params.put_bool("DoShutdown", True)
 
-    # Log to statsd
-    statlog.gauge("free_space_percent", msg.deviceState.freeSpacePercent)
-    statlog.gauge("gpu_usage_percent", msg.deviceState.gpuUsagePercent)
-    statlog.gauge("memory_usage_percent", msg.deviceState.memoryUsagePercent)
-    for i, usage in enumerate(msg.deviceState.cpuUsagePercent):
-      statlog.gauge(f"cpu{i}_usage_percent", usage)
-    for i, temp in enumerate(msg.deviceState.cpuTempC):
-      statlog.gauge(f"cpu{i}_temperature", temp)
-    for i, temp in enumerate(msg.deviceState.gpuTempC):
-      statlog.gauge(f"gpu{i}_temperature", temp)
-    statlog.gauge("memory_temperature", msg.deviceState.memoryTempC)
-    statlog.gauge("ambient_temperature", msg.deviceState.ambientTempC)
-    for i, temp in enumerate(msg.deviceState.pmicTempC):
-      statlog.gauge(f"pmic{i}_temperature", temp)
-    for i, temp in enumerate(last_hw_state.nvme_temps):
-      statlog.gauge(f"nvme_temperature{i}", temp)
-    for i, temp in enumerate(last_hw_state.modem_temps):
-      statlog.gauge(f"modem_temperature{i}", temp)
-    statlog.gauge("fan_speed_percent_desired", msg.deviceState.fanSpeedPercentDesired)
-    statlog.gauge("screen_brightness_percent", msg.deviceState.screenBrightnessPercent)
+      msg.deviceState.chargingError = current_filter.x > 0. and msg.deviceState.batteryPercent < 90  # if current is positive, then battery is being discharged
+      msg.deviceState.started = started_ts is not None
+      msg.deviceState.startedMonoTime = int(1e9*(started_ts or 0))
 
-    # atom
-    if usb_power and battery_charging_control:
-      power_monitor.charging_ctrl(msg, ts, battery_charging_max, battery_charging_min)
+      last_ping = params.get("LastAthenaPingTime")
+      if last_ping is not None:
+        msg.deviceState.lastAthenaPingTime = int(last_ping)
 
-    # report to server once every 10 minutes
-    if (count % int(600. / DT_TRML)) == 0:
-      if EON and started_ts is None and msg.deviceState.memoryUsagePercent > 40:
-        cloudlog.event("High offroad memory usage", mem=msg.deviceState.memoryUsagePercent)
+      msg.deviceState.thermalStatus = thermal_status
+      pm.send("deviceState", msg)
 
-      cloudlog.event("STATUS_PACKET",
-                     count=count,
-                     pandaStates=[strip_deprecated_keys(p.to_dict()) for p in pandaStates],
-                     peripheralState=strip_deprecated_keys(peripheralState.to_dict()),
-                     location=(strip_deprecated_keys(sm["gpsLocationExternal"].to_dict()) if sm.alive["gpsLocationExternal"] else None),
-                     deviceState=strip_deprecated_keys(msg.to_dict()))
+      if EON and not is_uno:
+        set_offroad_alert_if_changed("Offroad_ChargeDisabled", (not usb_power))
+
+      should_start_prev = should_start
+      startup_conditions_prev = startup_conditions.copy()
+
+      # Log to statsd
+      statlog.gauge("free_space_percent", msg.deviceState.freeSpacePercent)
+      statlog.gauge("gpu_usage_percent", msg.deviceState.gpuUsagePercent)
+      statlog.gauge("memory_usage_percent", msg.deviceState.memoryUsagePercent)
+      for i, usage in enumerate(msg.deviceState.cpuUsagePercent):
+        statlog.gauge(f"cpu{i}_usage_percent", usage)
+      for i, temp in enumerate(msg.deviceState.cpuTempC):
+        statlog.gauge(f"cpu{i}_temperature", temp)
+      for i, temp in enumerate(msg.deviceState.gpuTempC):
+        statlog.gauge(f"gpu{i}_temperature", temp)
+      statlog.gauge("memory_temperature", msg.deviceState.memoryTempC)
+      statlog.gauge("ambient_temperature", msg.deviceState.ambientTempC)
+      for i, temp in enumerate(msg.deviceState.pmicTempC):
+        statlog.gauge(f"pmic{i}_temperature", temp)
+      for i, temp in enumerate(last_hw_state.nvme_temps):
+        statlog.gauge(f"nvme_temperature{i}", temp)
+      for i, temp in enumerate(last_hw_state.modem_temps):
+        statlog.gauge(f"modem_temperature{i}", temp)
+      statlog.gauge("fan_speed_percent_desired", msg.deviceState.fanSpeedPercentDesired)
+      statlog.gauge("screen_brightness_percent", msg.deviceState.screenBrightnessPercent)
+
+      # atom
+      if usb_power and battery_charging_control:
+        power_monitor.charging_ctrl(msg, ts, battery_charging_max, battery_charging_min)
+
+      # report to server once every 10 minutes
+      if (count % int(600. / DT_TRML)) == 0:
+        if EON and started_ts is None and msg.deviceState.memoryUsagePercent > 40:
+          cloudlog.event("High offroad memory usage", mem=msg.deviceState.memoryUsagePercent)
+
+        cloudlog.event("STATUS_PACKET",
+                       count=count,
+                       pandaStates=[strip_deprecated_keys(p.to_dict()) for p in pandaStates],
+                       peripheralState=strip_deprecated_keys(peripheralState.to_dict()),
+                       location=(strip_deprecated_keys(sm["gpsLocationExternal"].to_dict()) if sm.alive["gpsLocationExternal"] else None),
+                       deviceState=strip_deprecated_keys(msg.to_dict()))
+
+    except Exception:
+      # optech (2026-11-26, 김관중 K7 HEV): one bad pass must not stop deviceState for the whole drive. thermald died
+      # right after the car started, nothing sent deviceState for 2 h -> controlsd read freeSpacePercent 0 ("저장 공간
+      # 부족 100%"), commIssue, processNotRunning, could not engage. A thread exception also left no trace (the
+      # process just ended with exit 0), so keep the traceback next to the drive log and carry on
+      save_crash("loop")
+      time.sleep(DT_TRML)
 
     count += 1
 
@@ -496,23 +536,29 @@ def main():
   end_event = threading.Event()
 
   threads = [
-    threading.Thread(target=hw_state_thread, args=(end_event, hw_queue)),
-    threading.Thread(target=thermald_thread, args=(end_event, hw_queue)),
+    threading.Thread(target=guarded(hw_state_thread, "hw"), args=(end_event, hw_queue)),
+    threading.Thread(target=guarded(thermald_thread, "start"), args=(end_event, hw_queue)),
   ]
 
   for t in threads:
     t.start()
 
+  died = False
   try:
     while True:
       time.sleep(1)
       if not all(t.is_alive() for t in threads):
+        died = True
         break
   finally:
     end_event.set()
 
   for t in threads:
     t.join()
+
+  # optech: a thread that died is an error, not a clean exit (exit 1, and the manager starts thermald again)
+  if died:
+    raise SystemExit(1)
 
 
 if __name__ == "__main__":
