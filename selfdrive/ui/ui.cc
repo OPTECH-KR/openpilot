@@ -721,6 +721,7 @@ UIState::UIState(QObject *parent) : QObject(parent) {
     "wideRoadCameraState", "managerState", "navInstruction", "navRoute", "uiPlan",
     "lateralPlan", "longitudinalPlan", "gpsLocationExternal", "carControl", "liveParameters", "roadLimitSpeed",
     "liveTorqueParameters", "sensorEvents", "ubloxGnss",
+    "peripheralState",  // optech: sidebar '전압' (car battery voltage, like optech-spst)
   });
 
   Params params;
