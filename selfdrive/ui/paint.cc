@@ -1204,7 +1204,10 @@ static void drawOptechHud(const UIState* s) {
         } else {
             snprintf(set_s, sizeof(set_s), "--");
         }
-        const bool slowing = enabled && longActiveUser > 0 && applyMaxSpeed > 0 && applyMaxSpeed + 0.5f < cruiseMaxSpeed;
+        // not while stopped: the camera slowdown target stays put at a red light and '감속 중 74' at 0 km/h confused
+        // (tester 2026-11-26)
+        const bool slowing = enabled && longActiveUser > 0 && applyMaxSpeed > 0 && applyMaxSpeed + 0.5f < cruiseMaxSpeed &&
+                             cur_speed >= 3.f;
         snprintf(hold_s, sizeof(hold_s), "%d", (int)(applyMaxSpeed * (metric ? 1.0 : KM_TO_MILE) + 0.5));
         float fs_set = 150, fs_hold = 110, b1[4], b2[4];
         nvgFontFace(s->vg, BOLD);
