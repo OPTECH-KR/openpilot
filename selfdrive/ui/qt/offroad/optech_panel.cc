@@ -8,11 +8,9 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QDir>
-#include <QElapsedTimer>
 #include <QImage>
 #include <QNetworkInterface>
 #include <QScroller>
-#include <QTimer>
 
 #include <QrCode.hpp>
 
@@ -34,52 +32,6 @@ static QLabel *optech_note(const QString &text) {
   label->setWordWrap(true);
   label->setStyleSheet("font-size: 36px; color: #9A9A9A; padding: 10px 10px;");
   return label;
-}
-
-// live text for 'GPS 확인' (optech-hkg gps_check_text): the GPS summary the UI keeps (ubloxGnss) + gpsLocationExternal
-static QString optech_gps_check_text(int elapsed_s) {
-  const UIState *s = uiState();
-  const SubMaster &sm = *(s->sm);
-  const UIScene &scene = s->scene;
-  const bool panda = scene.pandaType != cereal::PandaState::PandaType::UNKNOWN;
-  const bool gnss_alive = sm.alive("ubloxGnss");
-  const bool loc_alive = sm.alive("gpsLocationExternal");
-  const auto loc = sm["gpsLocationExternal"].getGpsLocationExternal();
-  const bool fixed = loc_alive && (loc.getFlags() & 1);
-  const float acc = loc.getAccuracy();
-
-  QString state, color;
-  if (!panda) { state = "판다 연결 안 됨"; color = "#AAAAAA"; }
-  else if (!gnss_alive) { state = "GPS 신호 없음"; color = "#AAAAAA"; }
-  else if (scene.gps_antenna_bad) { state = "안테나 이상"; color = "#FF4040"; }
-  else if (!fixed) { state = "위성 찾는 중"; color = "#DACA25"; }
-  else if (acc <= 5.0f) { state = "잡힘 (좋음)"; color = "#33DD33"; }
-  else if (acc <= 15.0f) { state = "잡힘 (보통)"; color = "#DACA25"; }
-  else { state = "잡힘 (약함)"; color = "#DA6F25"; }
-
-  const int cno = scene.gps_cno;
-  const int bars = cno >= 35 ? 4 : cno >= 30 ? 3 : cno >= 25 ? 2 : cno >= 20 ? 1 : 0;
-  const QString bar_text = QString("<span style='color:%1'>%2</span><span style='color:#555555'>%3</span>")
-                             .arg(color, QString("■").repeated(bars), QString("■").repeated(4 - bars));
-  QString t = "<h2>GPS 확인 (판다/uno GPS)</h2>";
-  t += QString("<p style='font-size:60px; color:%1'><b>%2</b></p>").arg(color, state);
-  t += QString("<p>신호 세기: %1 &nbsp;(%2 dB-Hz)</p>").arg(bar_text).arg(cno);
-  t += QString("<p>보이는 위성: %1개 &nbsp;(강한 위성 %2개)</p>").arg(scene.gps_sats).arg(scene.gps_strong);
-  if (fixed) {
-    t += QString("<p>위치 오차: 약 %1 m</p>").arg(acc, 0, 'f', 0);
-    t += QString("<p>위치: %1, %2</p>").arg(loc.getLatitude(), 0, 'f', 5).arg(loc.getLongitude(), 0, 'f', 5);
-  } else {
-    t += "<p>위치 오차: -</p>";
-  }
-  t += QString("<p style='color:#888888'>확인 시작 후 %1초</p>").arg(elapsed_s);
-  if (!panda) {
-    t += "<p>판다(uno 보드)가 연결되지 않았어요. C2에 차량 하네스 전원이 들어와야 GPS가 켜집니다.</p>";
-  } else if (!gnss_alive && elapsed_s >= 20) {
-    t += "<p>GPS 칩에서 데이터가 오지 않아요. GPS 안테나가 연결돼 있는지 확인해 주세요.</p>";
-  } else if (!fixed) {
-    t += "<p>처음 켜면 위성을 찾는 데 1~3분 걸릴 수 있어요. 하늘이 잘 보이는 곳에서 확인하세요.</p>";
-  }
-  return t;
 }
 
 // '주행 기록 내려받기' (optech-hkg): the device's addresses a phone on the same Wi-Fi / hotspot can open
@@ -360,6 +312,24 @@ OptechValueControl *OptechPanel::value(ListWidget *list, const QString &param, c
   return v;
 }
 
+ButtonControl *OptechPanel::choice(ListWidget *list, const QString &param, const QString &title, const QString &desc,
+                                   const QStringList &names) {
+  ButtonControl *btn = new ButtonControl("", "선택", desc);
+  const std::string key = param.toStdString();
+  auto current = [=]() { return names[std::clamp(std::atoi(params.get(key).c_str()), 0, (int)names.size() - 1)]; };
+  auto refresh = [=]() { btn->setTitle(title + ": " + current()); };
+  QObject::connect(btn, &ButtonControl::clicked, [=]() {
+    const QString sel = MultiOptionDialog::getSelection(title, names, current(), this);
+    if (sel.isEmpty()) return;
+    params.put(key, std::to_string(names.indexOf(sel)));
+    refresh();
+  });
+  refresh();
+  list->addItem(btn);
+  choice_refresh.append(refresh);
+  return btn;
+}
+
 // ---- the menu ----
 
 OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
@@ -529,7 +499,7 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
   QLabel *cam_note = optech_note(
     "● 과속카메라 앞 '감속 시작'에 정한 시간(처음 값 22초) 전부터 설정 속도를 조금씩 내려서, '감속 끝'(6초 전)까지 '목표 속도'(제한 속도의 %)에 맞춥니다. "
     "구간단속은 구간이 끝날 때까지 제한 속도를 지킵니다.\n"
-    "● 내비 연동(1·2): 폰 내비 앱(TmapNda·당근내비)이 보내는 카메라 정보를 먼저 쓰고, 앱 정보가 없을 때는 내장 카메라 DB로 채웁니다.\n"
+    "● 내비 연동(TmapNda·당근내비): 폰 내비 앱(TmapNda·당근내비)이 보내는 카메라 정보를 먼저 쓰고, 앱 정보가 없을 때는 내장 카메라 DB로 채웁니다.\n"
     "● 내장 카메라 DB: 내비 앱 없이 기기 GPS와 전국 카메라 위치(약 3만 1천 대)로 찾습니다. "
     "이동식·새 카메라는 모르고, 반대 차로의 카메라에도 줄일 수 있습니다.\n"
     "● openpilot이 가감속을 맡는 차량만 속도를 줄입니다. 차의 순정 크루즈를 쓰는 차량은 화면에 CAM 표시만 됩니다. GPS가 안 잡히면 동작하지 않습니다.");
@@ -549,29 +519,23 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
         90, 120, 1, [](int v) { return QString("%1%").arg(v); }));
   // '과속 단속 알림' text as it really works (like optech-hkg 651c76673): controlsd sets both lane departs for 3 s, pauses
   // 2 s, 3 s again; the Hyundai carcontroller sends that as the car's lane departure warning (value 1 or 2). 3: alert.
-  cam_group.append(value(drive, "HapticFeedbackWhenSpeedCamera", "과속 단속 알림",
+  cam_group.append(choice(drive, "HapticFeedbackWhenSpeedCamera", "과속 단속 알림",
         "과속 단속 카메라 앞에서 감속을 시작할 때 알려 주는 방법입니다.\n"
-        "0: 사용 안 함 (속도만 줄임, 처음 값)\n"
-        "1·2: 현대·기아·제네시스만 - 차의 차선 이탈 경고를 3초씩 두 번 켭니다. 계기판에 경고가 뜨고 경고음이 나며, 핸들 진동이 있는 차는 핸들도 떨립니다. "
-        "숫자에 따라 차마다 경고 모양이 조금 다릅니다.\n"
-        "3: 모든 차 - 주행 화면에 '앞에 과속 단속 카메라가 있어요' 알림을 띄웁니다.",
-        0, 3, 1, [](int v) {
-          const char *names[] = {"사용 안 함", "차선 경고 1", "차선 경고 2", "화면 알림"};
-          return QString(names[std::clamp(v, 0, 3)]);
-        }));
+        "사용 안 함(처음 값): 알리지 않고 속도만 줄입니다.\n"
+        "차선 경고 1·2: 현대·기아·제네시스만 - 차의 차선 이탈 경고를 3초씩 두 번 켭니다. 계기판에 경고가 뜨고 경고음이 나며, 핸들 진동이 있는 차는 핸들도 떨립니다. "
+        "1과 2는 차마다 경고 모양이 조금 다릅니다.\n"
+        "화면 알림: 모든 차 - 주행 화면에 '앞에 과속 단속 카메라가 있어요' 알림을 띄웁니다.",
+        {"사용 안 함", "차선 경고 1", "차선 경고 2", "화면 알림"}));
   // 내비 연동 방식 (OptechNaviLinkMode, same as optech-hkg since 2026-11-25) names the phone app: 0 사용 안 함, 1 TmapNda
   // (NDA 843 + carrot 7706), 2 당근내비 (carrot 7706). manager.py moves the old values (0 / 1 APM / 2 APM + 순정 / 3 NDA) once.
-  cam_group.append(value(drive, "OptechNaviLinkMode", "내비 연동 방식",
+  cam_group.append(choice(drive, "OptechNaviLinkMode", "내비 연동 방식",
         "폰 내비 앱에서 카메라·과속방지턱·길안내 정보를 받습니다. 쓰는 앱에 맞춰 고르세요.\n"
-        "0: 사용 안 함 - 내비 앱 정보를 받지 않고 내장 카메라 DB만 씁니다.\n"
-        "1: TmapNda - 앱의 오픈파일럿 연결이 당근 방식이든 NDA 방식이든 모두 받습니다. 앱에서 NDA 방식으로 두면 주행 화면에 TMAP으로 떠서 당근내비(CARROT)와 구별됩니다.\n"
-        "2: 당근내비 - 당근 방식으로 받습니다.\n"
-        "1·2 공통: 폰과 이 기기가 같은 와이파이(핫스팟)에 붙어 있어야 합니다. 앱 정보가 없을 때는 내장 카메라 DB로 채웁니다.\n"
+        "사용 안 함: 내비 앱 정보를 받지 않고 내장 카메라 DB만 씁니다.\n"
+        "TmapNda: 앱의 오픈파일럿 연결이 당근 방식이든 NDA 방식이든 모두 받습니다. 앱에서 NDA 방식으로 두면 주행 화면에 TMAP으로 떠서 당근내비(CARROT)와 구별됩니다.\n"
+        "당근내비: 당근 방식으로 받습니다.\n"
+        "TmapNda·당근내비 공통: 폰과 이 기기가 같은 와이파이(핫스팟)에 붙어 있어야 합니다. 앱 정보가 없을 때는 내장 카메라 DB로 채웁니다.\n"
         "바꾼 뒤 재부팅해야 적용됩니다.",
-        0, 2, 1, [](int v) {
-          const char *names[] = {"사용 안 함", "TmapNda", "당근내비"};
-          return QString(names[std::clamp(v, 0, 2)]);
-        }));
+        {"사용 안 함", "TmapNda", "당근내비"}));
   cam_group.append(toggle(drive, "OptechSpeedCam", "내장 카메라 DB",
          "내비 앱 없이 기기 GPS로 앞쪽 고정식 단속카메라(과속·신호과속·구간단속)를 찾습니다.\n"
          "전국 약 3만 1천 대(공공데이터, 2026년 10월)의 위치가 기기에 들어 있습니다. 구간단속은 구간이 끝날 때까지 제한속도를 지킵니다.\n\n"
@@ -617,14 +581,17 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
         "앞차 뒤에 멈출 때의 거리(cm)입니다. 600이면 약 6m 뒤에 멈춥니다(openpilot 기본). 주행 중에도 몇 초 안에 적용됩니다.",
         200, 1000, 50, [](int v) { return QString("%1 cm").arg(v); });
   speed->addItem(optech_section("속도별 가속 세기 (가속이 너무 세거나 약할 때)"));
-  speed->addItem(new ButtonParamControl("dp_long_accel_profile", "가속 성향",
-                 "속도에 따른 가속 세기를 고릅니다.\nOP: 기본 값\nECO: 부드럽게(연비)\nNOR: 보통\nSPT: 빠르게(스포츠)", "",
-                 std::vector<QString>{"OP", "ECO", "NOR", "SPT"}));
+  // the drive screen's 가속 성향 / 주행 성향 buttons change these too (re-read on showEvent)
+  choice(speed, "dp_long_accel_profile", "가속 성향",
+         "속도에 따른 가속 세기를 고릅니다. 주행 화면의 가속 성향 버튼(OP·ECO·NOR·SPT)과 같은 설정입니다.\n"
+         "OP: 기본 값\nECO: 부드럽게(연비)\nNOR: 보통\nSPT: 빠르게(스포츠)",
+         {"OP (기본)", "ECO (부드럽게)", "NOR (보통)", "SPT (빠르게)"});
   speed->addItem(optech_section("차간거리"));
-  speed->addItem(new ButtonParamControl("LongitudinalPersonality", "주행 성향 (차간거리)",
-                 "보통을 추천합니다.\n가깝게: 앞차를 더 가까이 따라가고, 가속·감속이 빠릅니다.\n"
-                 "멀리: 앞차와 거리를 더 두고 부드럽게 움직입니다.", "",
-                 std::vector<QString>{"가깝게", "보통", "멀리"}));
+  choice(speed, "LongitudinalPersonality", "주행 성향 (차간거리)",
+         "보통을 추천합니다. 주행 화면의 주행 성향 버튼과 같은 설정입니다.\n"
+         "가깝게: 앞차를 더 가까이 따라가고, 가속·감속이 빠릅니다.\n"
+         "멀리: 앞차와 거리를 더 두고 부드럽게 움직입니다.",
+         {"가깝게", "보통", "멀리"});
   toggle(speed, "dp_long_use_df_tune", "다이내믹 차간거리",
          "'주행 성향' 설정에 맞춰 앞차와의 거리를 상황에 따라 자동으로 조절합니다.");
 
@@ -711,10 +678,10 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
         "조향 명령을 보낸 뒤 실제로 핸들이 움직이기까지 걸리는 시간 보정입니다(0.01초 단위). 커브에서 늦게 꺾이면 조금 올려 보세요. "
         "0:차종 기본값. 시동을 다시 걸면 적용됩니다.",
         0, 100, 1, [](int v) { return v == 0 ? QString("차종 기본") : QString::number(v / 100.0, 'f', 2) + "초"; });
-  OptechValueControl *torque_custom = value(steer, "LateralTorqueCustom", "토크 사용자 설정",
-        "토크 조향 값을 직접 정할지 고릅니다. 끔:차량 기본값 + 주행하며 자동 학습, 켬:자동 학습을 끄고 아래 '토크 가속 계수'와 '토크 마찰 계수'를 사용"
-        "(주행 중 바꿔도 몇 초 안에 적용). 조향 방식이 토크인 차량에서만 동작합니다.",
-        0, 1, 1, [](int v) { return v > 0 ? QString("켬") : QString("끔"); });
+  ParamControl *torque_custom = toggle(steer, "LateralTorqueCustom", "토크 사용자 설정",
+        "토크 조향 값을 직접 정할지 고릅니다. 끄면(처음 값) 차량 기본값을 쓰고 주행하며 자동으로 학습합니다. "
+        "켜면 자동 학습을 끄고 아래 '토크 가속 계수'와 '토크 마찰 계수'를 씁니다(주행 중 바꿔도 몇 초 안에 적용). "
+        "조향 방식이 토크인 차량에서만 동작합니다.");
   torque_values.append(value(steer, "LateralTorqueAccelFactor", "토크 가속 계수",
         "토크 조향에서 원하는 회전량을 내는 데 필요한 힘 계수입니다(0.001 단위). 커브에서 덜 꺾이면 낮추고, 너무 꺾이면 높이세요. "
         "'토크 사용자 설정'이 켜져 있을 때만 적용됩니다.",
@@ -723,7 +690,7 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
         "핸들 마찰을 보정하는 값입니다(0.001 단위). 직진에서 핸들이 늦게 반응하면 조금 올려 보세요. "
         "'토크 사용자 설정'이 켜져 있을 때만 적용됩니다.",
         0, 1000, 10, [](int v) { return QString::number(v / 1000.0, 'f', 2); }));
-  torque_custom->on_change = [=](int) { updateToggles(); };
+  QObject::connect(torque_custom, &ToggleControl::toggleFlipped, [=]() { updateToggles(); });
 
   // ======== 화면 ========
   // OptechSettingsTimeout '화면 유지 시간' (ui.cc Device::resetInteractiveTimeout)
@@ -829,28 +796,6 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
 
   // ======== 고급 ========
   adv->addItem(optech_section("기기"));
-  // 'GPS 확인' (optech-hkg): GpsCheck keeps the uBlox (boardd) and ubloxd on with the car off while the screen is open
-  {
-    ButtonControl *gps_btn = new ButtonControl("GPS 확인", "확인",
-      "시동을 걸지 않아도 GPS를 켜서 잡힘 여부, 신호 세기, 위성 수, 위치 오차를 실시간으로 보여 줍니다. "
-      "GPS 안테나가 제대로 연결됐는지 확인할 때 쓰세요. 창을 닫으면 GPS도 다시 꺼집니다.");
-    QObject::connect(gps_btn, &ButtonControl::clicked, [=]() {
-      params.putBool("GpsCheck", true);
-      ConfirmationDialog d(optech_gps_check_text(0), "닫기", "", true, this);
-      QLabel *label = d.findChild<QLabel *>();
-      QElapsedTimer started;
-      started.start();
-      QTimer refresh;
-      QObject::connect(&refresh, &QTimer::timeout, [&]() {
-        if (label) label->setText(optech_gps_check_text(started.elapsed() / 1000));
-      });
-      refresh.start(500);
-      d.exec();
-      refresh.stop();
-      params.putBool("GpsCheck", false);
-    });
-    adv->addItem(gps_btn);
-  }
   // OptechOffShutdown '시동 끈 뒤 꺼짐' (selfdrive/thermald/power_monitoring.py, read every few seconds)
   {
     ButtonControl *off_btn = new ButtonControl("", "선택",
@@ -876,9 +821,9 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
   }
   toggle(adv, "OpkrHotspotOnBoot", "부팅 시 핫스팟 켜기",
          "켜 두면 기기가 켜질 때 핫스팟(테더링)이 자동으로 켜집니다. 재부팅해야 적용됩니다.");
-  adv->addItem(new ButtonParamControl("dp_device_audible_alert_mode", "알림 소리",
-               "기본: 원래대로 소리를 냅니다.\n경고만: 경고일 때만 소리를 냅니다.\n끄기: 소리를 내지 않습니다.", "",
-               std::vector<QString>{"기본", "경고만", "끄기"}));
+  choice(adv, "dp_device_audible_alert_mode", "알림 소리",
+         "기본: 원래대로 소리를 냅니다.\n경고만: 경고일 때만 소리를 냅니다.\n끄기: 소리를 내지 않습니다.",
+         {"기본", "경고만", "끄기"});
 
   adv->addItem(optech_section("주행 기록"));
   toggle(adv, "dp_logging", "주행 기록 저장",
@@ -1073,6 +1018,7 @@ void OptechPanel::updateToggles() {
 
 void OptechPanel::showEvent(QShowEvent *event) {
   for (auto v : values) v->refresh();
+  for (auto &r : choice_refresh) r();
   updateToggles();
   updateCarButton();
   updateBrandItems();

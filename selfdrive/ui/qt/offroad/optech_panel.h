@@ -85,6 +85,10 @@ private:
   ParamControl *toggle(ListWidget *list, const QString &param, const QString &title, const QString &desc);
   OptechValueControl *value(ListWidget *list, const QString &param, const QString &title, const QString &desc,
                             int min, int max, int step, std::function<QString(int)> format);
+  // one of several named choices (optech-hkg style): title "이름: 지금 값", button 선택 opens the list; stores the index
+  ButtonControl *choice(ListWidget *list, const QString &param, const QString &title, const QString &desc,
+                        const QStringList &names);
+  QList<std::function<void()>> choice_refresh;  // re-read on showEvent (the drive screen buttons change some of them)
   QString currentBrand();
   void updateCarButton();
   void updateBrandItems();

@@ -23,20 +23,18 @@ void Toggle::paintEvent(QPaintEvent *e) {
   p.setPen(Qt::NoPen);
   p.setRenderHint(QPainter::Antialiasing, true);
 
+  // OPTECH: round switch like optech-hkg (dragonpilot drew it square)
   // Draw toggle background left
   p.setBrush(green);
-//  p.drawRoundedRect(QRect(0, _y_rect, _x_circle + _radius, _height_rect), _height_rect/2, _height_rect/2);
-  p.drawRect(QRect(0, _y_rect, _x_circle + _radius, _height_rect));
+  p.drawRoundedRect(QRect(0, _y_rect, _x_circle + _radius, _height_rect), _height_rect/2, _height_rect/2);
 
   // Draw toggle background right
   p.setBrush(QColor(0x393939));
-//  p.drawRoundedRect(QRect(_x_circle - _radius, _y_rect, width() - (_x_circle - _radius), _height_rect), _height_rect/2, _height_rect/2);
-  p.drawRect(QRect(_x_circle - _radius, _y_rect, width() - (_x_circle - _radius), _height_rect));
+  p.drawRoundedRect(QRect(_x_circle - _radius, _y_rect, width() - (_x_circle - _radius), _height_rect), _height_rect/2, _height_rect/2);
 
   // Draw toggle circle
   p.setBrush(circleColor);
-//  p.drawEllipse(QRectF(_x_circle - _radius, _y_circle - _radius, 2 * _radius, 2 * _radius));
-  p.drawRect(QRectF(_x_circle - _radius, _y_circle - _radius, 2 * _radius, 2 * _radius));
+  p.drawEllipse(QRectF(_x_circle - _radius, _y_circle - _radius, 2 * _radius, 2 * _radius));
 }
 
 void Toggle::mouseReleaseEvent(QMouseEvent *e) {
