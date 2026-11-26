@@ -819,18 +819,21 @@ void Device::updateBrightness(const UIState &s) {
   }
 
   // optech '주행 중 밝기' (화면 탭): while driving, after 30 s without a touch fade down to this % (never brighter
-  // than the auto brightness), -1 '화면 끄기': backlight off. A touch or a warning brings it back at once.
-  // Soul EV tester 2026-11-26: only in a driving gear - P (and R) is always full brightness
+  // than the auto brightness), -1 '화면 밝기 0%': backlight off. A touch or a warning brings it back at once.
+  // Soul EV tester / user 2026-11-26: only in D - N / P / R are always full brightness, and the 30 s start again
+  // after shifting back to D (a gear the car does not report counts as D, so the feature still works there)
   bool driving_gear = true;
   if (s.scene.started && s.drive_dim != 0) {
     const auto gear = (*s.sm)["carState"].getCarState().getGearShifter();
-    driving_gear = gear != cereal::CarState::GearShifter::PARK && gear != cereal::CarState::GearShifter::REVERSE;
+    driving_gear = gear != cereal::CarState::GearShifter::PARK && gear != cereal::CarState::GearShifter::REVERSE &&
+                   gear != cereal::CarState::GearShifter::NEUTRAL;
+    if (!driving_gear) idle_frames = 0;
   }
   const bool want_dim = s.scene.started && s.drive_dim != 0 && driving_gear && idle_frames >= 30 * UI_FREQ &&
                         s.status != STATUS_WARNING && s.status != STATUS_ALERT;
   if (want_dim) {
     clipped_brightness = s.drive_dim < 0 ? 0.f : std::min(clipped_brightness, (float)s.drive_dim);
-    if (s.drive_dim < 0) brightness_filter.reset(0.f);  // '화면 끄기': off at once, not a 40 s fade
+    if (s.drive_dim < 0) brightness_filter.reset(0.f);  // '화면 밝기 0%': off at once, not a 40 s fade
   } else if (dimmed) {
     brightness_filter.reset(clipped_brightness);
   }

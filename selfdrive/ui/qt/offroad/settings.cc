@@ -1106,16 +1106,16 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     });
     dispToggles->addItem(keep_btn);
   }
-  // OptechDriveDim '주행 중 밝기' (ui.cc Device::updateBrightness): while driving (gear not P / R), 30 s without a touch
-  // -> this %, -1 '화면 끄기': backlight off (Soul EV tester 2026-11-26: screen fully off in D, bright again in P)
+  // OptechDriveDim '주행 중 밝기' (ui.cc Device::updateBrightness): in D only (not N / P / R), 30 s without a touch
+  // -> this %, -1 '화면 밝기 0%': backlight off (Soul EV tester 2026-11-26: screen fully off in D, bright again in P)
   {
     auto dim_btn = new ButtonControl("", "선택",
-      "[주행 중 화면 어둡게] 시동이 켜져 있고 기어가 D(주행)일 때만 동작합니다. P(주차)·R(후진)에서는 늘 원래 밝기입니다. "
-      "화면을 30초 동안 만지지 않으면 화면을 고른 밝기로 어둡게 합니다. 밤에 화면이 눈부실 때 쓰세요. "
-      "화면 끄기: 화면이 완전히 검게 꺼집니다. 화면을 누르면 다시 켜집니다. "
-      "화면을 만지거나, 경고가 뜨거나, 기어를 P에 두면 바로 원래 밝기로 돌아옵니다. "
-      "낮추지 않음(처음 값): 늘 원래 밝기 그대로입니다.");
-    const QStringList dim_names = {"낮추지 않음", "10%", "20%", "30%", "40%", "50%", "70%", "화면 끄기"};
+      "[주행 중 화면 어둡게] 고르면 기어가 D(주행)일 때만 해당됩니다. 화면을 30초 동안 만지지 않으면 고른 밝기로 어두워집니다. "
+      "화면 밝기 0%를 고르면 화면이 완전히 검게 됩니다. "
+      "화면을 터치하거나 기어를 N·P·R에 두면 화면이 다시 밝아지고, 다시 D로 바꾼 뒤 30초가 지나면 다시 적용됩니다. "
+      "경고가 뜰 때도 바로 밝아집니다. 밤에 화면이 눈부실 때 쓰세요. "
+      "항상 밝음(처음 값): 늘 원래 밝기 그대로입니다.");
+    const QStringList dim_names = {"항상 밝음", "10%", "20%", "30%", "40%", "50%", "70%", "화면 밝기 0%"};
     const QList<int> dim_pcts = {0, 10, 20, 30, 40, 50, 70, -1};
     auto dim_name = [=]() {
       const int i = dim_pcts.indexOf(std::atoi(Params().get("OptechDriveDim").c_str()));
