@@ -1162,14 +1162,17 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     });
     dispToggles->addItem(keep_btn);
   }
-  // OptechDriveDim '주행 중 밝기' (ui.cc Device::updateBrightness): while driving, 30 s without a touch -> this %
+  // OptechDriveDim '주행 중 밝기' (ui.cc Device::updateBrightness): while driving (gear not P / R), 30 s without a touch
+  // -> this %, -1 '화면 끄기': backlight off (Soul EV tester 2026-11-26: screen fully off in D, bright again in P)
   {
     auto dim_btn = new ButtonControl("", "선택",
-      "[주행 중 화면 어둡게] 주행 중에만 동작합니다. 화면을 30초 동안 만지지 않으면 화면을 고른 밝기로 어둡게 합니다. "
-      "화면은 꺼지지 않습니다. 밤에 화면이 눈부실 때 쓰세요. "
-      "화면을 만지거나 경고가 뜨면 바로 원래 밝기로 돌아옵니다. 끔(처음 값): 밝기를 낮추지 않습니다.");
-    const QStringList dim_names = {"끔", "10%", "20%", "30%", "40%", "50%", "70%"};
-    const QList<int> dim_pcts = {0, 10, 20, 30, 40, 50, 70};
+      "[주행 중 화면 어둡게] 시동이 켜져 있고 기어가 D(주행)일 때만 동작합니다. P(주차)·R(후진)에서는 늘 원래 밝기입니다. "
+      "화면을 30초 동안 만지지 않으면 화면을 고른 밝기로 어둡게 합니다. 밤에 화면이 눈부실 때 쓰세요. "
+      "화면 끄기: 화면이 완전히 검게 꺼집니다. 화면을 누르면 다시 켜집니다. "
+      "화면을 만지거나, 경고가 뜨거나, 기어를 P에 두면 바로 원래 밝기로 돌아옵니다. "
+      "낮추지 않음(처음 값): 늘 원래 밝기 그대로입니다.");
+    const QStringList dim_names = {"낮추지 않음", "10%", "20%", "30%", "40%", "50%", "70%", "화면 끄기"};
+    const QList<int> dim_pcts = {0, 10, 20, 30, 40, 50, 70, -1};
     auto dim_name = [=]() {
       const int i = dim_pcts.indexOf(std::atoi(Params().get("OptechDriveDim").c_str()));
       return "주행 중 밝기: " + dim_names[i < 0 ? 0 : i];
@@ -1239,9 +1242,9 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
       "[기기 전원을 끄는 시간] 상시 전원(시동을 꺼도 전기가 계속 들어오는 곳)에 연결한 차량용입니다. "
       "주행 후 시동을 끄고 고른 시간이 지나면 판다가 기기로 가는 전기를 끊어 기기가 꺼지고, 차 배터리를 아낍니다. "
       "다음에 시동을 걸면 판다가 전기를 다시 보내 기기가 켜지도록 합니다. "
-      "시동을 끄면 전기도 끊기는 곳에 연결했다면 끔으로 두세요. 끔(처음 값): 꺼지지 않습니다. "
+      "시동을 끄면 전기도 끊기는 곳에 연결했다면 꺼지지 않음으로 두세요. 꺼지지 않음(처음 값): 기기가 스스로 꺼지지 않습니다. "
       "기기를 켠 뒤 한 번도 시동을 걸지 않았으면 (집에서 업데이트·설정할 때) 꺼지지 않습니다.");
-    const QStringList off_names = {"끔", "30초", "1분", "3분", "5분", "10분"};
+    const QStringList off_names = {"꺼지지 않음", "30초", "1분", "3분", "5분", "10분"};
     const QList<int> off_secs = {0, 30, 60, 180, 300, 600};
     auto off_name = [=]() {
       const int i = off_secs.indexOf(std::atoi(Params().get("OptechOffShutdown").c_str()));

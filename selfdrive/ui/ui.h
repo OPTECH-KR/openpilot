@@ -217,7 +217,7 @@ public:
   float show_path_width = 1.0;
   int show_plot_mode = 0;
   int settings_timeout_s = 180;  // optech '화면 유지 시간' (OptechSettingsTimeout seconds, -1: never)
-  int drive_dim = 0;             // optech '주행 중 밝기' (OptechDriveDim %, 0: off)
+  int drive_dim = 0;             // optech '주행 중 밝기' (OptechDriveDim %, 0: off, -1: screen off)
   bool show_record_btn = false;  // optech '녹화 버튼' (OptechShowRecordBtn)
   bool show_gps_speed = true;    // optech 'GPS 속도' (OptechShowGpsSpeed), the box right of the set speed
   bool radar_tracks = false;     // EnableRadarTracks (badge)
