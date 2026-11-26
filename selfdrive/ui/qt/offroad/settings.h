@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+
 #include <QButtonGroup>
 #include <QFileSystemWatcher>
 #include <QFrame>
@@ -163,10 +165,14 @@ private:
   ListWidget* advancedToggles;
 
   ToggleControl* dmIcon = nullptr;  // optech '운전자 모니터링 아이콘' (화면 tab)
+  QList<std::function<void()>> choice_refresh;  // '이름: 값' titles of the choice() buttons, re-read in showEvent
 
   void togglesCarrot(int widgetIndex);
   void updateButtonStyles();
   void refreshDmIcon();
+  // '이름: 지금 값' + 선택 button (MultiOptionDialog); the param holds the index into names, def when empty / out of range
+  ButtonControl *choice(const QString &param, const QString &title, const QString &desc, const QStringList &names,
+                        int def = 0, std::function<void(int)> changed = nullptr);
 
 protected:
   void showEvent(QShowEvent *event) override;
