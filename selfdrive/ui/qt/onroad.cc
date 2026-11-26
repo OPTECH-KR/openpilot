@@ -307,6 +307,11 @@ static void drawOnScreenButton(QPainter &p, const QPoint &center, const QBrush &
   p.setPen(Qt::NoPen);
   p.setBrush(bg);
   p.drawEllipse(center, btn_size / 2, btn_size / 2);
+  // optech (user 2026-11-26): a light ring like the REC button's, so the dark buttons do not disappear on a dark road
+  p.setOpacity(1.0);
+  p.setPen(QPen(QColor(255, 255, 255, 80), 6));
+  p.setBrush(Qt::NoBrush);
+  p.drawEllipse(center, btn_size / 2 - 4, btn_size / 2 - 4);
   p.setOpacity(opacity);
 
   p.setFont(InterFont(32, QFont::DemiBold));
