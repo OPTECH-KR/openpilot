@@ -293,6 +293,14 @@ class DaemonProcess(ManagerProcess):
     pass
 
 
+# optech (2026-11-26): a dead process is never started again (start() returns while self.proc is set). For thermald that
+# meant no deviceState for the rest of the drive (김관중 K7 HEV: '저장 공간 부족 100%', could not engage for 2 h), so start
+# it again, at most every 5 s
+REVIVE_IF_DEAD = ("thermald",)
+REVIVE_GAP_S = 5.
+revive_ts: dict = {}
+
+
 def ensure_running(procs: ValuesView[ManagerProcess], started: bool, driverview: bool=False, not_run: Optional[List[str]]=None) -> None:
   if not_run is None:
     not_run = []
@@ -303,6 +311,12 @@ def ensure_running(procs: ValuesView[ManagerProcess], started: bool, driverview:
     elif not p.enabled:
       p.stop(block=False)
     elif p.persistent:
+      if p.name in REVIVE_IF_DEAD and p.proc is not None and p.proc.exitcode is not None and not p.shutting_down:
+        now = sec_since_boot()
+        if now - revive_ts.get(p.name, -1e9) >= REVIVE_GAP_S:
+          revive_ts[p.name] = now
+          cloudlog.error(f"{p.name} died with {p.proc.exitcode}, starting it again")
+          p.stop(block=False)  # already dead: only clears self.proc
       p.start()
     elif p.driverview and driverview:
       p.start()

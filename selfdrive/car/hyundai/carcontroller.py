@@ -31,6 +31,8 @@ RES_TRY_S = 3.0          # car SCC still off after this long -> stop pressing RE
 RES_RETRY_KPH = 5.0      # ... until the speed is this much higher, a lead appears,
 RES_HOLD_S = 15.0        # ... or this long has passed
 
+OPTECH_STOPPED_MS = 3.0 / 3.6  # below this the car counts as stopped for the cluster's speed camera blink
+
 
 def process_hud_alert(enabled, fingerprint, hud_control):
   sys_warning = (hud_control.visualAlert in (VisualAlert.steerRequired, VisualAlert.ldw))
@@ -297,10 +299,13 @@ class CarController:
                 can_sends.append(hyundaicanfd.create_buttons(self.packer, self.CP, CS.buttons_counter+1, Buttons.RES_ACCEL))
               self.last_button_frame = self.frame
     else:
+      # openpilot off and nothing to warn about: the cluster / HUD shows what the stock camera shows (no faint white
+      # car + lanes before SCC is set, K7 HEV tester 2026-11-26)
+      stock_display = not CC.enabled and not sys_warning and not left_lane_warning and not right_lane_warning
       can_sends.append(hyundaican.create_lkas11(self.packer, self.frame, self.car_fingerprint, self.send_lfa_mfa_lkas, apply_steer, lat_active,
                                                 torque_fault, CS.lkas11, sys_warning, sys_state, CC.enabled,
                                                 hud_control.leftLaneVisible or CC.enabled, hud_control.rightLaneVisible or CC.enabled,
-                                                left_lane_warning, right_lane_warning))
+                                                left_lane_warning, right_lane_warning, stock_display=stock_display))
 
       if not self.CP.openpilotLongitudinalControl:
         if CC.cruiseControl.cancel:
@@ -399,7 +404,10 @@ class CarController:
 
       # 20 Hz LFA MFA message
       if self.frame % 5 == 0 and self.CP.flags & HyundaiFlags.SEND_LFA.value:
-        can_sends.append(hyundaican.create_lfahda_mfc(self.packer, CC, self.blinking_signal))
+        # the HDA icon / 'AUTO' set speed blinks while slowing for a speed camera; not while stopped (tester 2026-11-26:
+        # at a red light 41 m before a 70 camera the cluster kept blinking 80 at 0 km/h), steady green then
+        blink = self.blinking_signal and CS.out.vEgo > OPTECH_STOPPED_MS
+        can_sends.append(hyundaican.create_lfahda_mfc(self.packer, CC, blink))
 
       # 5 Hz ACC options
       if self.frame % 20 == 0 and self.CP.openpilotLongitudinalControl: 
