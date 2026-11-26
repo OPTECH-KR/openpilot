@@ -1181,8 +1181,21 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     QObject::connect(dim_btn, &ButtonControl::clicked, [=]() {
       const QString sel = MultiOptionDialog::getSelection("주행 중 밝기", dim_names, dim_name().section(": ", 1), this);
       if (sel.isEmpty()) return;
-      Params().put("OptechDriveDim", std::to_string(dim_pcts[dim_names.indexOf(sel)]));
+      const int pct = dim_pcts[dim_names.indexOf(sel)];
+      Params().put("OptechDriveDim", std::to_string(pct));
       dim_btn->setTitle(dim_name());
+      // user 2026-11-26: like the Bolt EV car choice, explain right after choosing how it brightens and comes back
+      if (pct != 0) {
+        const QString level = pct < 0 ? "화면 밝기 0%" : QString("%1%").arg(pct);
+        const QString what = pct < 0 ? "화면이 검게 꺼집니다." : QString("화면이 %1% 밝기로 어두워집니다.").arg(pct);
+        // rich (42 px): this text does not fit the 70 px alert, whose button then ends up off the screen.
+        // 8 lines so it fits without scrolling
+        ConfirmationDialog::rich("<b>주행 중 밝기: " + level + "</b><br>"
+                                 "기어가 D일 때 화면을 30초 동안 만지지 않으면 " + what + "<br><br>"
+                                 "<b>다시 밝아지는 때</b><br>· 화면을 터치할 때 · 기어를 N·P·R에 둘 때 · 경고가 뜰 때<br><br>"
+                                 "<b>다시 " + level + "가 되는 때</b><br>"
+                                 "· 터치한 뒤 30초 동안 안 만지면 · N·P·R에서 D로 바꾸고 30초가 지나면", this);
+      }
     });
     dispToggles->addItem(dim_btn);
   }
