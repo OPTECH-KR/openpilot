@@ -789,10 +789,17 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
   });
   disp->addItem(dm_icon);
   disp->addItem(optech_section("화면 버튼"));
-  toggle(disp, "dp_long_personality_btn", "주행 성향 버튼",
-         "주행 화면에 주행 성향(차간거리 성향) 버튼을 보여 줍니다.");
-  toggle(disp, "dp_long_accel_btn", "가속 성향 버튼",
-         "주행 화면에 가속 성향 버튼을 보여 줍니다.");
+  // the drive screen buttons keep dragonpilot's English letters: name them as they look (user 2026-11-26)
+  toggle(disp, "dp_long_personality_btn", "주행 성향 버튼 (PERSNLY)",
+         "주행 화면 오른쪽 아래의 동그란 버튼 중 오른쪽, 아래에 'PERSNLY'라고 적힌 버튼입니다. "
+         "가운데에 A·Aggressive(가깝게), S·Standard(보통), R·Relaxed(멀리)가 보입니다. "
+         "누를 때마다 바뀌고, 속도 탭의 '주행 성향 (차간거리)'와 같은 설정입니다. 끄면 이 버튼이 주행 화면에서 사라집니다. "
+         "openpilot이 가감속을 맡는 차량에서만 보입니다.");
+  toggle(disp, "dp_long_accel_btn", "가속 성향 버튼 (ACCEL)",
+         "주행 화면 오른쪽 아래의 동그란 버튼 중 왼쪽, 아래에 'ACCEL'이라고 적힌 버튼입니다. "
+         "가운데에 O·OP(기본), E·ECO(부드럽게), N·NOR(보통), S·SPT(빠르게)가 보입니다. "
+         "누를 때마다 바뀌고, 속도 탭의 '가속 성향'과 같은 설정입니다. 끄면 이 버튼이 주행 화면에서 사라집니다. "
+         "openpilot이 가감속을 맡는 차량에서만 보입니다.");
 
   // ======== 고급 ========
   adv->addItem(optech_section("기기"));
