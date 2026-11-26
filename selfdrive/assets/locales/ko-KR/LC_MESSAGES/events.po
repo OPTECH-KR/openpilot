@@ -42,7 +42,7 @@ msgstr "경고: 이 Branch는 테스트되지 않았습니다"
 #: ../selfdrive/controls/lib/events.py:238
 #, fuzzy, python-brace-format
 msgid "Drive above {speed} to engage"
-msgstr "%(speed)d %(unit)s 이상의 속도로 주행하세요"
+msgstr "{speed} 넘게 달려야 시작할 수 있습니다"
 
 #: ../selfdrive/controls/lib/events.py:243
 #, fuzzy, python-format
@@ -52,22 +52,22 @@ msgstr "%d %s 이하에서는 조향제어가 불가합니다"
 #: ../selfdrive/controls/lib/events.py:250
 #, fuzzy
 msgid "Recalibration"
-msgstr "캘리브레이션 진행 중"
+msgstr "카메라 다시 보정"
 
 #: ../selfdrive/controls/lib/events.py:250
 #, fuzzy
 msgid "Calibration"
-msgstr "캘리브레이션 진행 중"
+msgstr "카메라 보정"
 
 #: ../selfdrive/controls/lib/events.py:252
 #, fuzzy, python-brace-format
 msgid "{word} in Progress: {perc}%"
-msgstr "캘리브레이션 진행중: %d%%"
+msgstr "{word} 중: {perc}%"
 
 #: ../selfdrive/controls/lib/events.py:253
 #, fuzzy, python-brace-format
 msgid "Drive Above {speed}"
-msgstr "%(speed)d %(unit)s 이상의 속도로 주행하세요"
+msgstr "{speed} 넘게 달려 주세요"
 
 #: ../selfdrive/controls/lib/events.py:260
 msgid "Poor GPS reception"
@@ -292,7 +292,7 @@ msgstr "수동으로 재출발 하세요"
 #: ../selfdrive/controls/lib/events.py:513
 #, fuzzy
 msgid "Press Resume to Exit Standstill"
-msgstr "재출발을 위해 RES버튼을 누르세요"
+msgstr "출발하려면 RES(재개) 버튼을 누르세요"
 
 #: ../selfdrive/controls/lib/events.py:525
 #, fuzzy
@@ -369,7 +369,7 @@ msgstr "브레이크 홀드 중"
 #: ../selfdrive/controls/lib/events.py:619
 #, fuzzy
 msgid "Parking Brake Engaged"
-msgstr "파킹브레이크 체결 됨"
+msgstr "주차 브레이크가 걸려 있습니다"
 
 #: ../selfdrive/controls/lib/events.py:624
 #, fuzzy
@@ -379,12 +379,12 @@ msgstr "시작 중 페달 밟음"
 #: ../selfdrive/controls/lib/events.py:630
 #, fuzzy
 msgid "Release Brake to Engage"
-msgstr "파킹브레이크 체결 됨"
+msgstr "브레이크에서 발을 떼면 시작합니다"
 
 #: ../selfdrive/controls/lib/events.py:658
 #, fuzzy
 msgid "Press Set to Engage"
-msgstr "파킹브레이크 체결 됨"
+msgstr "처음에는 SET 버튼으로 시작하세요"
 
 #: ../selfdrive/controls/lib/events.py:663
 #, fuzzy
@@ -601,11 +601,11 @@ msgstr "장치를 점검하세요"
 
 #: ../selfdrive/controls/lib/events.py:932
 msgid "openpilot Canceled"
-msgstr "오픈파일럿 시작불가"
+msgstr "오픈파일럿 해제됨"
 
 #: ../selfdrive/controls/lib/events.py:933
 msgid "Speed too low"
-msgstr "선행차량이 없습니다"
+msgstr "속도가 너무 낮습니다"
 
 #: ../selfdrive/controls/lib/events.py:941
 msgid "Speed Too High"
@@ -781,3 +781,8 @@ msgstr "운전자 전방주시 불안"
 
 #~ msgid "Please Connect to Internet"
 #~ msgstr "인터넷에 연결하세요"
+
+# optech-spst 2026-11-26: texts the old file did not have (msgids as in events.py now)
+
+msgid "Steer Unavailable Below {speed}"
+msgstr "{speed} 아래에서는 조향이 안 됩니다"
