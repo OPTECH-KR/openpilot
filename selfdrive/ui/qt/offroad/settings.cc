@@ -42,7 +42,6 @@
 #include <QTimer> // opkr
 #include <QFileInfo> // opkr
 #include <QDir>
-#include <QElapsedTimer>
 #include <algorithm>
 #include <QNetworkInterface>  // optech 주행 기록 내려받기
 #include <QImage>
@@ -754,55 +753,6 @@ static QLabel *carrot_section(const QString &title) {
   return label;
 }
 
-// Live text for the 'GPS 확인' screen: uses the GPS summary the UI keeps in UIScene (ubloxGnss) plus gpsLocationExternal.
-static QString gps_check_text(int elapsed_s) {
-  const UIState *s = uiState();
-  const SubMaster &sm = *(s->sm);
-  const UIScene &scene = s->scene;
-  const bool phone = Params().get("GpsSource") == "1";  // phone built-in GPS (gpsd) needs no panda
-  const bool panda = phone || scene.pandaType != cereal::PandaState::PandaType::UNKNOWN;
-  const bool gnss_alive = sm.alive("ubloxGnss");
-  const bool loc_alive = sm.alive("gpsLocationExternal");
-  const auto loc = sm["gpsLocationExternal"].getGpsLocationExternal();
-  const bool fixed = loc_alive && (loc.getFlags() & 1);
-  const float acc = loc.getAccuracy();
-
-  QString state, color;
-  if (!panda) { state = "판다 연결 안 됨"; color = "#AAAAAA"; }
-  else if (!gnss_alive) { state = "GPS 신호 없음"; color = "#AAAAAA"; }
-  else if (scene.gps_antenna_bad) { state = "안테나 이상"; color = "#FF4040"; }
-  else if (!fixed) { state = "위성 찾는 중"; color = "#DACA25"; }
-  else if (acc <= 5.0f) { state = "잡힘 (좋음)"; color = "#33DD33"; }
-  else if (acc <= 15.0f) { state = "잡힘 (보통)"; color = "#DACA25"; }
-  else { state = "잡힘 (약함)"; color = "#DA6F25"; }
-
-  const int cno = scene.gps_cno;
-  const int bars = cno >= 35 ? 4 : cno >= 30 ? 3 : cno >= 25 ? 2 : cno >= 20 ? 1 : 0;
-  const QString bar_text = QString("<span style='color:%1'>%2</span><span style='color:#555555'>%3</span>")
-                             .arg(color, QString("■").repeated(bars), QString("■").repeated(4 - bars));
-
-  QString t = phone ? "<h2>GPS 확인 (폰 내장 GPS)</h2>" : "<h2>GPS 확인 (판다/uno GPS)</h2>";
-  t += QString("<p style='font-size:60px; color:%1'><b>%2</b></p>").arg(color, state);
-  t += QString("<p>신호 세기: %1 &nbsp;(%2 dB-Hz)</p>").arg(bar_text).arg(cno);
-  t += QString("<p>보이는 위성: %1개 &nbsp;(강한 위성 %2개)</p>").arg(scene.gps_sats).arg(scene.gps_strong);
-  if (fixed) {
-    t += QString("<p>위치 오차: 약 %1 m</p>").arg(acc, 0, 'f', 0);
-    t += QString("<p>위치: %1, %2</p>").arg(loc.getLatitude(), 0, 'f', 5).arg(loc.getLongitude(), 0, 'f', 5);
-  } else {
-    t += "<p>위치 오차: -</p>";
-  }
-  t += QString("<p style='color:#888888'>확인 시작 후 %1초</p>").arg(elapsed_s);
-  if (!panda) {
-    t += "<p>판다(uno 보드)가 연결되지 않았어요. C2에 차량 하네스 전원이 들어와야 GPS가 켜집니다.</p>";
-  } else if (!gnss_alive && elapsed_s >= 20) {
-    t += phone ? "<p>폰 내장 GPS에서 데이터가 오지 않아요. 이 기기는 내장 GPS(모뎀)가 동작하지 않는 상태일 수 있어요.</p>"
-               : "<p>GPS 칩에서 데이터가 오지 않아요. GPS 안테나가 연결돼 있는지 확인해 주세요.</p>";
-  } else if (!fixed) {
-    t += "<p>처음 켜면 위성을 찾는 데 1~3분 걸릴 수 있어요. 하늘이 잘 보이는 곳에서 확인하세요.</p>";
-  }
-  return t;
-}
-
 CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   main_layout = new QStackedLayout(this);
   homeScreen = new QWidget(this);
@@ -869,22 +819,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   });
   startToggles->addItem(selectCarBtn);
   for (auto page : ccOnlyPages) startToggles->addItem(page);
-  auto gps_btn = new ButtonControl("GPS 확인", "확인", "시동을 걸지 않아도 GPS를 켜서 잡힘 여부, 신호 세기, 위성 수, 위치 오차를 실시간으로 보여 줍니다. 창을 닫으면 GPS는 다시 꺼집니다. 기기 내장 GPS를 사용합니다.");
-  QObject::connect(gps_btn, &ButtonControl::clicked, [=]() {
-    Params().putBool("GpsCheck", true);  // boardd powers the uBlox while this is set (read about once a second)
-    ConfirmationDialog d(gps_check_text(0), "닫기", "", true, this);
-    QLabel *label = d.findChild<QLabel *>();
-    QElapsedTimer started;
-    started.start();
-    QTimer refresh;
-    QObject::connect(&refresh, &QTimer::timeout, [&]() {
-      if (label) label->setText(gps_check_text(started.elapsed() / 1000));
-    });
-    refresh.start(500);
-    d.exec();
-    refresh.stop();
-    Params().putBool("GpsCheck", false);
-  });
+  // (no 'GPS 확인' button on 고급 since 2026-11-26, user; boardd still powers the uBlox while GpsCheck is set)
   // EngageWithLong: what the cruise button turns on (controlsd / cruise_helper); no reboot needed
   auto engage_mode_btn = new ButtonControl("", "선택", "크루즈 버튼으로 openpilot을 켤 때 무엇을 켤지 고릅니다. 조향+가감속 사용: 조향과 가감속이 함께 켜지고, 설정 속도는 그때의 현재 속도입니다. 브레이크를 밟았다 뗐을 때의 동작은 아래 '브레이크 후 다시 켜기'에서 고릅니다. 조향만 사용: 조향만 켜지고, 어떤 버튼이나 페달로도 가감속은 켜지지 않습니다. 어느 쪽이든 크루즈 버튼을 다시 누르면 모두 꺼지고, +/- 버튼은 가감속이 켜져 있을 때 설정 속도만 바꿉니다.");
   auto engage_mode_name = []() {
@@ -933,9 +868,13 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     "악셀을 더 밟아 빨라지면 설정 속도도 따라 올라갑니다 (속도 탭 '가속페달 속도 맞춤 상한'까지). "
     "핸들을 많이 꺾었거나 빨간 신호 앞에서는 켜지지 않고, 크루즈 버튼으로 직접 끈 뒤에도 켜지지 않습니다.",
     ROAD_ICON, this));
-  cruiseToggles->addItem(new CValueControl("SoftHoldMode", "소프트홀드", "정차 후 브레이크를 떼도 차를 멈춘 상태로 잡아 주는 기능입니다. 0:사용 안 함, 1:사용, 2:SCC와 함께 사용(일부 차량은 전자식 주차 브레이크가 걸릴 수 있음)", ROAD_ICON, 0, 2, 1));
+  cruiseToggles->addItem(choice("SoftHoldMode", "소프트홀드",
+    "정차 후 브레이크를 떼도 차를 멈춘 상태로 잡아 주는 기능입니다.\n"
+    "사용 안 함(처음 값) / 사용 / SCC와 함께 사용 (일부 차량은 전자식 주차 브레이크가 걸릴 수 있음)",
+    {"사용 안 함", "사용", "SCC와 함께 사용"}));
   cruiseToggles->addItem(carrot_section("크루즈 버튼"));
-  cruiseToggles->addItem(new CValueControl("LongControlActiveSound", "크루즈 알림음", "크루즈가 켜지고 꺼질 때 나는 알림음 크기입니다. 0:끄기, 1:작게, 2:크게", ROAD_ICON, 0, 2, 1));
+  cruiseToggles->addItem(choice("LongControlActiveSound", "크루즈 알림음", "크루즈가 켜지고 꺼질 때 나는 알림음 크기입니다. 처음 값: 작게",
+    {"끄기", "작게", "크게"}, 1));
   cruiseToggles->addItem(new CValueControl("CruiseSpeedUnit", "버튼 한 번에 바뀌는 속도", "크루즈 속도 버튼을 한 번 누를 때 바뀌는 속도(km/h)입니다.", ROAD_ICON, 1, 20, 1));
   // optech: same camera items as optech-spst - 내장 카메라 DB / 카메라 감속 (on/off) / 내비 연동 방식 (hkg only).
   // 내비 연동 방식 (OptechNaviLinkMode, user 2026-11-25) names the phone app: 0 사용 안 함, 1 TmapNda, 2 당근내비 (it was
@@ -961,8 +900,8 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   // shown right under '카메라 감속' while it is on: how it works with the navigation link and with the built-in DB
   QLabel *cam_note = new QLabel("● 과속카메라 앞 '감속 시작'에 정한 시간(처음 값 22초) 전부터 설정 속도를 조금씩 내려서, '감속 끝'(6초 전)까지 '목표 속도'(처음 값: 제한 속도 그대로 100%)에 맞춥니다. "
                                 "구간단속은 구간이 끝날 때까지 제한 속도를 지킵니다.\n"
-                                "● 내비 연동(1·2): 폰 내비 앱(TmapNda·당근내비)이 보내는 카메라 정보를 먼저 쓰고, 앱 정보가 없을 때는 내장 카메라 DB와 차 순정 내비의 카메라 정보로 채웁니다.\n"
-                                "● 내장 카메라 DB만(0): 내비 앱 없이 기기 GPS와 전국 카메라 위치(약 3만 1천 대)로 찾습니다. "
+                                "● 내비 연동(TmapNda·당근내비): 폰 내비 앱이 보내는 카메라 정보를 먼저 쓰고, 앱 정보가 없을 때는 내장 카메라 DB와 차 순정 내비의 카메라 정보로 채웁니다.\n"
+                                "● 내장 카메라 DB만(내비 연동 '사용 안 함'): 내비 앱 없이 기기 GPS와 전국 카메라 위치(약 3만 1천 대)로 찾습니다. "
                                 "이동식·새 카메라는 모르고, 반대 차로의 카메라에도 줄일 수 있습니다.\n"
                                 "● '사용 방식'이 조향+가감속일 때만 속도를 줄입니다. GPS가 안 잡히면 동작하지 않습니다.");
   cam_note->setWordWrap(true);
@@ -982,22 +921,26 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   // carcontroller: while the camera slowdown starts (activeHda 2) the value goes into LKAS11 CF_Lkas_LdwsLH/RHWarning
   // for 0-3 s and 5-8 s, i.e. the car's own lane departure warning (K7 HEV tester 2026-11-24: beeps + cluster warning
   // surprised him; the old text promised '1 핸들 진동, 2 계기판 표시, 3 HUD 표시', but every value 1-3 does the same)
-  CValueControl *cam_haptic = new CValueControl("HapticFeedbackWhenSpeedCamera", "과속 단속 알림",
-                                                "카메라 앞에서 속도를 줄이기 시작할 때 차의 차선 이탈 경고를 빌려 알려 줍니다 (3초씩 두 번).\n"
-                                                "0: 사용 안 함 (속도만 줄임, 처음 값)\n"
-                                                "1~3: 계기판에 차선 이탈 경고가 뜨고 경고음이 납니다. 핸들 진동이 있는 차는 핸들도 떨립니다. 숫자에 따라 차마다 경고 모양이 조금 다릅니다.",
-                                                ROAD_ICON, 0, 3, 1);
-  CValueControl *navi_mode = new CValueControl("OptechNaviLinkMode", "내비 연동 방식",
+  // the value goes into CF_Lkas_LdwsLH/RHWarning as it is: openpilot's own lane departure warning uses 1 on the
+  // Genesis G80 / G90 and 2 on the other cars (carcontroller process_hud_alert)
+  ButtonControl *cam_haptic = choice("HapticFeedbackWhenSpeedCamera", "과속 단속 알림",
+    "카메라 앞에서 속도를 줄이기 시작할 때 차의 차선 이탈 경고를 빌려 알려 줍니다 (3초씩 두 번).\n"
+    "사용 안 함(처음 값): 알리지 않고 속도만 줄입니다.\n"
+    "차선 경고 1·2·3: 계기판에 차선 이탈 경고가 뜨고 경고음이 납니다. 핸들 진동이 있는 차는 핸들도 떨립니다. "
+    "차마다 맞는 번호가 다릅니다: 제네시스 G80·G90은 1, 다른 현대·기아는 보통 2입니다 (openpilot이 차선 이탈 경고에 쓰는 값). "
+    "경고가 안 뜨거나 모양이 이상하면 다른 번호를 골라 보세요.",
+    {"사용 안 함", "차선 경고 1", "차선 경고 2", "차선 경고 3"});
+  ButtonControl *navi_mode = choice("OptechNaviLinkMode", "내비 연동 방식",
     "폰 내비 앱에서 카메라·과속방지턱·길안내 정보를 받습니다. 쓰는 앱에 맞춰 고르세요.\n"
-    "0: 사용 안 함 - 내비 앱 정보를 받지 않고 내장 카메라 DB만 씁니다.\n"
-    "1: TmapNda - 앱의 오픈파일럿 연결이 당근 방식이든 NDA 방식이든 모두 받습니다. 앱에서 NDA 방식으로 두면 주행 화면에 TMAP으로 떠서 당근내비(CARROT)와 구별됩니다.\n"
-    "2: 당근내비 - 당근 방식으로 받습니다.\n"
-    "1·2 공통: 폰과 C2가 같은 와이파이(핫스팟)에 붙어 있어야 합니다. 앱 정보가 없을 때는 내장 카메라 DB와 차 순정 내비의 카메라 정보로 채웁니다.\n"
-    "'카메라 감속'이 켜져 있을 때 적용되고, 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 2, 1);
-  QObject::connect(navi_mode, &CValueControl::valueChanged, [=](int cam_v) {
-    Params cam_params;
-    if (std::atoi(cam_params.get("AutoNaviSpeedCtrl").c_str()) > 0 && cam_v >= 0 && cam_v <= 2) cam_params.put("AutoNaviSpeedCtrl", std::to_string(navi_ctrl(cam_v)));
-  });
+    "사용 안 함: 내비 앱 정보를 받지 않고 내장 카메라 DB만 씁니다.\n"
+    "TmapNda(처음 값): 앱의 오픈파일럿 연결이 당근 방식이든 NDA 방식이든 모두 받습니다. 앱에서 NDA 방식으로 두면 주행 화면에 TMAP으로 떠서 당근내비(CARROT)와 구별됩니다.\n"
+    "당근내비: 당근 방식으로 받습니다.\n"
+    "TmapNda·당근내비 공통: 폰과 C2가 같은 와이파이(핫스팟)에 붙어 있어야 합니다. 앱 정보가 없을 때는 내장 카메라 DB와 차 순정 내비의 카메라 정보로 채웁니다.\n"
+    "'카메라 감속'이 켜져 있을 때 적용되고, 바꾼 뒤 재부팅해야 적용됩니다.",
+    {"사용 안 함", "TmapNda", "당근내비"}, 1, [=](int cam_v) {
+      Params cam_params;
+      if (std::atoi(cam_params.get("AutoNaviSpeedCtrl").c_str()) > 0) cam_params.put("AutoNaviSpeedCtrl", std::to_string(navi_ctrl(cam_v)));
+    });
   ParamControl *cam_db = new ParamControl("SpeedCamDB", "내장 카메라 DB", "내비 앱 없이 기기 GPS로 앞쪽 고정식 단속카메라(과속·신호과속·구간단속)를 찾습니다.\n전국 약 3만 1천 대(공공데이터)의 위치가 기기에 들어 있습니다. 구간단속은 구간이 끝날 때까지 제한속도를 지킵니다.\n\n● 함께 켜야 할 것: '카메라 감속' (끄면 화면에 CAM 표시만 나오고 속도는 줄이지 않습니다)\n● 안 되는 경우: 이동식 카메라, 새로 생긴 카메라 / GPS가 안 잡힐 때 / 스마트 크루즈가 없는 차(조향만 하는 차)\n● 주의: 반대 차로의 카메라에서도 속도를 줄일 수 있습니다. 내비 앱이 카메라 정보를 보내면 앱 정보를 먼저 씁니다.\n\n바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, this);
   QList<QWidget*> cam_group = {cam_note};
   cam_group += cam_tune;
@@ -1105,26 +1048,35 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     lm_refresh();
   }
   steerToggles->addItem(new CValueControl("PathOffset", "경로 좌우 보정 (쏠릴 때)", "차가 차로 안에서 한쪽으로 치우쳐 달리면 보정합니다. -값:왼쪽으로, +값:오른쪽으로 옮깁니다.", ROAD_ICON, -200, 200, 1));
-  steerToggles->addItem(new CValueControl("NNFF", "NNFF 조향 보정", "차종별로 미리 학습된 작은 신경망으로 커브에서 필요한 핸들 힘을 더 정확히 계산합니다(twilsonco NNFF, 당근 c3-wip에서 이식). 현대·기아·제네시스 31개 차종에만 모델이 있고, 모델이 없는 차(K7, 그랜저 IG 등)는 켜도 기존 방식 그대로입니다. 토크 조향 차량에서만 동작합니다. 0:끄기, 1:켜기. 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 1, 1));
-  steerToggles->addItem(new CValueControl("NNFFLite", "NNFF 라이트", "NNFF 모델이 없는 차(K7, 그랜저 등)용입니다. 주행 모델이 예상한 앞쪽 커브 변화를 미리 보고, 커브에 들어가거나 나올 때 핸들 마찰 보정을 미리 넣어 늦게 꺾이거나 늦게 풀리는 느낌을 줄입니다. 보정 크기는 기존 마찰 값 안으로 제한됩니다. 모델이 있는 차에서 NNFF를 켜면 NNFF가 우선합니다. 토크 조향 차량에서만 동작합니다. 0:끄기, 1:켜기. 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, 0, 1, 1));
+  steerToggles->addItem(new ParamControl("NNFF", "NNFF 조향 보정", "켜 두면(초록색) 차종별로 미리 학습된 작은 신경망으로 커브에서 필요한 핸들 힘을 더 정확히 계산합니다(twilsonco NNFF, 당근 c3-wip에서 이식). 현대·기아·제네시스 31개 차종에만 모델이 있고, 모델이 없는 차(K7, 그랜저 IG 등)는 켜도 기존 방식 그대로입니다. 토크 조향 차량에서만 동작합니다. 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, this));
+  steerToggles->addItem(new ParamControl("NNFFLite", "NNFF 라이트", "NNFF 모델이 없는 차(K7, 그랜저 등)용입니다. 켜 두면(초록색) 주행 모델이 예상한 앞쪽 커브 변화를 미리 보고, 커브에 들어가거나 나올 때 핸들 마찰 보정을 미리 넣어 늦게 꺾이거나 늦게 풀리는 느낌을 줄입니다. 보정 크기는 기존 마찰 값 안으로 제한됩니다. 모델이 있는 차에서 NNFF를 켜면 NNFF가 우선합니다. 토크 조향 차량에서만 동작합니다. 바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, this));
   steerToggles->addItem(new CValueControl("AutoLaneChangeSpeed", "차선변경 최소 속도", "방향지시등을 켰을 때 자동 차선 변경이 되는 최소 속도(km/h)입니다.", ROAD_ICON, 5, 60, 5));
   steerToggles->addItem(carrot_section("커브"));
-  steerToggles->addItem(new CValueControl("AutoCurveSpeedCtrlUse", "커브 자동 감속", "커브를 만나면 미리 속도를 줄입니다. 0:사용 안 함, 1·3:도로 설계 기준(주행 경로의 휘어짐으로 계산), 2:당근 방식(카메라로 앞 커브를 보고 거리에 맞춰 미리 감속)", ROAD_ICON, 0, 3, 1));
+  // cruise_helper: 2 = carrot vision curve speed, any other value > 0 = apilot road-design table (3 did the same as 1)
+  if (Params().get("AutoCurveSpeedCtrlUse") == "3") Params().put("AutoCurveSpeedCtrlUse", "1");
+  steerToggles->addItem(choice("AutoCurveSpeedCtrlUse", "커브 자동 감속",
+    "커브를 만나면 미리 속도를 줄입니다.\n"
+    "사용 안 함: 커브에서 따로 줄이지 않습니다.\n"
+    "도로 설계 기준: 주행 경로가 휘어진 정도로 계산해서 줄입니다.\n"
+    "당근 방식(처음 값): 카메라로 앞 커브를 보고 거리에 맞춰 미리 줄입니다.",
+    {"사용 안 함", "도로 설계 기준", "당근 방식"}, 2));
   steerToggles->addItem(new CValueControl("AutoCurveSpeedFactor", "커브 감속 비율", "커브 감속 정도입니다(%). 높이면 커브에서 더 빨리 달리고, 낮추면 더 많이 감속합니다.", ROAD_ICON, 50, 300, 1));
   steerToggles->addItem(carrot_section("조향 세부 (커브에서 덜 꺾이거나 너무 꺾일 때)"));
   steerToggles->addItem(new CValueControl("SteerRatioApply", "조향비 고정", "핸들을 돌린 만큼 바퀴가 꺾이는 비율(조향비)을 고정합니다(0.1 단위, 150=15.0). 0:자동 학습값 사용", ROAD_ICON, 0, 300, 2));
   steerToggles->addItem(new CValueControl("LiveSteerRatioApply", "실시간 조향비 적용", "자동으로 학습한 조향비를 몇 %로 쓸지 정합니다. 커브에서 너무 많이 꺾이면(오버스티어) 낮추세요.", ROAD_ICON, 50, 110, 1));
   steerToggles->addItem(new CValueControl("SteerActuatorDelay", "조향 반응 지연 보정", "조향 명령을 보낸 뒤 실제로 핸들이 움직이기까지 걸리는 시간 보정입니다(0.01초 단위). 커브에서 늦게 꺾이면 조금 올려 보세요.", ROAD_ICON, 0, 100, 1));
-  auto torqueCustom = new CValueControl("LateralTorqueCustom", "토크 사용자 설정", "토크 조향 값을 직접 정할지 고릅니다. 0:차량 기본값 + 주행하며 자동 학습, 1·2:자동 학습을 끄고 아래 '토크 가속 계수'와 '토크 마찰 계수'를 사용(주행 중 바꿔도 몇 초 안에 적용)", ROAD_ICON, 0, 2, 1);
+  // 1 and 2 did the same while driving (latcontrol_torque reads the values every 0.3 s; 2 also set them at the start)
+  if (Params().get("LateralTorqueCustom") == "2") Params().put("LateralTorqueCustom", "1");
+  auto torqueCustom = new ParamControl("LateralTorqueCustom", "토크 사용자 설정", "켜 두면(초록색) 자동 학습을 끄고 아래 '토크 가속 계수'와 '토크 마찰 계수'를 씁니다 (주행 중 바꿔도 몇 초 안에 적용). 끄면(처음 값) 차량 기본값으로 시작해서 주행하며 자동으로 학습합니다.", ROAD_ICON, this);
   steerToggles->addItem(torqueCustom);
   auto torqueAccel = new CValueControl("LateralTorqueAccelFactor", "토크 가속 계수", "토크 조향에서 원하는 회전량을 내는 데 필요한 힘 계수입니다. 커브에서 덜 꺾이면 낮추고, 너무 꺾이면 높이세요. '토크 사용자 설정'이 켜져 있을 때만 적용됩니다.", ROAD_ICON, 1000, 4000, 10);
   steerToggles->addItem(torqueAccel);
   auto torqueFriction = new CValueControl("LateralTorqueFriction", "토크 마찰 계수", "핸들 마찰을 보정하는 값입니다. 직진에서 핸들이 늦게 반응하면 조금 올려 보세요. '토크 사용자 설정'이 켜져 있을 때만 적용됩니다.", ROAD_ICON, 0, 1000, 10);
   steerToggles->addItem(torqueFriction);
   // show the two torque values only while 토크 사용자 설정 is on
-  auto showTorqueValues = [=](int v) { torqueAccel->setVisible(v > 0); torqueFriction->setVisible(v > 0); };
-  QObject::connect(torqueCustom, &CValueControl::valueChanged, showTorqueValues);
-  showTorqueValues(std::atoi(Params().get("LateralTorqueCustom").c_str()));
+  auto showTorqueValues = [=](bool on) { torqueAccel->setVisible(on); torqueFriction->setVisible(on); };
+  QObject::connect(torqueCustom, &ToggleControl::toggleFlipped, showTorqueValues);
+  showTorqueValues(Params().getBool("LateralTorqueCustom"));
 
   // ---- 화면 ----
   dispToggles = new ListWidget(this);
@@ -1183,10 +1135,11 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     "켜 두면(초록색) 주행 화면 설정 속도 칸 오른쪽 작은 칸에 GPS로 잰 속도(km/h)를 초록 숫자로 보여 줍니다. 계기판 속도는 실제보다 몇 % 높게 "
     "나오므로, 실제로 몇 km/h로 달리는지 볼 때 씁니다. GPS가 안 잡히면 숫자 대신 초록 가로 막대가 나옵니다. 끄면 칸이 사라집니다.", SHELL_ICON, this));
   // (no '시간 표시' (ShowDateTime): the optech 주행 화면 has no clock, user 2026-11-23)
-  dispToggles->addItem(new CValueControl("ShowTpms", "타이어 공기압", "주행 화면 오른쪽 맨 아래 칸에 네 바퀴의 타이어 공기압(psi)을 보여 줍니다. 위 줄이 앞바퀴(왼쪽·오른쪽), 아래 줄이 뒷바퀴입니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
-  dispToggles->addItem(new CValueControl("ShowGpsInfo", "GPS 상태", "주행 화면 왼쪽 위(내비 연결 표시 옆)에 GPS가 잡혔는지와 신호 세기(막대 4칸)를 보여 줍니다. 초록: 잘 잡힘, 주황: 찾는 중·약함. GPS는 시동이 켜져 있을 때만 동작합니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
-  dispToggles->addItem(new CValueControl("ShowDeviceState", "기기 상태", "주행 화면 오른쪽 가운데 칸에 기기의 CPU 온도와 CPU 사용률을 보여 줍니다. 80°C를 넘거나 사용률이 90%를 넘으면 빨갛게 깜빡입니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
-  dispToggles->addItem(new CValueControl("ShowBlindSpot", "후측방(BSD) 경고", "옆 차로 뒤쪽에 차가 있으면 도로 양옆(앞차 정보 옆)에 노란 차량 표시가 뜹니다. 그쪽으로 방향지시등을 켜면 그 표시가 깜빡입니다. 시속 30km 이상에서만 보이고, 차에 후측방 감지(BSD)가 있어야 합니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
+  // optech (user 2026-11-26): the 0 / 1 items are on/off switches like 녹화 버튼 (ui.cc still reads them with atoi)
+  dispToggles->addItem(new ParamControl("ShowTpms", "타이어 공기압", "켜 두면(초록색) 주행 화면 오른쪽 맨 아래 칸에 네 바퀴의 타이어 공기압(psi)을 보여 줍니다. 위 줄이 앞바퀴(왼쪽·오른쪽), 아래 줄이 뒷바퀴입니다.", SHELL_ICON, this));
+  dispToggles->addItem(new ParamControl("ShowGpsInfo", "GPS 상태", "켜 두면(초록색) 주행 화면 왼쪽 위(내비 연결 표시 옆)에 GPS가 잡혔는지와 신호 세기(막대 4칸)를 보여 줍니다. 초록: 잘 잡힘, 주황: 찾는 중·약함. GPS는 시동이 켜져 있을 때만 동작합니다.", SHELL_ICON, this));
+  dispToggles->addItem(new ParamControl("ShowDeviceState", "기기 상태", "켜 두면(초록색) 주행 화면 오른쪽 가운데 칸에 기기의 CPU 온도와 CPU 사용률을 보여 줍니다. 80°C를 넘거나 사용률이 90%를 넘으면 빨갛게 깜빡입니다.", SHELL_ICON, this));
+  dispToggles->addItem(new ParamControl("ShowBlindSpot", "후측방(BSD) 경고", "켜 두면(초록색) 옆 차로 뒤쪽에 차가 있을 때 도로 양옆(앞차 정보 옆)에 노란 차량 표시가 뜹니다. 그쪽으로 방향지시등을 켜면 그 표시가 깜빡입니다. 시속 30km 이상에서만 보이고, 차에 후측방 감지(BSD)가 있어야 합니다.", SHELL_ICON, this));
   // ShowRadarInfo '레이더 물체 표시' (paint.cc ui_draw_radar_info): 0 off, 1 moving objects + speed,
   // 2 also how far to the side, 3 also stopped objects (amber "정지")
   {
@@ -1211,7 +1164,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     });
     dispToggles->addItem(radar_btn);
   }
-  dispToggles->addItem(new CValueControl("ShowConnInfo", "연결 상태 표시", "주행 화면 왼쪽 위에 연결 상태를 보여 줍니다.\nTMAP: TmapNda가 NDA 방식으로 보내는 중\nCARROT: 당근 방식으로 들어옴 (당근내비, 당근 방식으로 설정한 TmapNda)\n초록은 정보가 들어오는 중, 회색은 연결됐지만 아직 정보가 없음\nHDA(보라): 차 순정 내비의 카메라 정보를 쓰는 중\nSCC2(빨강): SCC 버스2(롱컨) 차량\nRADAR(주황): 레이더 트랙 사용 중\n0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
+  dispToggles->addItem(new ParamControl("ShowConnInfo", "연결 상태 표시", "켜 두면(초록색) 주행 화면 왼쪽 위에 연결 상태를 보여 줍니다.\nTMAP: TmapNda가 NDA 방식으로 보내는 중\nCARROT: 당근 방식으로 들어옴 (당근내비, 당근 방식으로 설정한 TmapNda)\n초록은 정보가 들어오는 중, 회색은 연결됐지만 아직 정보가 없음\nHDA(보라): 차 순정 내비의 카메라 정보를 쓰는 중\nSCC2(빨강): SCC 버스2(롱컨) 차량\nRADAR(주황): 레이더 트랙 사용 중", SHELL_ICON, this));
   // '운전자 모니터링 아이콘' (ShowDmInfo 0 / 1); the mode itself is chosen on the 토글 page (optech_dm_mode)
   dmIcon = new ToggleControl("운전자 모니터링 아이콘",
     "주행 화면 오른쪽 아래(녹화 버튼을 켜 두면 그 왼쪽)에 운전자 모니터링 아이콘(얼굴 모양)을 보여 줍니다. 얼굴을 잘 보고 있으면 선명하게, 아니면 흐리게 보입니다. 토글 화면의 운전자 모니터링이 '기본 사용'일 때만 쓸 수 있습니다.",
@@ -1224,7 +1177,6 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   // ---- 고급: experimental / developer ----
   advancedToggles = new ListWidget(this);
   advancedToggles->addItem(carrot_section("기기"));
-  advancedToggles->addItem(gps_btn);  // GPS 확인 (made with the 시작 items above)
   // OptechOffShutdown (autoshutdownd): after a drive, turn the device off this long after the car is off (tester feedback)
   {
     auto off_btn = new ButtonControl("", "선택",
@@ -1336,7 +1288,14 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   }
   advancedToggles->addItem(carrot_section("개발용"));
   advancedToggles->addItem(new ParamControl("ShowDebugUI", "디버그 정보", "켜 두면 주행 화면에 개발용 상세 정보를 글자로 보여줍니다.", SHELL_ICON, this));
-  advancedToggles->addItem(new CValueControl("ShowPlotMode", "디버그 그래프", "개발용 그래프를 보여줍니다. 0:안 보임, 1~5:그래프 종류", SHELL_ICON, 0, 5, 1));
+  // ShowPlotMode (paint.cc ui_draw_plot): 1 accel, 2 lateral accel, 3 speed, 4 model distance / speed, 5 lead speed / accel
+  advancedToggles->addItem(choice("ShowPlotMode", "디버그 그래프", "개발용 그래프를 주행 화면에 보여줍니다. 문제를 찾을 때만 씁니다.\n"
+    "가속도: 지금 가속도와 목표 가속도\n"
+    "커브 횡가속도: 커브에서 옆으로 받는 힘 (지금 값과 계획 값)\n"
+    "속도: 지금 속도와 계획 속도\n"
+    "주행 모델 거리·속도: 주행 모델이 본 앞쪽 거리와 속도\n"
+    "앞차 속도·가속도: 레이더가 잡은 앞차의 속도와 가속도",
+    {"안 보임", "가속도", "커브 횡가속도", "속도", "주행 모델 거리·속도", "앞차 속도·가속도"}));
 
   toggles_layout->addWidget(startToggles);
   toggles_layout->addWidget(cruiseToggles);
@@ -1376,6 +1335,32 @@ void CarrotPanel::refreshDmIcon() {
 void CarrotPanel::showEvent(QShowEvent *event) {
   QWidget::showEvent(event);
   refreshDmIcon();
+  for (auto &refresh : choice_refresh) refresh();
+}
+
+// optech (user 2026-11-26, same as optech-spst c7adbf7): every item with several named values is '이름: 지금 값' + 선택
+// (list dialog) instead of a number with -/+; the param still holds the number (index into names)
+ButtonControl *CarrotPanel::choice(const QString &param, const QString &title, const QString &desc, const QStringList &names,
+                                   int def, std::function<void(int)> changed) {
+  ButtonControl *btn = new ButtonControl("", "선택", desc);
+  const std::string key = param.toStdString();
+  auto current = [=]() {
+    const std::string v = Params().get(key);
+    const int i = std::atoi(v.c_str());
+    return (v.empty() || i < 0 || i >= names.size()) ? def : i;
+  };
+  auto refresh = [=]() { btn->setTitle(title + ": " + names[current()]); };
+  QObject::connect(btn, &ButtonControl::clicked, [=]() {
+    const QString sel = MultiOptionDialog::getSelection(title, names, names[current()], this);
+    if (sel.isEmpty()) return;
+    const int i = names.indexOf(sel);
+    Params().put(key, std::to_string(i));
+    refresh();
+    if (changed) changed(i);
+  });
+  refresh();
+  choice_refresh.append(refresh);
+  return btn;
 }
 
 void CarrotPanel::updateButtonStyles() {
