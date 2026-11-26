@@ -825,13 +825,13 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   auto engage_mode_name = []() {
     return Params().getBool("EngageWithLong") ? QString("조향+가감속 사용") : QString("조향만 사용");
   };
-  engage_mode_btn->setTitle(engage_mode_name());  // the current choice is the title; the button says 선택
+  engage_mode_btn->setTitle("사용 방식: " + engage_mode_name());  // 이름: 지금 값 (like the other choice buttons)
   QObject::connect(engage_mode_btn, &ButtonControl::clicked, [=]() {
     const QStringList names = {"조향+가감속 사용", "조향만 사용"};
     const QString sel = MultiOptionDialog::getSelection("사용 방식을 고르세요", names, engage_mode_name(), this);
     if (sel.isEmpty() || sel == engage_mode_name()) return;
     Params().putBool("EngageWithLong", sel == names[0]);
-    engage_mode_btn->setTitle(engage_mode_name());
+    engage_mode_btn->setTitle("사용 방식: " + engage_mode_name());
   });
 
   // ---- 주행: brake / cruise buttons ----
