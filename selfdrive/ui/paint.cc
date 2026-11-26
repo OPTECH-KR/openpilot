@@ -1214,12 +1214,22 @@ static void drawOptechHud(const UIState* s) {
         for (float dy = col_y + 20; dy <= col_y + h - 20; dy += 13) nvgCircle(s->vg, dot_x, dy, 2.6f);
         nvgFillColor(s->vg, nvgRGBA(255, 255, 255, 150));
         nvgFill(s->vg);
-        const NVGcolor hold_c = slowing ? nvgRGBA(250, 199, 117, 255) : nvgRGBA(255, 255, 255, 110);
+        // the target side keeps its yellow; with no slowdown a yellow bar instead of the number (user 2026-11-26, like
+        // the road limit / camera tiles)
+        const NVGcolor hold_c = nvgRGBA(250, 199, 117, 255);
         const float num_base = col_y + h - 42;
         optech_text(s, c1, col_y + 58, "설정속도", lab_fs, txt, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
         optech_text(s, c1, num_base, set_s, fs_set, txt, NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
         optech_text(s, c2, col_y + 58, "감속목표", lab_fs, hold_c, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
-        optech_text(s, c2, num_base, hold_s, fs_hold, hold_c, NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
+        if (slowing) {
+            optech_text(s, c2, num_base, hold_s, fs_hold, hold_c, NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
+        } else {
+            const float bar_w = 70, bar_h = 16, bar_y = num_base - 0.36f * 110 - bar_h / 2;
+            nvgBeginPath(s->vg);
+            nvgRoundedRect(s->vg, c2 - bar_w / 2, bar_y, bar_w, bar_h, bar_h / 2);
+            nvgFillColor(s->vg, hold_c);
+            nvgFill(s->vg);
+        }
         col_y += h + 16;
     }
 
