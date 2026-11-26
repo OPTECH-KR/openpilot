@@ -1110,6 +1110,9 @@ static void drawOptechHud(const UIState* s) {
 
     // ---------------- navigation values (same rules as the carrot HUD) ----------------
     const int activeNDA = road.getActive();
+    // a phone navigation app (TmapNda / 당근내비) is linked: the same test as the TMAP / CARROT badge (green with data,
+    // grey when only linked). The road limit / camera tiles show only then (user 2026-11-26)
+    const bool navi_linked = activeNDA > 0 || road.getNaviSource() > 0;
     const int roadLimitSpeed = road.getRoadLimitSpeed();
     const int camType = road.getCamType();
     const int xSignType = road.getXSignType();
@@ -1241,7 +1244,9 @@ static void drawOptechHud(const UIState* s) {
     //    distance left sits in its own small box under the camera tile (red within 200 m). Without data a tile keeps
     //    its colours and shows a red bar instead of the number (user: changing colour would look odd), so nothing
     //    comes and goes. Dark / red text on these light tiles is drawn without the black outline.
-    {
+    //    Only while a phone navigation app is linked (user 2026-11-26: "only when the navi is really linked"); while
+    //    linked they stay put, red bars when the app has no limit / camera.
+    if (navi_linked) {
         const float th = 240, gap = 14, tw = (CW - gap) / 2, tt = col_y, frame = 10;
         const float tx1 = lx, tx2 = lx + tw + gap;
         const float num_base = tt + th - 42;  // numbers' baseline, as in the set speed box
