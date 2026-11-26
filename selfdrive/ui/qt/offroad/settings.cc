@@ -1235,6 +1235,9 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     "켜 두면(초록색) 주행 화면 오른쪽 아래에 동그란 'REC' 녹화 버튼이 보입니다. 누르면 기기 화면을 동영상으로 녹화하고 "
     "(녹화 중에는 버튼이 빨개집니다), 다시 누르면 멈춥니다. 영상은 3분마다 나뉘어 기기 저장공간(videos 폴더)에 남습니다. "
     "주행 영상을 남기고 싶을 때만 켜세요. 끄면 버튼이 사라지고 하던 녹화도 멈춥니다.", SHELL_ICON, this));
+  dispToggles->addItem(new ParamControl("OptechShowGpsSpeed", "GPS 속도",
+    "켜 두면(초록색) 주행 화면 설정 속도 칸 오른쪽 작은 칸에 GPS로 잰 속도(km/h)를 초록 숫자로 보여 줍니다. 계기판 속도는 실제보다 몇 % 높게 "
+    "나오므로, 실제로 몇 km/h로 달리는지 볼 때 씁니다. GPS가 안 잡히면 숫자 대신 초록 가로 막대가 나옵니다. 끄면 칸이 사라집니다.", SHELL_ICON, this));
   // (no '시간 표시' (ShowDateTime): the optech 주행 화면 has no clock, user 2026-11-23)
   dispToggles->addItem(new CValueControl("ShowTpms", "타이어 공기압", "주행 화면 오른쪽 맨 아래 칸에 네 바퀴의 타이어 공기압(psi)을 보여 줍니다. 위 줄이 앞바퀴(왼쪽·오른쪽), 아래 줄이 뒷바퀴입니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));
   dispToggles->addItem(new CValueControl("ShowGpsInfo", "GPS 상태", "주행 화면 왼쪽 위(내비 연결 표시 옆)에 GPS가 잡혔는지와 신호 세기(막대 4칸)를 보여 줍니다. 초록: 잘 잡힘, 주황: 찾는 중·약함. GPS는 시동이 켜져 있을 때만 동작합니다. 0:안 보임, 1:보임", SHELL_ICON, 0, 1, 1));

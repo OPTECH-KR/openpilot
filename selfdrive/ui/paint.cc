@@ -1304,6 +1304,44 @@ static void drawOptechHud(const UIState* s) {
         }
     }
 
+    // 5) GPS speed (화면 > 'GPS 속도', OptechShowGpsSpeed): the speed from the GPS - the dashboard speed reads a few %
+    //    high. User 2026-11-26 (marked on a screenshot): a small box right of the set speed box, level with its top,
+    //    in the gap before the big speed; '46 km/h' in the green of 'GPS 잡힘'. No GPS fix -> a green bar.
+    if (s->show_gps_speed) {
+        const float gw = 236, gh = 128, gx = lx + CW + 24, gy = 180;  // 180: the set speed box's top (col_y start)
+        const NVGcolor gps_c = nvgRGBA(151, 196, 89, 255);
+        carrot_round_box(s, gx, gy, gw, gh, nvgRGBA(20, 20, 20, 170), nvgRGBA(235, 235, 235, 200), 18, 3);
+        optech_text(s, gx + gw / 2, gy + 46, "GPS 속도", 34, COLOR_WHITE, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+        const auto gps = sm["gpsLocationExternal"].getGpsLocationExternal();
+        const bool gps_fix = sm.alive("gpsLocationExternal") && (gps.getFlags() & 1);
+        const float gbase = gy + gh - 18;
+        const char* gunit = metric ? "km/h" : "mph";
+        float ubb[4], nbb[4];
+        nvgFontFace(s->vg, BOLD);
+        nvgFontSize(s->vg, 30);
+        nvgTextBounds(s->vg, 0, 0, gunit, NULL, ubb);
+        const float uw = ubb[2] - ubb[0];
+        if (gps_fix) {
+            // number + unit centred as one group, on one baseline
+            char gs[16];
+            snprintf(gs, sizeof(gs), "%d", (int)(std::max(gps.getSpeed() * unit, 0.f) + 0.5f));
+            float gfs = 74;
+            nvgFontSize(s->vg, gfs);
+            nvgTextBounds(s->vg, 0, 0, gs, NULL, nbb);
+            float nw = nbb[2] - nbb[0];
+            if (nw + 8 + uw > gw - 24) { gfs *= (gw - 24 - 8 - uw) / nw; nw *= (gw - 24 - 8 - uw) / (nbb[2] - nbb[0]); }
+            const float gx0 = gx + gw / 2 - (nw + 8 + uw) / 2;
+            optech_text(s, gx0, gbase, gs, gfs, gps_c, NVG_ALIGN_LEFT | NVG_ALIGN_BASELINE);
+            optech_text(s, gx0 + nw + 8, gbase, gunit, 30, gps_c, NVG_ALIGN_LEFT | NVG_ALIGN_BASELINE);
+        } else {
+            const float gbw = 60, gbh = 14, gby = gbase - 0.36f * 74 - gbh / 2;
+            nvgBeginPath(s->vg);
+            nvgRoundedRect(s->vg, gx + gw / 2 - gbw / 2, gby, gbw, gbh, gbh / 2);
+            nvgFillColor(s->vg, gps_c);
+            nvgFill(s->vg);
+        }
+    }
+
     // ======================= top centre =======================
     const float cx = s->fb_w / 2.f;
     float spd_left = cx, spd_right = cx;  // the big number's left edge / the unit's right edge (turn signal arrows)

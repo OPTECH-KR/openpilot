@@ -747,6 +747,7 @@ void UIState::update() {
     settings_timeout_s = std::atoi(params.get("OptechSettingsTimeout").c_str());
     drive_dim = std::atoi(params.get("OptechDriveDim").c_str());
     show_record_btn = params.getBool("OptechShowRecordBtn");
+    show_gps_speed = params.getBool("OptechShowGpsSpeed");
     radar_tracks = params.getBool("EnableRadarTracks");
     path_offset = std::atoi(params.get("PathOffset").c_str());
   }
