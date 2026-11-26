@@ -21,6 +21,7 @@ class Track():
     self.seen = 0           # optech: radar frames since this track id appeared (cnt restarts on a speed jump)
     self.vision_frames = 0  # optech: frames in a row the camera's lead sat on this track (radard, raw tracks only)
     self.selected = 0       # optech sticky lead: frames this track was the camera-confirmed lead (radard, raw tracks)
+    self.first_d = None     # optech ghost guard: distance where this track id was first measured [m]
     self.aLeadTau = _LEAD_ACCEL_TAU
     self.K_A = kalman_params.A
     self.K_C = kalman_params.C
@@ -33,6 +34,9 @@ class Track():
     if self.seen > 0 and (not measured or abs(d_rel - self.dRel) > 5.0 or abs(y_rel - self.yRel) > 2.0 or
                           abs(v_lead - self.vLead) > 7.0):
       self.selected = 0
+
+    if self.seen == 0:
+      self.first_d = d_rel
 
     #apilot: changed radar target
     if abs(self.vLead - v_lead) > 0.5:
