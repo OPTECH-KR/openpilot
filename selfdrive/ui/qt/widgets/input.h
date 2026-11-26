@@ -59,6 +59,8 @@ public:
   static bool alert(const QString &prompt_text, QWidget *parent);
   static bool confirm(const QString &prompt_text, const QString &confirm_text, QWidget *parent);
   static bool rich(const QString &prompt_text, QWidget *parent);
+  // optech-hkg: long text (the update's change list) in the scrolling small-font dialog, with confirm + cancel
+  static bool richConfirm(const QString &prompt_text, const QString &confirm_text, QWidget *parent);
 };
 
 class MultiOptionDialog : public QDialogBase {

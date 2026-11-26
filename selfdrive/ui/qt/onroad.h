@@ -7,6 +7,7 @@
 #include <QWidget>
 
 #include "common/util.h"
+#include "selfdrive/ui/qt/screenrecorder/screenrecorder.h"
 #include "selfdrive/ui/ui.h"
 #ifdef QCOM
 #include "selfdrive/ui/qt/widgets/cameraview_qcom.h"
@@ -25,6 +26,7 @@ class OnroadAlerts : public QWidget {
 public:
   OnroadAlerts(QWidget *parent = 0) : QWidget(parent) {}
   void updateAlert(const Alert &a);
+  void updateHold(bool h);  // optech: the car's auto hold box ('오토 홀드 작동 중') while no alert is up
 
 protected:
   void paintEvent(QPaintEvent*) override;
@@ -32,6 +34,8 @@ protected:
 private:
   QColor bg;
   Alert alert = {};
+  bool hold = false;
+  int blink = 0;
 };
 
 class ExperimentalButton : public QPushButton {
@@ -190,6 +194,7 @@ protected:
   void drawOptechHud(QPainter &p);
   bool optech_hud = true;          // param OptechHud
   bool optech_show_dev = false;    // param OptechShowDeviceState
+  bool optech_show_dm = false;     // param ShowDmInfo == 1 (driver monitoring icon)
   bool optech_long = false;        // openpilot longitudinal (gap / accel profile only mean something then)
   int optech_personality = 1;      // LongitudinalPersonality 0 aggressive .. 2 relaxed
   int optech_accel_profile = 0;    // dp_long_accel_profile 0 OP, 1 ECO, 2 NOR, 3 SPT
@@ -206,6 +211,30 @@ protected:
   bool optech_cam_section = false;
   float optech_cam_target = 0;   // km/h while slowing down for it
   QPixmap speed_bg_img;
+  // optech-hkg 주행 화면 (2026-11-23 design): what the new layout shows
+  QPixmap wheel_img;
+  bool optech_enabled = false;
+  int optech_status = 0;
+  bool optech_show_tpms = true, optech_show_gps = true, optech_show_bsd = true, optech_show_conn = true;
+  int optech_show_radar = 1;
+  float optech_a_ego = 0, optech_steer_deg = 0, optech_v_ego = 0;
+  bool optech_brake = false, optech_left_blinker = false, optech_right_blinker = false;
+  bool optech_left_bsd = false, optech_right_bsd = false;
+  bool optech_lead = false;
+  float optech_lead_d = 0, optech_lead_v = 0;
+  int optech_navi_active = 0, optech_navi_source = 0, optech_road_limit = 0, optech_turn = 0, optech_turn_dist = 0;
+  bool optech_radar_tracks = false;
+  bool optech_scc2 = false;
+  void drawOptechRight(QPainter &p);
+  void drawOptechBsd(QPainter &p, bool right, bool danger);
+  void drawOptechRadar(QPainter &p);
+  void drawOptechGps(QPainter &p, float x, float y);
+  // optech-hkg 2026-11-25/26 layout: speed bump sign (roadLimitSpeed), and whether an alert / the auto hold box is up
+  // (the lead info box steps aside meanwhile)
+  QPixmap bump_img;
+  bool optech_bump = false;
+  int optech_bump_dist = 0;
+  bool optech_msg_box = false;
 
   //dp
   void drawKnightScanner(QPainter &p);
@@ -228,6 +257,9 @@ private:
   void mousePressEvent(QMouseEvent* e) override;
   OnroadAlerts *alerts;
   AnnotatedCameraWidget *nvg;
+  ScreenRecorder *recorder = nullptr;  // optech 화면 > 녹화 버튼
+  QTimer *record_timer = nullptr;
+  bool show_record_btn = false;
   QColor bg = bg_colors[STATUS_DISENGAGED];
   QWidget *map = nullptr;
   QHBoxLayout* split;

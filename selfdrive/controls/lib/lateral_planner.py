@@ -12,6 +12,14 @@ from cereal import log
 from openpilot.selfdrive.hardware import EON
 
 from openpilot.common.params import Params
+
+
+def optech_path_offset(params):
+  """optech 조향 탭 '경로 좌우 보정' (PathOffset, cm; optech-hkg): + moves the path to the right, - to the left"""
+  try:
+    return -float(int(params.get("PathOffset", encoding="utf8") or 0)) * 0.01
+  except (TypeError, ValueError):
+    return 0.
 from openpilot.selfdrive.controls.lib.lane_planner import LanePlanner
 from openpilot.common.conversions import Conversions as CV
 
@@ -38,6 +46,7 @@ class LateralPlanner:
     self.DH = DesireHelper()
 
     self.params = Params()
+    self.path_offset = optech_path_offset(self.params)
     self._dp_lat_lane_priority_mode = self.params.get_bool("dp_lat_lane_priority_mode")
     self._dp_lat_lane_priority_mode_active = False
     self._dp_lat_lane_priority_mode_active_prev = False
@@ -81,6 +90,7 @@ class LateralPlanner:
     measured_curvature = sm['controlsState'].curvature
 
     if self.param_read_counter % 50 == 0:
+      self.path_offset = optech_path_offset(self.params)
       self._dp_lat_lane_priority_mode = self.params.get_bool("dp_lat_lane_priority_mode")
       if self._dp_lat_lane_priority_mode:
         self._dp_lat_lane_priority_mode_speed_based = int(self.params.get("dp_lat_lane_priority_mode_speed_based", encoding="utf-8"))
@@ -112,6 +122,9 @@ class LateralPlanner:
       d_path_xyz = self._get_laneless_laneline_d_path_xyz()
     else:
       d_path_xyz = self.path_xyz
+    if self.path_offset != 0.:
+      d_path_xyz = d_path_xyz.copy()
+      d_path_xyz[:, 1] += self.path_offset
     self._d_path_w_lines_xyz = d_path_xyz
 
     self.lat_mpc.set_weights(PATH_COST, LATERAL_MOTION_COST,

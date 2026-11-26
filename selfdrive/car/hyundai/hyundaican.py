@@ -6,7 +6,14 @@ hyundai_checksum = crcmod.mkCrcFun(0x11D, initCrc=0xFD, rev=False, xorOut=0xdf)
 def create_lkas11(packer, frame, car_fingerprint, apply_steer, steer_req,
                   torque_fault, lkas11, sys_warning, sys_state, enabled,
                   left_lane, right_lane,
-                  left_lane_depart, right_lane_depart):
+                  left_lane_depart, right_lane_depart, ldws_car=False, stock_display=False):
+  # stock_display (optech-hkg 2026-11-26, K7 HEV tester): openpilot off and no warning -> keep the stock camera's
+  # display fields (lane state, car icon, lane lines), so the cluster / HUD looks like the car without openpilot.
+  # Before, a faint white car + lanes (SysState 1, FcwOpt_USM 1) showed on the HUD before SCC was set.
+  # ... but a camera that reports 15 (= not available; the K5 2021 camera always does) has nothing to show:
+  # forwarding it lit an amber lane icon on the K5 cluster, so then the values from before are sent
+  if stock_display and int(lkas11["CF_Lkas_LdwsSysState"]) == 15:
+    stock_display = False
   values = {s: lkas11[s] for s in [
     "CF_Lkas_LdwsActivemode",
     "CF_Lkas_LdwsSysState",
@@ -24,7 +31,8 @@ def create_lkas11(packer, frame, car_fingerprint, apply_steer, steer_req,
     "CF_Lkas_FcwOpt_USM",
     "CF_Lkas_LdwsOpt_USM",
   ]}
-  values["CF_Lkas_LdwsSysState"] = sys_state
+  if not stock_display:
+    values["CF_Lkas_LdwsSysState"] = sys_state
   values["CF_Lkas_SysWarning"] = 3 if sys_warning else 0
   values["CF_Lkas_LdwsLHWarning"] = left_lane_depart
   values["CF_Lkas_LdwsRHWarning"] = right_lane_depart
@@ -33,12 +41,16 @@ def create_lkas11(packer, frame, car_fingerprint, apply_steer, steer_req,
   values["CF_Lkas_ToiFlt"] = torque_fault  # seems to allow actuation on CR_Lkas_StrToqReq
   values["CF_Lkas_MsgCount"] = frame % 0x10
 
-  if car_fingerprint in (CAR.SONATA, CAR.PALISADE, CAR.KIA_NIRO_EV, CAR.KIA_NIRO_HEV_2021, CAR.SANTA_FE,
+  lfa_mfa_car = car_fingerprint in (CAR.SONATA, CAR.PALISADE, CAR.KIA_NIRO_EV, CAR.KIA_NIRO_HEV_2021, CAR.SANTA_FE,
                          CAR.IONIQ_EV_2020, CAR.IONIQ_PHEV, CAR.KIA_SELTOS, CAR.ELANTRA_2021, CAR.GENESIS_G70_2020,
                          CAR.ELANTRA_HEV_2021, CAR.SONATA_HYBRID, CAR.KONA_EV, CAR.KONA_HEV, CAR.KONA_EV_2022,
                          CAR.SANTA_FE_2022, CAR.KIA_K5_2021, CAR.IONIQ_HEV_2022, CAR.SANTA_FE_HEV_2022,
                          CAR.SANTA_FE_PHEV_2022, CAR.KIA_STINGER_2022, CAR.KIA_K5_HEV_2020, CAR.KIA_CEED,
-                         CAR.AZERA_6TH_GEN, CAR.AZERA_HEV_6TH_GEN, CAR.CUSTIN_1ST_GEN):
+                         CAR.AZERA_6TH_GEN, CAR.AZERA_HEV_6TH_GEN, CAR.CUSTIN_1ST_GEN,
+                         CAR.GRANDEUR_IG_FL, CAR.GRANDEUR_IG_FL_HEV, CAR.NEXO)  # optech: as optech-hkg send_lfa_mfa
+  if lfa_mfa_car and stock_display:
+    pass  # the stock camera's lane / car icon fields stay as they are
+  elif lfa_mfa_car:
     values["CF_Lkas_LdwsActivemode"] = int(left_lane) + (int(right_lane) << 1)
     values["CF_Lkas_LdwsOpt_USM"] = 2
 
@@ -57,7 +69,7 @@ def create_lkas11(packer, frame, car_fingerprint, apply_steer, steer_req,
     values["CF_Lkas_SysWarning"] = 4 if sys_warning else 0
 
   # Likely cars lacking the ability to show individual lane lines in the dash
-  elif car_fingerprint in (CAR.KIA_OPTIMA_G4, CAR.KIA_OPTIMA_G4_FL):
+  elif car_fingerprint in (CAR.KIA_OPTIMA_G4, CAR.KIA_OPTIMA_G4_FL, CAR.KONA_NON_SCC):  # optech-hkg: Kona without SCC too
     # SysWarning 4 = keep hands on wheel + beep
     values["CF_Lkas_SysWarning"] = 4 if sys_warning else 0
 
@@ -77,6 +89,10 @@ def create_lkas11(packer, frame, car_fingerprint, apply_steer, steer_req,
     # Genesis and Optima fault when forwarding while engaged
     values["CF_Lkas_LdwsActivemode"] = 2
 
+  # optech 토글 'LDWS 차량' (OPKR LdwsCarFix, optech-hkg): a car with lane departure warning only, no LKAS
+  if ldws_car and not stock_display:
+    values["CF_Lkas_LdwsOpt_USM"] = 3
+
   dat = packer.make_can_msg("LKAS11", 0, values)[2]
 
   if car_fingerprint in CHECKSUM["crc8"]:
@@ -95,7 +111,7 @@ def create_lkas11(packer, frame, car_fingerprint, apply_steer, steer_req,
   return packer.make_can_msg("LKAS11", 0, values)
 
 
-def create_clu11(packer, frame, clu11, button, car_fingerprint):
+def create_clu11(packer, frame, clu11, button, car_fingerprint, camera_scc=False, next_counter=False):
   values = {s: clu11[s] for s in [
     "CF_Clu_CruiseSwState",
     "CF_Clu_CruiseSwMain",
@@ -111,9 +127,10 @@ def create_clu11(packer, frame, clu11, button, car_fingerprint):
     "CF_Clu_AliveCnt1",
   ]}
   values["CF_Clu_CruiseSwState"] = button
-  values["CF_Clu_AliveCnt1"] = frame % 0x10
+  # next_counter (optech, apilot): the counter right after the cluster's own message, so the SCC takes this one next
+  values["CF_Clu_AliveCnt1"] = (int(clu11["CF_Clu_AliveCnt1"]) + 1) % 0x10 if next_counter else frame % 0x10
   # send buttons to camera on camera-scc based cars
-  bus = 2 if car_fingerprint in CAMERA_SCC_CAR else 0
+  bus = 2 if (car_fingerprint in CAMERA_SCC_CAR or camera_scc) else 0
   return packer.make_can_msg("CLU11", bus, values)
 
 

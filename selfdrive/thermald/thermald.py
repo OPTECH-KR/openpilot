@@ -209,6 +209,10 @@ def thermald_thread(end_event, hw_queue) -> None:
 
   dp_device_disable_temp_check = params.get_bool("dp_device_disable_temp_check")
 
+  # optech 고급 > '부팅 시 핫스팟 켜기' (OPKR / optech-hkg: NEOS wifi service call, once, 80 s after boot)
+  hotspot_on_boot = params.get_bool("OpkrHotspotOnBoot")
+  hotspot_run = False
+
   while not end_event.is_set():
     sm.update(PANDA_STATES_TIMEOUT)
 
@@ -379,6 +383,10 @@ def thermald_thread(end_event, hw_queue) -> None:
       started_ts = None
       if off_ts is None:
         off_ts = time.monotonic()
+
+    if hotspot_on_boot and not hotspot_run and time.monotonic() > 80:
+      os.system("service call wifi 37 i32 0 i32 1 &")
+      hotspot_run = True
 
     # Offroad power monitoring
     voltage = None if peripheralState is None or peripheralState.pandaType == log.PandaState.PandaType.unknown else peripheralState.voltage

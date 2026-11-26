@@ -7,6 +7,8 @@
 
 #include <QDebug>
 #include <QMouseEvent>
+#include <QPainterPath>
+#include <QTimer>
 
 #include "common/timing.h"
 #include "selfdrive/ui/qt/util.h"
@@ -57,6 +59,22 @@ OnroadWindow::OnroadWindow(QWidget *parent) : QWidget(parent) {
   alerts->setAttribute(Qt::WA_TransparentForMouseEvents, true);
   stacked_layout->addWidget(alerts);
 
+  // optech 화면 > '녹화 버튼' (optech-hkg / neokii). spst (user 2026-11-26): lower left, under the left column, right of
+  // the driver monitoring icon (that icon spans x 30..222 in this area, drawOptechHud); the lower right corner holds
+  // dragonpilot's accel / personality buttons, which it covered
+  QWidget *recorder_widget = new QWidget(this);
+  QVBoxLayout *recorder_layout = new QVBoxLayout(recorder_widget);
+  recorder_layout->setContentsMargins(246, 0, 0, 40);
+  recorder = new ScreenRecorder(this);
+  recorder_layout->addWidget(recorder);
+  recorder_layout->setAlignment(recorder, Qt::AlignLeft | Qt::AlignBottom);
+  recorder->setVisible(false);
+  stacked_layout->addWidget(recorder_widget);
+  recorder_widget->raise();
+  record_timer = new QTimer(this);
+  QObject::connect(record_timer, &QTimer::timeout, [=]() { recorder->updateScreen(); });
+  record_timer->start(1000 / UI_FREQ);
+
   // setup stacking order
   alerts->raise();
 
@@ -93,6 +111,13 @@ void OnroadWindow::updateState(const UIState &s) {
     return;
   }
 
+  // optech 화면 > '녹화 버튼': show or hide REC; hiding it stops a recording
+  if (s.sm->frame % UI_FREQ == 0) show_record_btn = Params().getBool("OptechShowRecordBtn");
+  if (recorder && recorder->isVisible() != show_record_btn) {
+    if (!show_record_btn) recorder->stop(false);
+    recorder->setVisible(show_record_btn);
+  }
+
   QColor bgColor = bg_colors[s.scene.lat_active && s.scene.alka_active && s.status == STATUS_DISENGAGED? STATUS_ALKA : s.status];
   Alert alert = Alert::get(*(s.sm), s.scene.started_frame);
   alerts->updateAlert(alert);
@@ -110,6 +135,7 @@ void OnroadWindow::updateState(const UIState &s) {
   dp_brake_pressed = cs.getBrakePressed();
   dp_blinker_left = cs.getLeftBlinker();
   dp_blinker_right = cs.getRightBlinker();
+  alerts->updateHold(cs.getBrakeHoldActive());  // optech: '오토 홀드 작동 중' box (optech-hkg 2026-11-25)
   dp_bsm_left = cs.getLeftBlindspot();
   dp_bsm_right = cs.getRightBlindspot();
 
@@ -164,6 +190,7 @@ void OnroadWindow::offroadTransition(bool offroad) {
 #endif
 
   alerts->updateAlert({});
+  if (offroad && recorder) recorder->stop(false);  // a recording ends with the drive
 }
 
 void OnroadWindow::paintEvent(QPaintEvent *event) {
@@ -195,70 +222,33 @@ void OnroadWindow::paintEvent(QPaintEvent *event) {
 // ***** onroad widgets *****
 
 // OnroadAlerts
+// optech-hkg 2026-11-25 alert look (drawn in optech_paint_alert, after the HUD helpers further down)
+static void optech_paint_alert(QPainter &p, float w, float h, const Alert &alert, bool hold, bool blink_on);
+
 void OnroadAlerts::updateAlert(const Alert &a) {
-  if (!alert.equal(a)) {
+  // a 'danger' alert blinks: repaint it every frame
+  if (!alert.equal(a) || a.status == cereal::ControlsState::AlertStatus::CRITICAL) {
     alert = a;
     update();
   }
 }
 
+void OnroadAlerts::updateHold(bool h) {
+  if (h != hold) {
+    hold = h;
+    update();
+  }
+}
+
 void OnroadAlerts::paintEvent(QPaintEvent *event) {
-  if (alert.size == cereal::ControlsState::AlertSize::NONE) {
+  if (alert.size == cereal::ControlsState::AlertSize::NONE && !hold) {
     return;
   }
-  static std::map<cereal::ControlsState::AlertSize, const int> alert_heights = {
-    {cereal::ControlsState::AlertSize::SMALL, 271},
-    {cereal::ControlsState::AlertSize::MID, 420},
-    {cereal::ControlsState::AlertSize::FULL, height()},
-  };
-  int h = alert_heights[alert.size];
-
-  int margin = 40;
-  int radius = 30;
-  if (alert.size == cereal::ControlsState::AlertSize::FULL) {
-    margin = 0;
-    radius = 0;
-  }
-  QRect r = QRect(0 + margin, height() - h + margin, width() - margin*2, h - margin*2);
-
+  blink = (blink + 1) % 12;
   QPainter p(this);
-
-  // draw background + gradient
-  p.setPen(Qt::NoPen);
-  p.setCompositionMode(QPainter::CompositionMode_SourceOver);
-  p.setBrush(QBrush(alert_colors[alert.status]));
-//  p.drawRoundedRect(r, radius, radius);
-  p.drawRect(r);
-
-  QLinearGradient g(0, r.y(), 0, r.bottom());
-  g.setColorAt(0, QColor::fromRgbF(0, 0, 0, 0.05));
-  g.setColorAt(1, QColor::fromRgbF(0, 0, 0, 0.35));
-
-  p.setCompositionMode(QPainter::CompositionMode_DestinationOver);
-  p.setBrush(QBrush(g));
-//  p.drawRoundedRect(r, radius, radius);
-  p.drawRect(r);
-  p.setCompositionMode(QPainter::CompositionMode_SourceOver);
-
-  // text
-  const QPoint c = r.center();
-  p.setPen(QColor(0xff, 0xff, 0xff));
+  p.setRenderHint(QPainter::Antialiasing);
   p.setRenderHint(QPainter::TextAntialiasing);
-  if (alert.size == cereal::ControlsState::AlertSize::SMALL) {
-    p.setFont(InterFont(74, QFont::DemiBold));
-    p.drawText(r, Qt::AlignCenter, alert.text1);
-  } else if (alert.size == cereal::ControlsState::AlertSize::MID) {
-    p.setFont(InterFont(88, QFont::Bold));
-    p.drawText(QRect(0, c.y() - 125, width(), 150), Qt::AlignHCenter | Qt::AlignTop, alert.text1);
-    p.setFont(InterFont(66));
-    p.drawText(QRect(0, c.y() + 21, width(), 90), Qt::AlignHCenter, alert.text2);
-  } else if (alert.size == cereal::ControlsState::AlertSize::FULL) {
-    bool l = alert.text1.length() > 15;
-    p.setFont(InterFont(l ? 132 : 177, QFont::Bold));
-    p.drawText(QRect(0, r.y() + (l ? 240 : 270), width(), 600), Qt::AlignHCenter | Qt::TextWordWrap, alert.text1);
-    p.setFont(InterFont(88));
-    p.drawText(QRect(0, r.height() - (l ? 361 : 420), width(), 300), Qt::AlignHCenter | Qt::TextWordWrap, alert.text2);
-  }
+  optech_paint_alert(p, width(), height(), alert, hold, blink < 7);
 }
 
 // ExperimentalButton
@@ -317,6 +307,11 @@ static void drawOnScreenButton(QPainter &p, const QPoint &center, const QBrush &
   p.setPen(Qt::NoPen);
   p.setBrush(bg);
   p.drawEllipse(center, btn_size / 2, btn_size / 2);
+  // optech (user 2026-11-26): a light ring like the REC button's, so the dark buttons do not disappear on a dark road
+  p.setOpacity(1.0);
+  p.setPen(QPen(QColor(255, 255, 255, 80), 6));
+  p.setBrush(Qt::NoBrush);
+  p.drawEllipse(center, btn_size / 2 - 4, btn_size / 2 - 4);
   p.setOpacity(opacity);
 
   p.setFont(InterFont(32, QFont::DemiBold));
@@ -455,6 +450,7 @@ AnnotatedCameraWidget::AnnotatedCameraWidget(VisionStreamType type, QWidget* par
 
   experimental_btn = new ExperimentalButton(this);
   main_layout->addWidget(experimental_btn, 0, Qt::AlignTop | Qt::AlignRight);
+  experimental_btn->setVisible(false);  // optech: no experimental mode button on the driving screen
 
   // Create a spacer item to push the following layout to the bottom
   QSpacerItem* vSpacer = new QSpacerItem(1, 1, QSizePolicy::Minimum, QSizePolicy::Expanding);
@@ -488,6 +484,8 @@ AnnotatedCameraWidget::AnnotatedCameraWidget(VisionStreamType type, QWidget* par
   #endif
   dp_no_gps_ctrl = Params().getBool("dp_no_gps_ctrl");
   speed_bg_img = loadPixmap("../assets/images/speed_bg.png", {350, 150}, Qt::IgnoreAspectRatio);
+  wheel_img = loadPixmap("../assets/img_chffr_wheel.png", {120, 120});
+  bump_img = loadPixmap("../assets/images/speed_bump.png", {330, 330});  // optech-hkg 방지턱 sign
 }
 
 void AnnotatedCameraWidget::updateState(const UIState &s) {
@@ -587,10 +585,53 @@ void AnnotatedCameraWidget::updateState(const UIState &s) {
   if (sm.frame % UI_FREQ == 0) {  // params once a second
     Params op_params;
     optech_hud = op_params.getBool("OptechHud");
+    optech_show_dm = op_params.get("ShowDmInfo") == "1";
     optech_show_dev = op_params.getBool("OptechShowDeviceState");
     optech_personality = std::atoi(op_params.get("LongitudinalPersonality").c_str());
     optech_accel_profile = std::atoi(op_params.get("dp_long_accel_profile").c_str());
+    optech_show_tpms = op_params.getBool("ShowTpms");
+    optech_show_gps = op_params.getBool("ShowGpsInfo");
+    optech_show_bsd = op_params.getBool("ShowBlindSpot");
+    optech_show_conn = op_params.getBool("ShowConnInfo");
+    optech_show_radar = std::atoi(op_params.get("ShowRadarInfo").c_str());
+    optech_scc2 = op_params.getBool("OptechHkgCameraScc");
   }
+  optech_enabled = cs.getEnabled();
+  optech_status = s.status;
+  optech_a_ego = car_state.getAEgo();
+  optech_v_ego = car_state.getVEgo();
+  optech_steer_deg = car_state.getSteeringAngleDeg();
+  optech_brake = car_state.getBrakePressed();
+  optech_left_blinker = car_state.getLeftBlinker();
+  optech_right_blinker = car_state.getRightBlinker();
+  optech_left_bsd = car_state.getLeftBlindspot();
+  optech_right_bsd = car_state.getRightBlindspot();
+  {
+    const auto lead = sm["radarState"].getRadarState().getLeadOne();
+    optech_lead = sm.alive("radarState") && lead.getStatus();
+    optech_lead_d = lead.getDRel();
+    optech_lead_v = lead.getVLead();
+  }
+  optech_radar_tracks = sm.alive("liveTracks") && sm["liveTracks"].getLiveTracks().size() > 1;
+  // navigation app (TmapNda / 당근내비, selfdrive/optech/road_speed_limiter.py): sent about 5 times a second
+  const bool navi = sm.rcv_frame("roadLimitSpeed") > 0 && (sm.frame - sm.rcv_frame("roadLimitSpeed")) < 2 * UI_FREQ;
+  if (navi) {
+    const auto road = sm["roadLimitSpeed"].getRoadLimitSpeed();
+    optech_navi_active = road.getActive();
+    optech_navi_source = road.getNaviSource();
+    const int rl = road.getRoadLimitSpeed();
+    optech_road_limit = (rl > 0 && rl < 200) ? rl : 0;
+    optech_turn = road.getXTurnInfo();
+    optech_turn_dist = road.getXDistToTurn();
+    // speed bump ahead (the app sends it in the camera fields: sign 124 / camera type 22); speedcamd skips bumps
+    optech_bump = road.getXSpdLimit() > 0 && road.getXSpdDist() > 0 && (road.getXSignType() == 124 || road.getCamType() == 22);
+    optech_bump_dist = optech_bump ? road.getXSpdDist() : 0;
+  } else {
+    optech_navi_active = optech_navi_source = optech_road_limit = optech_turn = optech_turn_dist = 0;
+    optech_bump = false;
+    optech_bump_dist = 0;
+  }
+  optech_msg_box = cs.getAlertSize() != cereal::ControlsState::AlertSize::NONE || car_state.getBrakeHoldActive();
   optech_long = s.scene.longitudinal_control;
   switch (car_state.getGearShifter()) {
     case cereal::CarState::GearShifter::PARK: optech_gear = "P"; break;
@@ -732,8 +773,8 @@ void AnnotatedCameraWidget::drawHud(QPainter &p) {
   p.setFont(InterFont(66));
   drawText(p, rect().center().x(), 290, speedUnit, 200);
 
-  // dm icon
-  if (!hideBottomIcons) {
+  // driver monitoring icon only with OPTECH > 화면 > 운전자 모니터링 '아이콘 보임'
+  if (optech_show_dm && !hideBottomIcons) {
     int offset = UI_BORDER_SIZE + btn_size / 2;
     int x = rightHandDM ? width() - offset : offset;
     int y = height() - offset;
@@ -743,125 +784,579 @@ void AnnotatedCameraWidget::drawHud(QPainter &p) {
   p.restore();
 }
 
-// ---- OPTECH speed box: same layout as optech-hkg's lower-left box (paint.cc carrot_hud_*) ----
+// ---- OPTECH 주행 화면: optech-hkg's 2026-11-23 design (its paint.cc drawOptechHud, NanoVG), drawn with QPainter ----
 
-static void optech_box(QPainter &p, float x, float y, float w, float h, const QColor &fill, float radius, float line) {
-  p.setPen(line > 0 ? QPen(QColor(255, 255, 255, 255), line) : QPen(Qt::NoPen));
+static void optech_box(QPainter &p, float x, float y, float w, float h, const QColor &fill, float radius, float line,
+                       const QColor &line_color = QColor(255, 255, 255)) {
+  p.setPen(line > 0 ? QPen(line_color, line) : QPen(Qt::NoPen));
   p.setBrush(fill);
   p.drawRoundedRect(QRectF(x, y, w, h), radius, radius);
 }
 
-// text centered on cx with its bottom at `bottom` (like NanoVG CENTER|BOTTOM), with a dark shadow
-static void optech_text(QPainter &p, float cx, float bottom, const QString &text, int px, const QColor &color) {
+// text at (x, y): halign -1 left / 0 centre / 1 right; valign 0 = y is the bottom, 1 = y is the middle
+static void optech_txt(QPainter &p, float x, float y, const QString &text, int px, const QColor &color,
+                       int halign = 0, int valign = 0) {
   p.setFont(InterFont(px, QFont::Bold));
-  const QRectF r(cx - 400, bottom - px * 1.4, 800, px * 1.4);
-  p.setPen(QColor(0, 0, 0, 200));
-  p.drawText(r.translated(3, 3), Qt::AlignHCenter | Qt::AlignBottom, text);
+  const float w = 1400, h = px * 1.5f;
+  const float left = halign < 0 ? x : (halign > 0 ? x - w : x - w / 2);
+  const float top = valign == 0 ? y - h : y - h / 2;
+  const int flags = (halign < 0 ? Qt::AlignLeft : (halign > 0 ? Qt::AlignRight : Qt::AlignHCenter)) |
+                    (valign == 0 ? Qt::AlignBottom : Qt::AlignVCenter);
+  const QRectF r(left, top, w, h);
+  p.setPen(QColor(0, 0, 0, 160));
+  p.drawText(r.translated(2, 2), flags, text);
   p.setPen(color);
-  p.drawText(r, Qt::AlignHCenter | Qt::AlignBottom, text);
+  p.drawText(r, flags, text);
 }
 
+static int optech_text_w(QPainter &p, const QString &text, int px) {
+  p.setFont(InterFont(px, QFont::Bold));
+  return p.fontMetrics().boundingRect(text).width();
+}
+
+static QString optech_dist(int m, const QString &suffix) {
+  return (m >= 1000 ? QString::number(m / 1000.0, 'f', 1) + "km" : QString::number(m) + "m") + suffix;
+}
+
+// turn signal chevron (OPKR style), (x, y) top left of a w x h box
+static void optech_chevron(QPainter &p, float x, float y, float w, float h, bool right, const QColor &c) {
+  const float d = right ? 1.f : -1.f, t = w * 0.42f;
+  const float tip = x + (right ? w : 0), back = x + (right ? 0 : w);
+  QPainterPath path;
+  path.moveTo(back, y);
+  path.lineTo(back + d * t, y);
+  path.lineTo(tip, y + h / 2);
+  path.lineTo(back + d * t, y + h);
+  path.lineTo(back, y + h);
+  path.lineTo(tip - d * t, y + h / 2);
+  path.closeSubpath();
+  p.setPen(Qt::NoPen);
+  p.setBrush(c);
+  p.drawPath(path);
+}
+
+// big white turn arrow: 1 left, 2 right, 3 left lane, 4 right lane, 5 U-turn; (x, y) top left of S x S
+static void optech_turn_arrow(QPainter &p, float x, float y, float S, int kind) {
+  const bool mirror = kind == 2 || kind == 4;
+  auto X = [&](float u) { return x + (mirror ? 1.f - u : u) * S; };
+  auto Y = [&](float v) { return y + v * S; };
+  QPainterPath line, head;
+  if (kind == 1 || kind == 2) {
+    line.moveTo(X(0.66f), Y(1.0f));
+    line.lineTo(X(0.66f), Y(0.52f));
+    line.quadTo(X(0.66f), Y(0.32f), X(0.46f), Y(0.32f));
+    line.lineTo(X(0.34f), Y(0.32f));
+    head.moveTo(X(0.04f), Y(0.32f)); head.lineTo(X(0.38f), Y(0.04f)); head.lineTo(X(0.38f), Y(0.60f));
+  } else if (kind == 3 || kind == 4) {
+    line.moveTo(X(0.70f), Y(1.0f));
+    line.lineTo(X(0.70f), Y(0.78f));
+    line.cubicTo(X(0.70f), Y(0.56f), X(0.34f), Y(0.56f), X(0.34f), Y(0.36f));
+    line.lineTo(X(0.34f), Y(0.30f));
+    head.moveTo(X(0.34f), Y(0.0f)); head.lineTo(X(0.62f), Y(0.34f)); head.lineTo(X(0.06f), Y(0.34f));
+  } else {
+    line.moveTo(X(0.74f), Y(1.0f));
+    line.lineTo(X(0.74f), Y(0.42f));
+    line.cubicTo(X(0.74f), Y(0.12f), X(0.30f), Y(0.12f), X(0.30f), Y(0.42f));
+    line.lineTo(X(0.30f), Y(0.62f));
+    head.moveTo(X(0.30f), Y(0.96f)); head.lineTo(X(0.04f), Y(0.62f)); head.lineTo(X(0.56f), Y(0.62f));
+  }
+  head.closeSubpath();
+  p.setPen(QPen(Qt::white, S * 0.17f, Qt::SolidLine, Qt::FlatCap, Qt::RoundJoin));
+  p.setBrush(Qt::NoBrush);
+  p.drawPath(line);
+  p.setPen(Qt::NoPen);
+  p.setBrush(Qt::white);
+  p.drawPath(head);
+}
+
+// text standing on a baseline (the big speed and its unit share one): halign -1 left / 0 centre / 1 right
+// shadow: the dark copy under the letters that keeps them readable over the camera picture; false for dark / red text
+// on a light tile (it smudged it there, optech-hkg 2026-11-26)
+static void optech_txt_base(QPainter &p, float x, float base, const QString &text, int px, const QColor &color,
+                            int halign = 0, bool shadow = true) {
+  p.setFont(InterFont(px, QFont::Bold));
+  const float w = p.fontMetrics().boundingRect(text).width();
+  const float left = halign < 0 ? x : (halign > 0 ? x - w : x - w / 2);
+  if (shadow) {
+    p.setPen(QColor(0, 0, 0, 160));
+    p.drawText(QPointF(left + 2, base + 2), text);
+  }
+  p.setPen(color);
+  p.drawText(QPointF(left, base), text);
+}
+
+// text placed like optech-hkg's NVG_ALIGN_BOTTOM: y is just under the letters (Qt's AlignBottom puts the font's
+// descent there too, which drew every such label 10-20 px higher than on optech-hkg). Measured on both screens.
+static void optech_txt_hb(QPainter &p, float x, float y, const QString &text, int px, const QColor &color,
+                          int halign = 0, bool shadow = true) {
+  optech_txt_base(p, x, y - 0.06f * px, text, px, color, halign, shadow);
+}
+
+// font size that makes text fit max_w (never bigger than px)
+static int optech_fit(QPainter &p, const QString &text, int px, float max_w) {
+  const int w = optech_text_w(p, text, px);
+  return w > max_w && w > 0 ? std::max(12, (int)(px * max_w / w)) : px;
+}
+
+// a short rounded bar standing in for a number that is not there (optech-hkg 2026-11-26): centred on cx, vertically on
+// the middle of a number of size px standing on base
+static void optech_hbar(QPainter &p, float cx, float base, int px, const QColor &c) {
+  const float bw = 70, bh = 16, by = base - 0.36f * px - bh / 2;
+  p.setPen(Qt::NoPen);
+  p.setBrush(c);
+  p.drawRoundedRect(QRectF(cx - bw / 2, by, bw, bh), bh / 2, bh / 2);
+}
+
+// optech-hkg 2026-11-25 alerts: a rounded box low in the middle (3/4 of the height) between the left and right
+// columns, drawn over everything. Normal: dark see-through box, light outline, green first line; 'take action'
+// (userPrompt) orange, 'danger' (critical) blinking red, both with white letters. First line big, second smaller, and
+// a third line when openpilot turns off. With no alert, the car's auto hold shows '오토 홀드 작동 중' in the normal look.
+static void optech_paint_alert(QPainter &p, float W, float H, const Alert &alert, bool hold, bool blink_on) {
+  const float maxw = std::min(1300.f, W - 2 * 430.f), cx = W / 2.f;
+  const QColor green(80, 230, 60), white(255, 255, 255);
+  if (alert.size == cereal::ControlsState::AlertSize::NONE) {
+    if (!hold) return;
+    const QString txt = "오토 홀드 작동 중";
+    const int fs = optech_fit(p, txt, 124, maxw - 60);
+    const float h = 172, top = H * 0.75f - h / 2, w = std::min(maxw, std::max(560.f, (float)optech_text_w(p, txt, fs) + 100));
+    optech_box(p, cx - w / 2, top, w, h, QColor(10, 10, 10, 215), 22, 4, QColor(235, 235, 235, 230));
+    optech_txt(p, cx, top + h / 2, txt, fs, green, 0, 1);
+    return;
+  }
+  const QString t1 = alert.text1, t2 = alert.text2;
+  const QString line3 = alert.type.contains("immediateDisable") ? "오픈파일럿이 꺼졌습니다"
+                      : alert.type.contains("softDisable") ? "오픈파일럿이 곧 꺼집니다" : "";
+  const bool full = alert.size == cereal::ControlsState::AlertSize::FULL;
+  const bool one_line = t2.isEmpty() && line3.isEmpty();
+  const int fs1 = optech_fit(p, t1, one_line ? (full ? 144 : 132) : (full ? 124 : 108), maxw - 60);
+  const int fs2 = optech_fit(p, t2, 70, maxw - 60), fs3 = 54;
+  const float tw = std::max(optech_text_w(p, t1, fs1), t2.isEmpty() ? 0 : optech_text_w(p, t2, fs2));
+  const float l1 = fs1 * 0.95f, l2 = t2.isEmpty() ? 0 : fs2 * 0.95f + 14, l3 = line3.isEmpty() ? 0 : fs3 * 0.95f + 12;
+  const float h = 26 + l1 + l2 + l3 + 26, w = std::min(maxw, std::max(640.f, tw + 100));
+  const float top = std::min(H * 0.75f - h / 2, H - 20.f - h), x = cx - w / 2;
+  QColor fill(10, 10, 10, 215), line(235, 235, 235, 230), c1 = green;
+  float lw = 4;
+  if (alert.status == cereal::ControlsState::AlertStatus::CRITICAL) {
+    fill = blink_on ? QColor(215, 35, 35, 245) : QColor(150, 20, 20, 245); line = white; lw = 5; c1 = white;
+  } else if (alert.status == cereal::ControlsState::AlertStatus::USER_PROMPT) {
+    fill = QColor(225, 115, 25, 240); line = white; c1 = white;
+  }
+  optech_box(p, x, top, w, h, fill, 22, lw, line);
+  float y = top + 26;
+  optech_txt(p, cx, y + l1 / 2, t1, fs1, c1, 0, 1);
+  y += l1;
+  if (!t2.isEmpty()) { y += 14; optech_txt(p, cx, y + fs2 * 0.95f / 2, t2, fs2, white, 0, 1); y += fs2 * 0.95f; }
+  if (!line3.isEmpty()) { y += 12; optech_txt(p, cx, y + fs3 * 0.95f / 2, line3, fs3, QColor(255, 235, 200), 0, 1); }
+}
+
+// GPS box (optech-hkg 2026-11-25): under the badge row on the left, as wide as its content
+void AnnotatedCameraWidget::drawOptechGps(QPainter &p, float x, float by) {
+  const SubMaster &sm = *(uiState()->sm);
+  const UIScene &scene = uiState()->scene;
+  const bool gnss_alive = sm.alive("ubloxGnss");
+  const auto loc = sm["gpsLocationExternal"].getGpsLocationExternal();
+  const bool fixed = optech_gps_alive && (loc.getFlags() & 1);
+  const float acc = loc.getAccuracy();
+  QString state;
+  QColor gps_color;
+  if (!gnss_alive && !optech_gps_alive) { state = "꺼짐"; gps_color = QColor(180, 178, 169); }
+  else if (scene.gps_antenna_bad) { state = "안테나 이상"; gps_color = QColor(240, 149, 149); }
+  else if (!fixed) { state = "찾는 중"; gps_color = QColor(250, 199, 117); }
+  else if (acc <= 5.0f) { state = "잡힘"; gps_color = QColor(151, 196, 89); }
+  else if (acc <= 15.0f) { state = "잡힘"; gps_color = QColor(250, 199, 117); }
+  else { state = "약함"; gps_color = QColor(250, 199, 117); }
+  const QString str = "GPS " + state;
+  const int cno = scene.gps_cno;
+  const int bars = cno >= 35 ? 4 : cno >= 30 ? 3 : cno >= 25 ? 2 : cno >= 20 ? 1 : 0;
+  const float bh = 58, cy = by + bh / 2, fs = 34, bw = 9, gap = 5, barsw = 4 * bw + 3 * gap, maxbar = 34;
+  const float w = 22 + barsw + 16 + optech_text_w(p, str, fs) + 22;
+  optech_box(p, x, by, w, bh, QColor(0, 0, 0, 110), 14, 2, QColor(136, 135, 128));
+  const float bottom = cy + maxbar / 2;
+  p.setPen(Qt::NoPen);
+  for (int i = 0; i < 4; i++) {
+    const float h = 13 + i * 7;
+    p.setBrush(i < bars ? gps_color : QColor(255, 255, 255, 55));
+    p.drawRoundedRect(QRectF(x + 22 + i * (bw + gap), bottom - h, bw, h), 2, 2);
+  }
+  optech_txt(p, x + 22 + barsw + 16, cy, str, fs, gps_color, -1, 1);
+}
+
+void AnnotatedCameraWidget::drawOptechRadar(QPainter &p) {
+  if (optech_show_radar <= 0) return;
+  for (const auto &rp : uiState()->scene.radar_points) {
+    const float x = rp.pt.x(), y = rp.pt.y();
+    if (rp.kind == 2) {
+      if (optech_show_radar < 3) continue;
+      optech_box(p, x - 42, y - 35, 84, 42, QColor(239, 159, 39), 15, 0);
+      optech_txt(p, x, y - 14, "정지", 34, Qt::white, 0, 1);
+    } else {
+      const QString v = QString::number((int)std::nearbyint(std::abs(rp.v) * (is_metric ? MS_TO_KPH : MS_TO_MPH)));
+      const float w = 35 * v.length();
+      optech_box(p, x - w / 2, y - 35, w, 42, rp.kind == 1 ? QColor(226, 50, 50) : QColor(30, 180, 60), 15, 0);
+      optech_txt(p, x, y - 14, (rp.kind == 1 ? "-" : "") + v, 40, Qt::white, 0, 1);
+    }
+    if (optech_show_radar >= 2) optech_txt(p, x, y - 40, QString::number(rp.y_rel, 'f', 1), 30, Qt::white);
+  }
+}
+
+// right column (optech-hkg 2026-11-25/26): wheel, CPU ('기기 상태') and tyre boxes of 160 x 160, then the following
+// distance + gear box (230 high) under them
+void AnnotatedCameraWidget::drawOptechRight(QPainter &p) {
+  const float colw = 160, boxh = 160, gap = 14, rx = width() - 30 - colw, rcx = rx + colw / 2;
+  const QColor box_fill(0, 0, 0, 100), box_line(180, 178, 169), lab(211, 209, 199), white(255, 255, 255);
+  const bool blink_on = optech_blink < 7;
+  float top = 20;
+  optech_box(p, rx, top, colw, boxh, box_fill, 14, 3, box_line);
+  const QColor wc = optech_enabled ? bg_colors[optech_status] : QColor(0x17, 0x33, 0x49, 0xc8);
+  p.setPen(Qt::NoPen);
+  p.setBrush(wc);
+  p.drawEllipse(QPointF(rcx, top + boxh / 2), 66, 66);
+  p.save();
+  p.translate(rcx, top + boxh / 2);
+  p.rotate(-optech_steer_deg);
+  p.drawPixmap(QRectF(-60, -60, 120, 120), wheel_img, QRectF(wheel_img.rect()));
+  p.restore();
+
+  if (optech_show_dev) {
+    top += boxh + gap;
+    optech_box(p, rx, top, colw, boxh, box_fill, 14, 3, box_line);
+    optech_txt(p, rcx, top + 26, "CPU 온도", 30, lab, 0, 1);
+    optech_txt(p, rcx, top + 60, QString::number((int)std::nearbyint(optech_cpu_temp)) + "°C", 44,
+               optech_cpu_temp > 80 && blink_on ? QColor(240, 149, 149) : white, 0, 1);
+    optech_txt(p, rcx, top + 99, "CPU 사용", 30, lab, 0, 1);
+    optech_txt(p, rcx, top + 133, QString::number(optech_cpu_use) + "%", 44,
+               optech_cpu_use > 90 && blink_on ? QColor(240, 149, 149) : white, 0, 1);
+  }
+
+  const float *t = uiState()->scene.tpms;
+  if (optech_show_tpms && (t[0] > 1 || t[1] > 1 || t[2] > 1 || t[3] > 1)) {
+    top += boxh + gap;
+    optech_box(p, rx, top, colw, boxh, box_fill, 14, 3, box_line);
+    optech_txt(p, rcx, top + 26, "공기압 psi", 30, lab, 0, 1);
+    for (int i = 0; i < 4; i++) {
+      const float px = rcx + (i % 2 == 0 ? -38 : 38), py = top + (i < 2 ? 77 : 127);
+      const bool ok = t[i] > 1;
+      const QColor c = !ok ? QColor(136, 135, 128) : (t[i] < 30 ? QColor(240, 149, 149) : (t[i] > 45 ? QColor(250, 199, 117) : white));
+      optech_txt(p, px, py, ok ? QString::number((int)std::nearbyint(t[i])) : "-", 44, c, 0, 1);
+    }
+  }
+
+  // following distance + gear: white label, outlined steps (lit ones bright green), a big gear tile (D green, R red,
+  // N amber, P grey). spst: the steps are openpilot's 주행 성향 (1-3) with openpilot speed control; the car's own gap
+  // setting is not read here, so with the car's cruise they stay dark
+  {
+    top += boxh + gap;
+    const float gh = 230;
+    optech_box(p, rx, top, colw, gh, QColor(0, 0, 0, 140), 14, 3, white);
+    optech_txt(p, rcx, top + 28, "차간 거리", 34, white, 0, 1);
+    const int segs = 3, lit = optech_long ? std::clamp(optech_personality, 0, 2) + 1 : 0;
+    const float gl = rx + 14, gr = rx + colw - 14, sgap = 6, segw = (gr - gl - (segs - 1) * sgap) / segs, segh = 30, segy = top + 54;
+    for (int i = 0; i < segs; i++) {
+      p.setPen(QPen(i < lit ? white : QColor(255, 255, 255, 110), 2));
+      p.setBrush(i < lit ? QColor(120, 220, 60) : QColor(255, 255, 255, 30));
+      p.drawRoundedRect(QRectF(gl + i * (segw + sgap), segy, segw, segh), 6, 6);
+    }
+    QColor gfill(110, 110, 105);
+    if (optech_gear == "D" || optech_gear == "S" || optech_gear == "L" || optech_gear == "E") gfill = QColor(40, 150, 20);
+    else if (optech_gear == "R") gfill = QColor(226, 60, 60);
+    else if (optech_gear == "N") gfill = QColor(220, 140, 20);
+    const float ts = 120, tcy = top + 100 + ts / 2;
+    optech_box(p, rcx - ts / 2, tcy - ts / 2, ts, ts, gfill, 16, 4, white);
+    optech_txt(p, rcx, tcy, optech_gear, 96, white, 0, 1);
+  }
+}
+
+// rear side warning (optech-hkg 2026-11-25): beside the road on either side of the lead car info (centre -/+ 350),
+// always amber like the cars' mirror lights and without text: steady while a car is there, blinking once the turn
+// signal is on towards it
+void AnnotatedCameraWidget::drawOptechBsd(QPainter &p, bool right, bool danger) {
+  const float w = 140, h = 170, x = width() / 2.f + (right ? 350.f : -350.f) - w / 2, y = height() * 0.60f;
+  if (danger && optech_blink >= 7) return;
+  const QColor bsd_bg(239, 159, 39, 235), fg(65, 36, 2);
+  optech_box(p, x, y, w, h, bsd_bg, 20, 5);
+  // car seen from the side
+  const float cx = x + w / 2, cw = 118, ch = 64, cy = y + 48;
+  QPainterPath body;
+  body.addRoundedRect(QRectF(cx - cw / 2, cy - ch * 0.08f, cw, ch * 0.42f), 10, 10);
+  QPolygonF cabin;
+  cabin << QPointF(cx - cw * 0.34f, cy - ch * 0.06f) << QPointF(cx - cw * 0.20f, cy - ch * 0.46f)
+        << QPointF(cx + cw * 0.18f, cy - ch * 0.46f) << QPointF(cx + cw * 0.38f, cy - ch * 0.06f);
+  body.addPolygon(cabin);
+  p.setPen(Qt::NoPen);
+  p.setBrush(fg);
+  p.drawPath(body.simplified());
+  p.setBrush(bsd_bg);
+  QPolygonF win1, win2;
+  win1 << QPointF(cx - cw * 0.27f, cy - ch * 0.10f) << QPointF(cx - cw * 0.16f, cy - ch * 0.37f)
+       << QPointF(cx - cw * 0.02f, cy - ch * 0.37f) << QPointF(cx - cw * 0.02f, cy - ch * 0.10f);
+  win2 << QPointF(cx + cw * 0.03f, cy - ch * 0.10f) << QPointF(cx + cw * 0.03f, cy - ch * 0.37f)
+       << QPointF(cx + cw * 0.15f, cy - ch * 0.37f) << QPointF(cx + cw * 0.29f, cy - ch * 0.10f);
+  p.drawPolygon(win1);
+  p.drawPolygon(win2);
+  for (int i = -1; i <= 1; i += 2) {
+    const QPointF wc(cx + i * cw * 0.29f, cy + ch * 0.36f);
+    p.setPen(QPen(bsd_bg, 4));
+    p.setBrush(fg);
+    p.drawEllipse(wc, ch * 0.17f, ch * 0.17f);
+    p.setPen(Qt::NoPen);
+    p.setBrush(bsd_bg);
+    p.drawEllipse(wc, ch * 0.06f, ch * 0.06f);
+  }
+  // warning triangle with an exclamation mark (yellow, black rim)
+  const float triW = 92, triH = 76, triX = cx - triW / 2, triY = y + h - triH - 8;
+  QPolygonF tri;
+  tri << QPointF(cx, triY) << QPointF(triX + triW, triY + triH) << QPointF(triX, triY + triH);
+  p.setPen(QPen(QColor(20, 20, 20), 6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+  p.setBrush(QColor(250, 184, 0));
+  p.drawPolygon(tri);
+  p.setPen(Qt::NoPen);
+  p.setBrush(QColor(20, 20, 20));
+  p.drawRoundedRect(QRectF(cx - 5.5f, triY + 24, 11, 30), 5.5f, 5.5f);
+  p.drawEllipse(QPointF(cx, triY + 64), 6, 6);
+}
+
+// OPTECH 주행 화면, same layout as optech-hkg's (2026-11-25/26):
+//   left column: badge row (SCC2 / TMAP·CARROT / RADAR), GPS box, big set speed box at y 180, ONE sign under it
+//   (camera ahead / speed bump / road limit) with the distance left
+//   top centre: traffic light at the top, big speed (240) with km/h beside it on the same baseline, turn signal
+//   arrows beside the number, turn guidance under it
+//   right column: wheel, CPU, tyres, following distance + gear. Lead info under the lead (not while a message box is
+//   up), rear side warning beside the road. Alerts: OnroadAlerts (optech_paint_alert)
 void AnnotatedCameraWidget::drawOptechHud(QPainter &p) {
   p.save();
-  optech_blink = (optech_blink + 1) % 16;
-  const bool blink_on = optech_blink <= 8;
-  const QColor white(255, 255, 255, 255);
-  const QColor green(0, 255, 0, 255);
+  p.setRenderHint(QPainter::Antialiasing);
+  optech_blink = (optech_blink + 1) % 12;
+  const bool blink_on = optech_blink < 7;
+  const QColor white(255, 255, 255), label_c(211, 209, 199), amber(250, 199, 117);
+  const QColor soft_red(240, 149, 149), soft_green(151, 196, 89), dark(44, 44, 42);
+  const float to_unit = is_metric ? 1.f : KM_TO_MILE;
 
-  // anchor: speed center line, lower-left corner (optech-hkg: x = 140, y = fb_h - 230)
-  const int bx = 140;
-  const int by = height() - 230;
+  // ======================= left column =======================
+  const float lx = 30, CW = 370, BH = 62, ry = 20;
+  float bx = lx;
+  // 1) badges, only the ones that are on, all text boxes in one font
+  if (optech_show_conn) {
+    auto badge = [&](const QString &text, const QColor &c) {
+      const int fs = (int)(BH * 0.62f);
+      const float w = std::max(BH * 2.22f, (float)optech_text_w(p, text, fs) + BH * 0.6f);
+      optech_box(p, bx, ry, w, BH, c, 12, 2);
+      optech_txt(p, bx + w / 2, ry + BH / 2, text, fs, white, 0, 1);
+      bx += w + 14;
+    };
+    if (optech_scc2) badge("SCC2", QColor(200, 40, 40, 235));
+    // navigation link by the port the data came in on (roadLimitSpeed.naviSource): CARROT (7706: 당근내비, TmapNda
+    // in carrot mode), TMAP (843: TmapNda in NDA mode); green while it delivers, grey while linked with nothing yet
+    {
+      const QColor app(0, 170, 0, 230), idle(110, 110, 110, 220);
+      const QString name = optech_navi_source == 1 ? "CARROT" : optech_navi_source == 2 ? "TMAP" : "NAVI";
+      if (optech_navi_active >= 200) badge(name, app);
+      else if (optech_navi_active > 0 && optech_navi_active < 100) badge(optech_navi_source == 1 ? name : QString("TMAP"), app);
+      else if (optech_navi_active >= 100 || optech_navi_source > 0) badge(name, idle);
+    }
+    if (optech_radar_tracks) badge("RADAR", QColor(230, 130, 20, 235));
+  }
+  // the set speed + sign block always starts at y 180, with or without the badge row
+  float col_y = 180;
+  // 2) GPS box, centred between the badge row and the set speed box
+  if (optech_show_gps) drawOptechGps(p, lx, (ry + BH + col_y) / 2 - 58 / 2);
 
-  // background box (+ CPU / FPS tiles above the speed when 기기 상태 is on)
-  const bool cam_on = optech_cam_limit > 0;
-  const QColor bg = (cam_on && !blink_on) ? QColor(255, 0, 0, 180) : QColor(0, 0, 0, 90);
-  if (optech_show_dev) optech_box(p, bx - 120, by - 270, 475, 495, bg, 15, 2);
-  else                 optech_box(p, bx - 120, by - 130, 475, 355, bg, 15, 2);
-  if (optech_show_dev) {
-    const QColor tile_ok(0, 255, 0, 190), tile_hot(255, 0, 0, 255);
-    const int dx = bx - 35, dy = by - 200;
-    const int xs[3] = {dx, dx + 150, dx + 300};
-    const QString labels[3] = {"CPU온도", "CPU사용", "FPS"};
-    const QString vals[3] = {QString::number((int)std::round(optech_cpu_temp)), QString::number(optech_cpu_use) + "%",
-                             QString::number((int)std::round(optech_fps))};
-    const bool hot[3] = {optech_cpu_temp > 80, optech_cpu_use > 90, optech_fps > 0 && optech_fps < 15};
+  // 3) set speed box (optech-hkg 2026-11-26, fixed layout): left half '설정속도' + the set speed, a dotted line in the
+  //    middle, right half '감속목표' + the speed openpilot slows to for a speed camera (yellow; a yellow bar while it is
+  //    not slowing, so nothing moves when the target comes and goes). Labels centred over their numbers, both numbers
+  //    on one baseline, each shrunk only to fit its half. Not while stopped (the target stays put at a red light)
+  const int cam_disp = optech_cam_limit > 0 ? (int)std::nearbyint(optech_cam_limit * to_unit) : 0;
+  {
+    const float w = CW, h = 240, pad = 22;
+    QColor fill(95, 94, 90, 230), line(136, 135, 128), txt = white;
+    bool draw = true;
+    if (optech_enabled && cam_disp > 0) {
+      const bool over = speed > cam_disp + 2.0f;
+      if (over) { fill = QColor(226, 75, 74, 240); line = white; draw = blink_on; }
+      else { fill = QColor(59, 109, 17, 235); line = white; }
+    } else if (optech_enabled && optech_long) {
+      fill = QColor(24, 95, 165, 235); line = white;
+    } else if (optech_enabled) {
+      fill = QColor(255, 255, 255, 64); line = white;
+    } else {
+      txt = QColor(180, 178, 169);
+    }
+    if (draw) optech_box(p, lx, col_y, w, h, fill, 18, 3, line);
+    const QString set_s = is_cruise_set ? QString::number((int)std::nearbyint(setSpeed)) : "--";
+    const float target = optech_cam_target * to_unit;
+    const bool slowing = optech_enabled && optech_long && target > 0 && target + 0.5f < setSpeed && speed >= 3.f;
+    const QString hold_s = QString::number((int)std::nearbyint(target));
+    const float half = (w - 2 * pad - 32) / 2;  // 32: room for the dotted line
+    const float c1 = lx + pad + half / 2, c2 = lx + w - pad - half / 2, dot_x = lx + w / 2;
+    const int lab_fs = std::min(optech_fit(p, "설정속도", 44, half), optech_fit(p, "감속목표", 44, half));
+    const int fs_set = optech_fit(p, set_s, 150, half), fs_hold = optech_fit(p, hold_s, 110, half);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(255, 255, 255, 150));
+    for (float dy = col_y + 20; dy <= col_y + h - 20; dy += 13) p.drawEllipse(QPointF(dot_x, dy), 2.6, 2.6);
+    const float num_base = col_y + h - 42;
+    optech_txt_hb(p, c1, col_y + 58, "설정속도", lab_fs, txt, 0);
+    optech_txt_base(p, c1, num_base, set_s, fs_set, txt, 0);
+    optech_txt_hb(p, c2, col_y + 58, "감속목표", lab_fs, amber, 0);
+    if (slowing) optech_txt_base(p, c2, num_base, hold_s, fs_hold, amber, 0);
+    else optech_hbar(p, c2, num_base, 110, amber);
+    col_y += h + 16;
+  }
+
+  // 4) road limit | speed camera under the set speed (optech-hkg 2026-11-26: the one big round sign was too big and
+  //    came and went with the data). Two square tiles side by side, the height of the set speed box, in the sign
+  //    colours: left '제한속도' white with a red frame (label and number red), right '단속속도' / '구간단속' / '방지턱'
+  //    yellow with a red frame (dark text, '방지턱' red, the bump picture for a bump). The distance left sits in its
+  //    own small box under the camera tile (red within 200 m). Without data a tile keeps its colours and shows a red bar
+  //    instead of the number, so nothing comes and goes. Dark / red text on these light tiles has no shadow.
+  {
+    const float th = 240, gap = 14, tw = (CW - gap) / 2, tt = col_y, frame = 10;
+    const float tx1 = lx, tx2 = lx + tw + gap;
+    const float num_base = tt + th - 42;  // numbers' baseline, as in the set speed box
+    const int road_disp = optech_road_limit > 0 ? (int)std::nearbyint(optech_road_limit * to_unit)
+                                                : (speedLimit > 1 ? (int)std::nearbyint(speedLimit) : 0);
+    const bool cam = cam_disp > 0, bump = !cam && optech_bump;
+    const QString rlab = bump ? "방지턱" : optech_cam_section ? "구간단속" : "단속속도";
+    const QColor red(226, 75, 74), yellow(250, 199, 117);
+    const float inner = tw - 2 * frame - 18;
+    const int tlab_fs = std::min(optech_fit(p, "제한속도", 44, inner), optech_fit(p, rlab, 44, inner));
+    auto tile = [&](float tx, const QString &tlab, const QColor &tfill, const QColor &lab_col) {
+      optech_box(p, tx, tt, tw, th, tfill, 18, frame, red);
+      optech_txt_hb(p, tx + tw / 2, tt + 58, tlab, tlab_fs, lab_col, 0, false);
+    };
+    auto tile_num = [&](float tx, int sv, const QColor &num_col) {
+      const float ncx = tx + tw / 2;
+      if (sv <= 0) {  // no data: a red bar where the number goes
+        optech_hbar(p, ncx, num_base, 130, red);
+        return;
+      }
+      const QString nb = QString::number(sv);
+      optech_txt_base(p, ncx, num_base, nb, optech_fit(p, nb, 130, inner), num_col, 0, false);
+    };
+    tile(tx1, "제한속도", white, red);
+    tile_num(tx1, road_disp, red);
+    tile(tx2, rlab, yellow, bump ? red : dark);
+    if (bump) {
+      const float bs = 130;
+      p.drawPixmap(QRectF(tx2 + tw / 2 - bs / 2, tt + 72, bs, bs), bump_img, QRectF(bump_img.rect()));
+    } else {
+      tile_num(tx2, cam ? cam_disp : 0, dark);
+    }
+    const float left = cam ? optech_cam_dist : bump ? optech_bump_dist : 0;
+    if (left > 0) {  // distance left: its own box under the camera tile, red within 200 m
+      const QString dist = optech_dist((int)left, " 남음");
+      const float dh = 50, dt = tt + th + 10;
+      optech_box(p, tx2, dt, tw, dh, left < 200 ? red : QColor(30, 30, 30, 225), 14, 3);
+      optech_txt(p, tx2 + tw / 2, dt + dh / 2, dist, optech_fit(p, dist, 36, tw - 20), white, 0, 1);
+    }
+  }
+
+  // ======================= top centre =======================
+  const float cx = width() / 2.f;
+  const float SPEED_BASE = 326, SPEED_FS = 240;  // big speed baseline and size (optech-hkg)
+  float spd_left = cx, spd_right = cx;            // the number's left edge / the unit's right edge
+  {
+    // white steady, red braking / slowing, green speeding up; km/h right of the number on the same baseline
+    QColor c = white;
+    if (optech_brake || optech_a_ego < -0.3f) c = soft_red;
+    else if (optech_a_ego > 0.3f) c = soft_green;
+    const QString num = QString::number((int)std::nearbyint(speed));
+    const float nw = optech_text_w(p, num, (int)SPEED_FS);
+    optech_txt_base(p, cx, SPEED_BASE, num, (int)SPEED_FS, c, 0);
+    spd_left = cx - nw / 2;
+    const QString unit_str = is_metric ? "km/h" : "mph";
+    const float ux = cx + nw / 2 + 14;
+    optech_txt_base(p, ux, SPEED_BASE, unit_str, 40, label_c, -1);
+    spd_right = ux + optech_text_w(p, unit_str, 40);
+  }
+  // traffic light at the top (driving model's stop / go guess, selfdrive/controls/lib/optech_signal.py)
+  const int light = uiState()->scene.traffic_state;
+  if (light == 1 || light == 2) {
+    const float w = 264, h = 88, x = cx - w / 2, y = 30, r = 31;
+    optech_box(p, x, y, w, h, QColor(44, 44, 42, 240), 14, 3);
+    const QColor off(95, 94, 90), on[3] = {QColor(226, 75, 74), QColor(239, 159, 39), QColor(99, 153, 34)};
+    const int lit = light == 1 ? 0 : 2;
+    p.setPen(Qt::NoPen);
     for (int i = 0; i < 3; i++) {
-      optech_box(p, xs[i] - 65, dy - 38, 130, 90, (hot[i] && blink_on) ? tile_hot : tile_ok, 7, 2);
-      optech_text(p, xs[i], dy - 5, labels[i], 25, white);
-      optech_text(p, xs[i], dy + 40, vals[i], 40, white);
+      p.setBrush(i == lit ? on[i] : off);
+      p.drawEllipse(QPointF(x + w / 2 + (i - 1) * 82, y + h / 2), r, r);
+    }
+  }
+  // turn signal arrows beside the big number (three lighting up one after another)
+  if (optech_left_blinker || optech_right_blinker) {
+    const int step = (optech_blink / 3) % 4;
+    const float w = 60, h = 110, gap = 44, y = SPEED_BASE - 0.36f * SPEED_FS - h / 2;
+    const float lx0 = std::min(cx - 270, spd_left - 50), rx0 = std::max(cx + 270, spd_right + 40);
+    for (int i = 0; i < 3; i++) {
+      const QColor col(239, 159, 39, step > i ? 255 : 70);
+      if (optech_left_blinker) optech_chevron(p, lx0 - i * gap - w, y, w, h, false, col);
+      if (optech_right_blinker) optech_chevron(p, rx0 + i * gap, y, w, h, true, col);
+    }
+  }
+  // navigation turn guidance right under the speed (TmapNda / 당근내비)
+  if (optech_navi_active > 0 && optech_turn > 0) {
+    int arrow = 0;
+    QString label;
+    switch (optech_turn) {
+      case 1: arrow = 1; label = "좌회전"; break;
+      case 2: arrow = 2; label = "우회전"; break;
+      case 3: arrow = 3; label = "왼쪽 차로"; break;
+      case 4: arrow = 4; label = "오른쪽 차로"; break;
+      case 5: arrow = 5; label = "U턴"; break;
+      case 35: label = "좌측 고가 진입"; break;
+      case 43: label = "지하차도 우측"; break;
+      case 48: label = "휴게소"; break;
+      default: break;
+    }
+    if (!label.isEmpty()) {
+      const QString str = optech_turn_dist > 0 ? label + " " + optech_dist(optech_turn_dist, "") : label;
+      const float fs = 58, S = 60, tw = optech_text_w(p, str, (int)fs), iw = arrow ? S + 20 : 0, w = tw + iw + 56, h = 96;
+      const float x = cx - w / 2, y = SPEED_BASE + 30;
+      optech_box(p, x, y, w, h, QColor(0, 0, 0, 120), 12, 0);
+      if (arrow) optech_turn_arrow(p, x + 26, y + (h - S) / 2, S, arrow);
+      optech_txt(p, x + 28 + iw, y + h / 2, str, (int)fs, white, -1, 1);
     }
   }
 
-  // current speed on the speed plate
-  optech_text(p, bx, by + 50, QString::number((int)std::nearbyint(speed)), 120, white);
-  p.drawPixmap(bx - 100, by - 60, speed_bg_img);
-
-  // set speed (green), "--" while cruise is not set
-  optech_text(p, bx + 170, by + 15, is_cruise_set ? QString::number((int)std::nearbyint(setSpeed)) : "--", 60, green);
-  if (optech_cam_target > 0 && is_cruise_set && optech_cam_target < setSpeed) {
-    const QColor ochre(218, 111, 37, 255);
-    optech_text(p, bx + 250, by - 50, QString::number((int)std::nearbyint(optech_cam_target)), 50, ochre);
-    optech_text(p, bx + 250, by - 100, "cam", 30, ochre);
+  // ======================= lead: amber triangle + info under it (the info steps aside while a message box is up) ======
+  if (optech_lead) {
+    const QPointF &v = uiState()->scene.lead_vertices[0];
+    const float x = std::clamp((float)v.x(), 300.f, width() - 300.f);
+    const float y = std::clamp((float)v.y(), 300.f, height() - 230.f);
+    QPolygonF tri;
+    tri << QPointF(x, y - 6) << QPointF(x + 28, y + 36) << QPointF(x - 28, y + 36);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(239, 159, 39));
+    p.drawPolygon(tri);
   }
-
-  // acceleration profile tile (연비 / 일반 / 고속) + GPS speed above it; only with openpilot longitudinal
-  QString mode_text;
-  QColor mode_color;
-  if (optech_long) {
-    switch (optech_accel_profile) {
-      case 1: mode_text = "연비"; mode_color = QColor(0, 255, 0, 200); break;
-      case 2: mode_text = "일반"; mode_color = QColor(128, 128, 128, 210); break;
-      case 3: mode_text = "고속"; mode_color = QColor(255, 0, 0, 200); break;
-    }
-  }
-  const int mx = bx - 50, my = by + 175;
-  if (!mode_text.isEmpty()) {
-    optech_box(p, mx - 55, my - 38, 110, 48, mode_color, 6, 2);
-    optech_text(p, mx, my - 2, mode_text, 32, white);
-  }
-  if (optech_gps_alive) {
-    if (optech_gps_fix) optech_text(p, mx, my - 45, "GPS " + QString::number((int)(optech_gps_speed + 0.5f)), 30, green);
-    else                optech_text(p, mx, my - 45, "GPS --", 30, QColor(170, 170, 170, 255));
-  }
-
-  // following distance: number + bars (relaxed = 3 bars ... aggressive = 1); only with openpilot longitudinal
-  if (optech_long) {
-    const int gap = std::clamp(optech_personality, 0, 2) + 1;
-    optech_text(p, bx + 220, by + 77, QString::number(gap), 40, white);
-    const float ddy = 80.0f / 4.0f;
-    for (int i = 0; i < gap; i++) {
-      optech_box(p, bx + 270, by + 185 - ddy * (i + 1) + 2, 70, ddy - 2, QColor(0, 255, 0, 210), 1, 2);
+  if (optech_lead && !optech_msg_box) {
+    const QPointF &v = uiState()->scene.lead_vertices[0];
+    const float x = std::clamp((float)v.x(), 300.f, width() - 300.f);
+    const float y = std::clamp((float)v.y(), 300.f, height() - 230.f);
+    const float vl = std::max(0.f, (float)(optech_lead_v * (is_metric ? MS_TO_KPH : MS_TO_MPH)));
+    const bool gap_ok = optech_v_ego > 1.0f;
+    const float tgap = gap_ok ? optech_lead_d / optech_v_ego : 0.f;
+    const float w = 250, h = gap_ok ? 150 : 104, top = y + 44;
+    optech_box(p, x - w / 2, top, w, h, QColor(0, 0, 0, 110), 12, 0);
+    optech_txt_hb(p, x, top + 46, "거리 " + QString::number((int)std::nearbyint(optech_lead_d)) + "m", 40, white);
+    optech_txt_hb(p, x, top + 92, "앞차 " + QString::number((int)std::nearbyint(vl)) + (is_metric ? "km/h" : "mph"), 40, white);
+    if (gap_ok) {
+      const QColor gc = tgap < 1.0f ? soft_red : (tgap < 2.0f ? amber : white);
+      optech_txt_hb(p, x, top + 138, "도달 " + QString::number(tgap, 'f', 1) + "초", 40, gc);
     }
   }
 
-  // gear
-  const int gx = bx + 305, gy = by + 60;
-  optech_box(p, gx - 35, gy - 70, 70, 80, QColor(0, 255, 0, 210), 7, 3);
-  optech_text(p, gx, gy + 5, optech_gear, 70, white);
+  drawOptechRadar(p);
+  drawOptechRight(p);
 
-  // speed camera ahead: CAM tile blinking red / yellow with its limit and the distance above it
-  if (cam_on) {
-    const int lx = bx + 75, ly = by + 175;
-    const QString dist = optech_cam_dist >= 1000 ? QString::number(optech_cam_dist / 1000., 'f', 1) + "km"
-                                                 : QString::number((int)optech_cam_dist) + "m";
-    optech_text(p, lx, ly - 45, (optech_cam_section ? "구간 " : "CAM ") + dist, 30, white);
-    optech_box(p, lx - 55, ly - 38, 110, 48, blink_on ? QColor(255, 0, 0, 210) : QColor(255, 255, 0, 210), 6, 2);
-    optech_text(p, lx, ly, QString::number(optech_cam_limit), 40, blink_on ? white : QColor(0, 0, 0, 255));
-  }
-  // speed limit (map data), red when over
-  else if (speedLimit > 1) {
-    const int lx = bx + 75, ly = by + 175;
-    const int limit = (int)std::nearbyint(speedLimit);
-    const QColor lcolor = speed > limit + 2 ? QColor(255, 0, 0, 210) : QColor(255, 255, 255, 210);
-    optech_text(p, lx, ly - 45, "LIMIT", 30, white);
-    optech_box(p, lx - 55, ly - 38, 110, 48, lcolor, 6, 2);
-    optech_text(p, lx, ly, QString::number(limit), 40, speed > limit + 2 ? white : QColor(0, 0, 0, 255));
+  // rear side warning (cars with blind spot monitoring), from 30 km/h
+  if (optech_show_bsd && optech_v_ego > 30.f / 3.6f) {
+    if (optech_left_bsd) drawOptechBsd(p, false, optech_left_blinker);
+    if (optech_right_bsd) drawOptechBsd(p, true, optech_right_blinker);
   }
 
-  // driver monitoring icon: top left (the speed box owns the lower-left corner)
-  if (!hideBottomIcons) {
-    const int offset = UI_BORDER_SIZE + btn_size / 2;
-    drawIcon(p, QPoint(offset, offset), dm_img, blackColor(70), dmActive ? 1.0 : 0.2);
+  // driver monitoring icon (OPTECH > 화면 > 운전자 모니터링 아이콘): lower left under the left column, left of the REC
+  // button and level with it (user 2026-11-26: the square sign tiles left that corner free)
+  if (optech_show_dm && !hideBottomIcons) {
+    drawIcon(p, QPoint((int)(lx + btn_size / 2), height() - 40 - 70), dm_img, blackColor(70), dmActive ? 1.0 : 0.2);
   }
   p.restore();
 }
@@ -918,6 +1413,38 @@ void AnnotatedCameraWidget::drawLaneLines(QPainter &painter, const UIState *s) {
 
   const UIScene &scene = s->scene;
   SubMaster &sm = *(s->sm);
+
+  if (optech_hud) {
+    // OPTECH 주행 화면 = optech-hkg (paint.cc drawLaneLines, show_mode 7, ShowLaneInfo 1): white lane lines while the
+    // model is fairly sure of them, no road edges, a see-through white path and, while openpilot is on, a blue
+    // centre line along it (instead of dragonpilot's green path)
+    painter.setPen(Qt::NoPen);
+    for (int i = 0; i < std::size(scene.lane_line_vertices); ++i) {
+      if (scene.lane_line_probs[i] <= 0.3) continue;
+      painter.setBrush(QColor(255, 255, 255));
+      painter.drawPolygon(scene.lane_line_vertices[i]);
+    }
+    const int n = scene.track_vertices.length();
+    if (n >= 4) {
+      painter.setBrush(QColor(255, 255, 255, 46));
+      painter.drawPolygon(scene.track_vertices);
+      if (sm["controlsState"].getControlsState().getEnabled()) {
+        // the middle 12 % of the path: point i (one side) paired with point n-1-i (the other side)
+        const int glen = std::min(n / 2 - 1, 64);
+        const float g = 0.06f;
+        QPolygonF band(glen * 2);
+        for (int i = 0; i < glen; i++) {
+          const QPointF a = scene.track_vertices[i], b = scene.track_vertices[n - i - 1];
+          band[i] = a + (b - a) * (0.5f - g);
+          band[glen * 2 - 1 - i] = a + (b - a) * (0.5f + g);
+        }
+        painter.setBrush(QColor(55, 138, 221, 235));
+        painter.drawPolygon(band);
+      }
+    }
+    painter.restore();
+    return;
+  }
 
   // lanelines
   for (int i = 0; i < std::size(scene.lane_line_vertices); ++i) {
@@ -1062,6 +1589,8 @@ void AnnotatedCameraWidget::drawDriverState(QPainter &painter, const UIState *s)
 }
 #endif
 void AnnotatedCameraWidget::drawLead(QPainter &painter, const cereal::RadarState::LeadData::Reader &lead_data, const QPointF &vd, float v_ego) {
+  // OPTECH 주행 화면: no dragonpilot chevron; drawOptechHud marks the lead with optech-hkg's small amber triangle
+  if (optech_hud) return;
   painter.save();
 
   const float speedBuff = 10.;
@@ -1094,8 +1623,9 @@ void AnnotatedCameraWidget::drawLead(QPainter &painter, const cereal::RadarState
   painter.setBrush(redColor(fillAlpha));
   painter.drawPolygon(chevron, std::size(chevron));
 
-  // DP: Chevron detailed info.
-  if (d_rel > 0) {
+  // DP: Chevron detailed info. Not with the OPTECH 주행 화면: its lead info box (거리 / 앞차 / 도달) sits at the same
+  // place and the two texts ran into each other (optech-hkg draws no such text either)
+  if (d_rel > 0 && !optech_hud) {
     QString dist = is_metric? QString::number(d_rel,'f',1) + "m" : QString::number(d_rel*3.2808,'f',1) + "ft";
     int str_w = 350;
     painter.setFont(InterFont(40, QFont::Bold));

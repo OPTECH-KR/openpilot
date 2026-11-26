@@ -145,6 +145,15 @@ typedef struct UIScene {
   // lead
   QPointF lead_vertices[2];
 
+  // optech 주행 화면 (optech-hkg): radar objects (liveTracks), GPS summary (ubloxGnss), tyres + traffic light
+  // (controlsStateExt)
+  struct OptechRadarPoint { QPointF pt; float v; float y_rel; int kind; };  // kind 0 moving, 1 oncoming, 2 stopped
+  std::vector<OptechRadarPoint> radar_points;
+  int gps_sats = 0, gps_strong = 0, gps_cno = 0;
+  bool gps_antenna_bad = false;
+  float tpms[4] = {0, 0, 0, 0};
+  int traffic_state = 0;  // 0 none, 1 red, 2 green
+
   #ifndef QCOM
   // DMoji state
   float driver_pose_vals[3];
@@ -198,6 +207,9 @@ public:
 
   QTransform car_space_transform;
 
+  int settings_timeout_s = 180;  // optech '화면 유지 시간' (OptechSettingsTimeout seconds, -1: never)
+  int drive_dim = 0;             // optech '주행 중 밝기' (OptechDriveDim %, 0: off)
+
 signals:
   void uiUpdate(const UIState &s);
   void offroadTransition(bool offroad);
@@ -224,8 +236,12 @@ public:
   void setOffroadBrightness(int brightness) {
     offroad_brightness = std::clamp(brightness, 0, 100);
   }
+  bool settings_open = false;  // the settings window is shown (MainWindow sets it; '화면 유지 시간')
 
 private:
+  int idle_frames = 0;  // frames since the last touch ('주행 중 밝기')
+  bool dimmed = false;
+  bool keepApplies() const;
   #ifdef QCOM
   const float accel_samples = 5*UI_FREQ;
   bool motionTriggered(const UIState &s);

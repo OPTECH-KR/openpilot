@@ -65,11 +65,12 @@ void AbstractControl::hideEvent(QHideEvent *e) {
 
 ButtonControl::ButtonControl(const QString &title, const QString &text, const QString &desc, QWidget *parent) : AbstractControl(title, desc, "", parent) {
   btn.setText(text);
+  // OPTECH: rounded (pill) button like optech-hkg's 선택 button (dragonpilot made it square)
   btn.setStyleSheet(R"(
     QPushButton {
       padding: 0;
-      border-radius: 0px;
-      font-size: 32px;
+      border-radius: 40px;
+      font-size: 35px;
       font-weight: 500;
       color: #E4E4E4;
       background-color: #393939;

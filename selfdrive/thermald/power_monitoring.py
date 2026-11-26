@@ -39,8 +39,11 @@ class PowerMonitoring:
     self.car_voltage_instant_mV = 12e3          # Last value of peripheralState voltage
     self.integration_lock = threading.Lock()
     self.is_oneplus = os.path.isfile('/ONEPLUS')
-    self.dp_device_auto_shutdown = self.params.get_bool("dp_device_auto_shutdown")
-    self.dp_device_auto_shutdown_in = int(self.params.get("dp_device_auto_shutdown_in")) * 60
+    # optech 고급 > '시동 끈 뒤 꺼짐' (OptechOffShutdown seconds, 0 = never; replaces dp_device_auto_shutdown(_in)),
+    # read again every few seconds so a change in the menu works without a reboot
+    self.off_shutdown_s = 0
+    self.off_shutdown_read = 0.
+    self.read_off_shutdown()
     self.dp_device_auto_shutdown_voltage_prev = 0
 
     car_battery_capacity_uWh = self.params.get("CarBatteryCapacity")
@@ -202,6 +205,12 @@ class PowerMonitoring:
     disable_charging |= self.params.get_bool("ForcePowerDown")
     return disable_charging
 
+  def read_off_shutdown(self):
+    try:
+      self.off_shutdown_s = int(self.params.get("OptechOffShutdown", encoding="utf8") or 0)
+    except ValueError:
+      self.off_shutdown_s = 0
+
   def legacy_should_shutdown(self, peripheralState, ignition, in_car, offroad_timestamp, started_seen):
     if offroad_timestamp is None:
       return False
@@ -210,7 +219,10 @@ class PowerMonitoring:
     panda_charging = (peripheralState.usbPowerMode != log.PeripheralState.UsbPowerMode.client)
     # BATT_PERC_OFF = 3 if self.is_oneplus else 10
 
-    if started_seen and self.dp_device_auto_shutdown and (now - offroad_timestamp) > self.dp_device_auto_shutdown_in:
+    if now - self.off_shutdown_read > 5.:
+      self.off_shutdown_read = now
+      self.read_off_shutdown()
+    if started_seen and self.off_shutdown_s > 0 and (now - offroad_timestamp) > self.off_shutdown_s:
       self.params.put_bool("ForcePowerDown", True)
       if not panda_charging:
         return True

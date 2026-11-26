@@ -19,6 +19,7 @@ public:
   OptechValueControl(const QString &param, const QString &title, const QString &desc,
                      int min, int max, int step, std::function<QString(int)> format);
   void refresh();
+  std::function<void(int)> on_change;  // optional: called with the new value after a －/＋ press
 
 private:
   std::string key;
@@ -49,6 +50,7 @@ private:
   QListWidget *list;
   QStringList brands;
   QMap<QString, QStringList> cars;  // brand -> car names
+  QMap<QString, QString> names;     // Hyundai / Kia / Genesis: car -> menu name ("K5 DL3 2020-2023")
   QString cur_brand;
   void showCars(const QString &brand);
 };
@@ -71,14 +73,22 @@ private:
   QList<QPushButton *> tab_btns;
   QList<ListWidget *> tab_lists;
   QList<OptechValueControl *> values;
-  OptechValueControl *auto_shutdown_timer = nullptr;
   OptechValueControl *lane_priority_speed = nullptr;
-  QList<QWidget *> toyota_items, vag_items, bolt_items;
+  QList<QWidget *> toyota_items, vag_items, bolt_items, hkg_items;
+  QList<QWidget *> ray_items, porter_items;  // cars without SCC with their own settings (optech-hkg)
+  QLabel *non_scc_note = nullptr;            // the trims without SCC (… NO SCC)
+  QList<QWidget *> cam_group;      // 과속카메라: shown while 카메라 감속 is on
+  QList<QWidget *> torque_values;  // 토크 가속 / 마찰 계수: shown while 토크 사용자 설정 is on
+  ToggleControl *dm_icon = nullptr;
   QLabel *brand_note = nullptr;
 
   ParamControl *toggle(ListWidget *list, const QString &param, const QString &title, const QString &desc);
   OptechValueControl *value(ListWidget *list, const QString &param, const QString &title, const QString &desc,
                             int min, int max, int step, std::function<QString(int)> format);
+  // one of several named choices (optech-hkg style): title "이름: 지금 값", button 선택 opens the list; stores the index
+  ButtonControl *choice(ListWidget *list, const QString &param, const QString &title, const QString &desc,
+                        const QStringList &names);
+  QList<std::function<void()>> choice_refresh;  // re-read on showEvent (the drive screen buttons change some of them)
   QString currentBrand();
   void updateCarButton();
   void updateBrandItems();

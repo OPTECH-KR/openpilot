@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <functional>
+#include <vector>
 
 #include <QtConcurrent>
 
@@ -154,9 +156,67 @@ static void update_sockets(UIState *s) {
   s->sm->update(0);
 }
 
+// optech 주행 화면 'GPS 상태' (optech-hkg update_gps): satellites, strong ones and the mean of the 4 best signals
+static void update_gps(const SubMaster &sm, UIScene &scene) {
+  if (!sm.alive("ubloxGnss")) {
+    scene.gps_sats = scene.gps_strong = scene.gps_cno = 0;
+    scene.gps_antenna_bad = false;
+    return;
+  }
+  if (!sm.updated("ubloxGnss")) return;
+  const auto gnss = sm["ubloxGnss"].getUbloxGnss();
+  if (gnss.which() == cereal::UbloxGnss::MEASUREMENT_REPORT) {
+    std::vector<int> cnos;
+    for (const auto &meas : gnss.getMeasurementReport().getMeasurements()) {
+      if (meas.getCno() > 0) cnos.push_back(meas.getCno());
+    }
+    std::sort(cnos.begin(), cnos.end(), std::greater<int>());
+    const int top = std::min<int>(4, cnos.size());
+    int sum = 0;
+    for (int i = 0; i < top; i++) sum += cnos[i];
+    scene.gps_sats = cnos.size();
+    scene.gps_strong = std::count_if(cnos.begin(), cnos.end(), [](int c) { return c >= 30; });
+    scene.gps_cno = top > 0 ? sum / top : 0;
+  } else if (gnss.which() == cereal::UbloxGnss::HW_STATUS) {
+    const auto ant = gnss.getHwStatus().getAStatus();
+    scene.gps_antenna_bad = ant == cereal::UbloxGnss::HwStatus::AntennaSupervisorState::SHORT ||
+                            ant == cereal::UbloxGnss::HwStatus::AntennaSupervisorState::OPEN;
+  }
+}
+
+// optech 주행 화면 '레이더 물체' (optech-hkg ui_draw_radar_info): every radar track on the screen with its own speed
+static void update_radar_points(UIState *s) {
+  const SubMaster &sm = *(s->sm);
+  UIScene &scene = s->scene;
+  scene.radar_points.clear();
+  if (!sm.alive("liveTracks")) return;
+  const auto line = sm["modelV2"].getModelV2().getPosition();
+  const float v_ego = sm["carState"].getCarState().getVEgo();
+  for (const auto &t : sm["liveTracks"].getLiveTracks()) {
+    const float d = t.getDRel();
+    if (d < 2.f || d > 150.f) continue;
+    float z = 0.f;
+    if (line.getX().size() > 0) z = line.getZ()[get_path_length_idx(line, d)];
+    QPointF pt;
+    if (!calib_frame_to_full_frame(s, d, -t.getYRel(), z + 1.22, &pt)) continue;
+    const float v = v_ego + t.getVRel();
+    const int kind = v < -1.f ? 1 : std::abs(v) < 1.f ? 2 : 0;
+    scene.radar_points.push_back({pt, v, t.getYRel(), kind});
+  }
+}
+
 static void update_state(UIState *s) {
   SubMaster &sm = *(s->sm);
   UIScene &scene = s->scene;
+
+  update_gps(sm, scene);
+  if (sm.updated("liveTracks")) update_radar_points(s);
+  if (sm.updated("controlsStateExt")) {
+    const auto ext = sm["controlsStateExt"].getControlsStateExt();
+    scene.tpms[0] = ext.getTpmsFl(); scene.tpms[1] = ext.getTpmsFr();
+    scene.tpms[2] = ext.getTpmsRl(); scene.tpms[3] = ext.getTpmsRr();
+    scene.traffic_state = ext.getTrafficState();
+  }
 
   if (sm.updated("liveCalibration")) {
     auto live_calib = sm["liveCalibration"].getLiveCalibration();
@@ -307,6 +367,10 @@ UIState::UIState(QObject *parent) : QObject(parent) {
     "gpsLocationExternal",
     // optech - speed camera ahead
     "optechSpeedCam",
+    // optech - car battery voltage in the sidebar
+    "peripheralState",
+    // optech 주행 화면 (optech-hkg): navigation app link, radar objects, GPS satellites
+    "roadLimitSpeed", "liveTracks", "ubloxGnss",
   });
 
   Params params;
@@ -326,6 +390,11 @@ void UIState::update() {
 
   if (sm->frame % UI_FREQ == 0) {
     watchdog_kick(nanos_since_boot());
+    // optech 화면 탭 (optech-hkg): read once a second, also while the car is off
+    Params params;
+    const std::string keep = params.get("OptechSettingsTimeout");
+    settings_timeout_s = keep.empty() ? 180 : std::atoi(keep.c_str());
+    drive_dim = std::atoi(params.get("OptechDriveDim").c_str());
   }
   emit uiUpdate(*this);
 }
@@ -346,6 +415,7 @@ Device::Device(QObject *parent) : brightness_filter(BACKLIGHT_OFFROAD, BACKLIGHT
 }
 
 void Device::update(const UIState &s) {
+  if (idle_frames < 1000000) idle_frames++;
   updateBrightness(s);
   updateWakefulness(s);
 }
@@ -359,9 +429,22 @@ void Device::setAwake(bool on) {
   }
 }
 
+// optech '화면 유지 시간' (화면 탭, optech-hkg): untouched, the settings window stays open and the screen stays on with
+// the car off this long (-1 '항상': never). A value not in the menu (0) counts as 3 minutes
+static int keepSeconds() {
+  const int s = uiState()->settings_timeout_s;
+  return s == 0 ? 180 : s;
+}
+
+bool Device::keepApplies() const {
+  return settings_open || !ignition_on;
+}
+
 void Device::resetInteractiveTimeout(int timeout) {
+  idle_frames = 0;  // '주행 중 밝기': a touch brings the brightness back
   if (timeout == -1) {
-    timeout = (ignition_on ? 10 : 30);
+    const int keep_s = keepSeconds();
+    timeout = (keep_s > 0 && keepApplies()) ? keep_s : (ignition_on ? 10 : 30);
   }
   interactive_timeout = timeout * UI_FREQ;
 }
@@ -381,6 +464,19 @@ void Device::updateBrightness(const UIState &s) {
     // Scale back to 10% to 100%
     clipped_brightness = std::clamp(100.0f * clipped_brightness, 10.0f, 100.0f);
   }
+
+  // optech '주행 중 밝기' (화면 탭, optech-hkg): while driving, after 30 s without a touch fade down to this %
+  // (never brighter than the auto brightness). A touch or a warning brings it back at once
+  const auto cs = (*s.sm)["controlsState"].getControlsState();
+  const bool alerting = cs.getAlertSize() != cereal::ControlsState::AlertSize::NONE &&
+                        cs.getAlertStatus() != cereal::ControlsState::AlertStatus::NORMAL;
+  const bool want_dim = s.scene.started && s.drive_dim > 0 && idle_frames >= 30 * UI_FREQ && !alerting;
+  if (want_dim) {
+    clipped_brightness = std::min(clipped_brightness, (float)s.drive_dim);
+  } else if (dimmed) {
+    brightness_filter.reset(clipped_brightness);
+  }
+  dimmed = want_dim;
 
   int brightness = brightness_filter.update(clipped_brightness);
   if (!awake) {
@@ -419,6 +515,9 @@ void Device::updateWakefulness(const UIState &s) {
   if (ignition_just_turned_off) {
   #endif
     resetInteractiveTimeout();
+  } else if (keepSeconds() < 0 && keepApplies()) {
+    // '화면 유지 시간: 항상': never time out (and do not fire interactiveTimeout, which closes the settings window)
+    if (interactive_timeout <= 0) interactive_timeout = 1;
   } else if (interactive_timeout > 0 && --interactive_timeout == 0) {
     emit interactiveTimeout();
   }

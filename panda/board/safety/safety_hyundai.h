@@ -45,6 +45,14 @@ const CanMsg HYUNDAI_LONG_TX_MSGS[] = {
   {0x7D0, 0, 8}, // radar UDS TX addr Bus 0 (for radar disable)
 };
 
+// optech: no SCC + comma pedal: GAS_COMMAND instead of the SCC messages (CLU11 cancels the car's own cruise)
+const CanMsg HYUNDAI_NON_SCC_PEDAL_TX_MSGS[] = {
+  {0x340, 0, 8}, // LKAS11 Bus 0
+  {0x4F1, 0, 4}, // CLU11 Bus 0
+  {0x485, 0, 4}, // LFAHDA_MFC Bus 0
+  {0x200, 0, 6}, // comma pedal GAS_COMMAND Bus 0
+};
+
 const CanMsg HYUNDAI_CAMERA_SCC_TX_MSGS[] = {
   {0x340, 0, 8}, // LKAS11 Bus 0
   {0x4F1, 2, 4}, // CLU11 Bus 2
@@ -77,6 +85,51 @@ RxCheck hyundai_long_rx_checks[] = {
 };
 
 // older hyundai models have less checks due to missing counters and checksums
+// optech: no SCC (legacy checks, no SCC12): the cruise state comes from EMS16 (gas cars, in the common checks), LABEL11
+// (0x592, EVs) or E_CRUISE_CONTROL (0x595, hybrids) - StarPilot's non-SCC messages
+#define HYUNDAI_NON_SCC_NO_TCS_RX_CHECKS                                                                       \
+  {.msg = {{0x260, 0, 8, .check_checksum = true, .max_counter = 3U, .frequency = 100U},                       \
+           {0x371, 0, 8, .frequency = 100U}, { 0 }}},                                                         \
+  {.msg = {{0x386, 0, 8, .check_checksum = false, .max_counter = 0U, .frequency = 100U}, { 0 }, { 0 }}},      \
+
+#define HYUNDAI_NON_SCC_EV_RX_CHECK \
+  {.msg = {{0x592, 0, 8, .frequency = 10U}, { 0 }, { 0 }}},
+#define HYUNDAI_NON_SCC_HEV_RX_CHECK \
+  {.msg = {{0x595, 0, 8, .frequency = 10U}, { 0 }, { 0 }}},
+// ... with a comma pedal: the buttons (SET / RES engage) and the pedal's GAS_SENSOR (0x201, 50 Hz)
+#define HYUNDAI_NON_SCC_PEDAL_RX_CHECKS \
+  {.msg = {{0x4F1, 0, 4, .check_checksum = false, .max_counter = 15U, .frequency = 50U}, { 0 }, { 0 }}}, \
+  {.msg = {{0x201, 0, 6, .check_checksum = true, .max_counter = 15U, .frequency = 50U}, { 0 }, { 0 }}},
+
+RxCheck hyundai_non_scc_rx_checks[] = {
+  HYUNDAI_COMMON_RX_CHECKS(true)
+};
+
+RxCheck hyundai_non_scc_ev_rx_checks[] = {
+  HYUNDAI_COMMON_RX_CHECKS(true)
+  HYUNDAI_NON_SCC_EV_RX_CHECK
+};
+
+RxCheck hyundai_non_scc_hev_rx_checks[] = {
+  HYUNDAI_COMMON_RX_CHECKS(true)
+  HYUNDAI_NON_SCC_HEV_RX_CHECK
+};
+
+RxCheck hyundai_non_scc_ev_no_tcs_rx_checks[] = {
+  HYUNDAI_NON_SCC_NO_TCS_RX_CHECKS
+  HYUNDAI_NON_SCC_EV_RX_CHECK
+};
+
+RxCheck hyundai_non_scc_pedal_rx_checks[] = {
+  HYUNDAI_COMMON_RX_CHECKS(true)
+  HYUNDAI_NON_SCC_PEDAL_RX_CHECKS
+};
+
+RxCheck hyundai_non_scc_pedal_no_tcs_rx_checks[] = {
+  HYUNDAI_NON_SCC_NO_TCS_RX_CHECKS
+  HYUNDAI_NON_SCC_PEDAL_RX_CHECKS
+};
+
 RxCheck hyundai_legacy_rx_checks[] = {
   HYUNDAI_COMMON_RX_CHECKS(true)
   HYUNDAI_SCC12_ADDR_CHECK(0)
@@ -99,6 +152,8 @@ static uint8_t hyundai_get_counter(const CANPacket_t *to_push) {
     cnt = GET_BYTE(to_push, 7) & 0xFU;
   } else if (addr == 0x4F1) {
     cnt = (GET_BYTE(to_push, 3) >> 4) & 0xFU;
+  } else if (addr == 0x201) {
+    cnt = GET_BYTE(to_push, 4) & 0xFU;  // comma pedal COUNTER_PEDAL
   } else {
   }
   return cnt;
@@ -116,16 +171,32 @@ static uint32_t hyundai_get_checksum(const CANPacket_t *to_push) {
     chksum = GET_BYTE(to_push, 6) & 0xFU;
   } else if (addr == 0x421) {
     chksum = GET_BYTE(to_push, 7) >> 4;
+  } else if (addr == 0x201) {
+    chksum = GET_BYTE(to_push, 5);  // comma pedal CHECKSUM_PEDAL
   } else {
   }
   return chksum;
+}
+
+// comma pedal CRC8 (poly 0xD5) over the first 5 bytes, as in selfdrive/car crc8_pedal
+static uint8_t hyundai_pedal_checksum(const CANPacket_t *msg) {
+  uint8_t crc = 0xFFU;
+  for (int i = 4; i >= 0; i--) {
+    crc ^= GET_BYTE(msg, i);
+    for (int j = 0; j < 8; j++) {
+      crc = ((crc & 0x80U) != 0U) ? (uint8_t)((crc << 1U) ^ 0xD5U) : (uint8_t)(crc << 1U);
+    }
+  }
+  return crc;
 }
 
 static uint32_t hyundai_compute_checksum(const CANPacket_t *to_push) {
   int addr = GET_ADDR(to_push);
 
   uint8_t chksum = 0;
-  if (addr == 0x386) {
+  if (addr == 0x201) {
+    chksum = hyundai_pedal_checksum(to_push);
+  } else if (addr == 0x386) {
     // count the bits
     for (int i = 0; i < 8; i++) {
       uint8_t b = GET_BYTE(to_push, i);
@@ -162,7 +233,7 @@ static void hyundai_rx_hook(const CANPacket_t *to_push) {
   int addr = GET_ADDR(to_push);
 
   // SCC12 is on bus 2 for camera-based SCC cars, bus 0 on all others
-  if ((addr == 0x421) && (((bus == 0) && !hyundai_camera_scc) || ((bus == 2) && hyundai_camera_scc))) {
+  if (!hyundai_non_scc && (addr == 0x421) && (((bus == 0) && !hyundai_camera_scc) || ((bus == 2) && hyundai_camera_scc))) {
     // 2 bits: 13-14
     int cruise_engaged = (GET_BYTES(to_push, 0, 4) >> 13) & 0x3U;
     hyundai_common_cruise_state_check(cruise_engaged);
@@ -183,7 +254,28 @@ static void hyundai_rx_hook(const CANPacket_t *to_push) {
     }
 
     // gas press, different for EV, hybrid, and ICE models
-    if ((addr == 0x371) && hyundai_ev_gas_signal) {
+    // optech: no SCC: the car's own cruise control (set with its SET button) engages openpilot (StarPilot non-SCC);
+    // with a comma pedal openpilot does the speed and the buttons engage instead (hyundai_longitudinal)
+    if (hyundai_non_scc && !hyundai_longitudinal) {
+      if ((addr == 0x592) && hyundai_ev_gas_signal) {
+        hyundai_common_cruise_state_check(GET_BIT(to_push, 35U));  // LABEL11 CC_Engaged
+      } else if ((addr == 0x595) && hyundai_hybrid_gas_signal) {
+        hyundai_common_cruise_state_check(GET_BIT(to_push, 51U));  // E_CRUISE_CONTROL CRUISE_LAMP_S
+      } else if ((addr == 0x260) && !hyundai_ev_gas_signal && !hyundai_hybrid_gas_signal) {
+        hyundai_common_cruise_state_check(GET_BIT(to_push, 26U));  // EMS16 CRUISE_LAMP_S
+      } else {
+      }
+    }
+
+    // comma pedal: the car's accelerator signal is openpilot's command, the driver's own pedal is in GAS_SENSOR
+    // (raw tracks, StarPilot Ray pedal thresholds)
+    if (hyundai_non_scc_pedal && (addr == 0x201)) {
+      uint32_t track1 = (GET_BYTE(to_push, 0) << 8) | GET_BYTE(to_push, 1);
+      uint32_t track2 = (GET_BYTE(to_push, 2) << 8) | GET_BYTE(to_push, 3);
+      gas_pressed = (track1 > 272U) || (track2 > 513U);
+    } else if (hyundai_non_scc_pedal && (addr == 0x371)) {
+      // not the driver's pedal here
+    } else if ((addr == 0x371) && hyundai_ev_gas_signal) {
       gas_pressed = (((GET_BYTE(to_push, 4) & 0x7FU) << 1) | GET_BYTE(to_push, 3) >> 7) != 0U;
     } else if ((addr == 0x371) && hyundai_hybrid_gas_signal) {
       gas_pressed = GET_BYTE(to_push, 7) != 0U;
@@ -199,8 +291,12 @@ static void hyundai_rx_hook(const CANPacket_t *to_push) {
       vehicle_moving = (front_left_speed > HYUNDAI_STANDSTILL_THRSLD) || (rear_right_speed > HYUNDAI_STANDSTILL_THRSLD);
     }
 
-    if (addr == 0x394) {
+    if ((addr == 0x394) && !hyundai_non_scc_no_tcs) {
       brake_pressed = ((GET_BYTE(to_push, 5) >> 5U) & 0x3U) == 0x2U;
+    }
+    // optech: no TCS13 (Porter II EV): E_EMS11 Brake_Pedal_Pos
+    if ((addr == 0x371) && hyundai_non_scc_no_tcs) {
+      brake_pressed = GET_BYTE(to_push, 0) != 0U;
     }
 
     bool stock_ecu_detected = (addr == 0x340);
@@ -260,6 +356,34 @@ static bool hyundai_tx_hook(const CANPacket_t *to_send) {
     }
   }
 
+  // optech: comma pedal command (StarPilot Ray pedal checks): only with the pedal flag; an enabled command stays in the
+  // calibrated range (track2 follows track1), a disabled one is all zero, and no throttle unless openpilot may do the
+  // speed (controls allowed, no gas) and the brake is not pressed
+  if (addr == 0x200) {
+    if (!hyundai_non_scc_pedal) {
+      tx = false;
+    } else {
+      int track1 = (GET_BYTE(to_send, 0) << 8) | GET_BYTE(to_send, 1);
+      int track2 = (GET_BYTE(to_send, 2) << 8) | GET_BYTE(to_send, 3);
+      bool enabled = (GET_BYTE(to_send, 4) & 0x80U) != 0U;
+      int expected_track2 = 497 + (2 * (track1 - 264));
+      int track1_max = hyundai_non_scc_pedal_strong ? 795 : 530;
+      int track2_max = hyundai_non_scc_pedal_strong ? 1572 : 1035;
+      bool violation = (GET_BYTE(to_send, 4) & 0x70U) != 0U;
+      violation |= GET_BYTE(to_send, 5) != hyundai_pedal_checksum(to_send);
+      if (enabled) {
+        violation |= (track1 < 264) || (track1 > track1_max) || (track2 < 497) || (track2 > track2_max);
+        violation |= ABS(track2 - expected_track2) > 40;
+        violation |= !get_longitudinal_allowed() || brake_pressed_prev;
+      } else {
+        violation |= (track1 != 0) || (track2 != 0);
+      }
+      if (violation) {
+        tx = false;
+      }
+    }
+  }
+
   // UDS: Only tester present ("\x02\x3E\x80\x00\x00\x00\x00\x00") allowed on diagnostics address
   if (addr == 0x7D0) {
     if ((GET_BYTES(to_send, 0, 4) != 0x00803E02U) || (GET_BYTES(to_send, 4, 4) != 0x0U)) {
@@ -272,8 +396,10 @@ static bool hyundai_tx_hook(const CANPacket_t *to_send) {
     int button = GET_BYTE(to_send, 0) & 0x7U;
 
     bool allowed_resume = (button == 1) && controls_allowed;
+    // optech: SET- too while engaged, to bring the stock cruise set speed down to the current speed after engaging
+    bool allowed_set_decel = (button == 2) && controls_allowed;
     bool allowed_cancel = (button == 4) && cruise_engaged_prev;
-    if (!(allowed_resume || allowed_cancel)) {
+    if (!(allowed_resume || allowed_set_decel || allowed_cancel)) {
       tx = false;
     }
   }
@@ -318,9 +444,26 @@ static safety_config hyundai_init(uint16_t param) {
 static safety_config hyundai_legacy_init(uint16_t param) {
   hyundai_common_init(param);
   hyundai_legacy = true;
-  hyundai_longitudinal = false;
   hyundai_camera_scc = false;
-  return BUILD_SAFETY_CFG(hyundai_legacy_rx_checks, HYUNDAI_TX_MSGS);
+  // optech: no SCC (optech-hkg's 11 cars, legacy checks): engage on the car's own cruise control; with a comma pedal
+  // openpilot does the speed (SET / RES engage like op long, no SCC messages to send)
+  hyundai_longitudinal = hyundai_non_scc_pedal;
+  enable_gas_interceptor = false;  // the pedal's gas is read here, not by the generic interceptor code
+  safety_config ret;
+  if (hyundai_non_scc_pedal) {
+    ret = hyundai_non_scc_no_tcs ? BUILD_SAFETY_CFG(hyundai_non_scc_pedal_no_tcs_rx_checks, HYUNDAI_NON_SCC_PEDAL_TX_MSGS)
+                                 : BUILD_SAFETY_CFG(hyundai_non_scc_pedal_rx_checks, HYUNDAI_NON_SCC_PEDAL_TX_MSGS);
+  } else if (hyundai_non_scc && hyundai_ev_gas_signal) {
+    ret = hyundai_non_scc_no_tcs ? BUILD_SAFETY_CFG(hyundai_non_scc_ev_no_tcs_rx_checks, HYUNDAI_TX_MSGS)
+                                 : BUILD_SAFETY_CFG(hyundai_non_scc_ev_rx_checks, HYUNDAI_TX_MSGS);
+  } else if (hyundai_non_scc && hyundai_hybrid_gas_signal) {
+    ret = BUILD_SAFETY_CFG(hyundai_non_scc_hev_rx_checks, HYUNDAI_TX_MSGS);
+  } else if (hyundai_non_scc) {
+    ret = BUILD_SAFETY_CFG(hyundai_non_scc_rx_checks, HYUNDAI_TX_MSGS);
+  } else {
+    ret = BUILD_SAFETY_CFG(hyundai_legacy_rx_checks, HYUNDAI_TX_MSGS);
+  }
+  return ret;
 }
 
 const safety_hooks hyundai_hooks = {

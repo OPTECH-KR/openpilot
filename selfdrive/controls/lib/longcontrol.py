@@ -1,5 +1,6 @@
 from cereal import car
 from openpilot.common.numpy_fast import clip, interp
+from openpilot.common.params import Params
 from openpilot.common.realtime import DT_CTRL
 from openpilot.selfdrive.controls.lib.drive_helpers import CONTROL_N, apply_deadzone
 from openpilot.selfdrive.controls.lib.pid import PIDController
@@ -9,7 +10,8 @@ LongCtrlState = car.CarControl.Actuators.LongControlState
 
 
 def long_control_state_trans(CP, active, long_control_state, v_ego, v_target,
-                             v_target_1sec, brake_pressed, cruise_standstill):
+                             v_target_1sec, brake_pressed, cruise_standstill, starting_state=None):
+  starting_state = CP.startingState if starting_state is None else starting_state
   # Ignore cruise standstill if car has a gas interceptor
   cruise_standstill = cruise_standstill and not CP.enableGasInterceptor
   accelerating = v_target_1sec > v_target
@@ -36,7 +38,7 @@ def long_control_state_trans(CP, active, long_control_state, v_ego, v_target,
         long_control_state = LongCtrlState.stopping
 
     elif long_control_state == LongCtrlState.stopping:
-      if starting_condition and CP.startingState:
+      if starting_condition and starting_state:
         long_control_state = LongCtrlState.starting
       elif starting_condition:
         long_control_state = LongCtrlState.pid
@@ -50,6 +52,13 @@ def long_control_state_trans(CP, active, long_control_state, v_ego, v_target,
   return long_control_state
 
 
+def optech_percent(params, key):
+  try:
+    return min(max(int(params.get(key) or 0), 0), 100) * 0.01
+  except ValueError:
+    return 0.
+
+
 class LongControl:
   def __init__(self, CP):
     self.CP = CP
@@ -59,6 +68,11 @@ class LongControl:
                              k_f=CP.longitudinalTuning.kf, rate=1 / DT_CTRL)
     self.v_pid = 0.0
     self.last_output_accel = 0.0
+    # optech 속도 > 출발 가속 / 정지 유지 힘 (%, 0 = the car's own startAccel / stopAccel), read once a second
+    self.params = Params()
+    self.param_frame = 0
+    self.start_accel_apply = 0.
+    self.stop_accel_apply = 0.
 
   def reset(self, v_pid):
     """Reset PID controller and change setpoint"""
@@ -92,23 +106,32 @@ class LongControl:
     self.pid.neg_limit = accel_limits[0]
     self.pid.pos_limit = accel_limits[1]
 
+    if self.param_frame % 100 == 0:
+      self.start_accel_apply = optech_percent(self.params, "StartAccelApply")
+      self.stop_accel_apply = optech_percent(self.params, "StopAccelApply")
+    self.param_frame += 1
+    # as on optech-hkg: 100 % = 2.0 m/s^2 when starting / -2.0 m/s^2 while stopped
+    starting_state = self.CP.startingState or self.start_accel_apply > 0.
+    start_accel = 2.0 * self.start_accel_apply if self.start_accel_apply > 0. else self.CP.startAccel
+    stop_accel = -2.0 * self.stop_accel_apply if self.stop_accel_apply > 0. else self.CP.stopAccel
+
     output_accel = self.last_output_accel
     self.long_control_state = long_control_state_trans(self.CP, active, self.long_control_state, CS.vEgo,
                                                        v_target, v_target_1sec, CS.brakePressed,
-                                                       CS.cruiseState.standstill)
+                                                       CS.cruiseState.standstill, starting_state)
 
     if self.long_control_state == LongCtrlState.off:
       self.reset(CS.vEgo)
       output_accel = 0.
 
     elif self.long_control_state == LongCtrlState.stopping:
-      if output_accel > self.CP.stopAccel:
+      if output_accel > stop_accel:
         output_accel = min(output_accel, 0.0)
         output_accel -= self.CP.stoppingDecelRate * DT_CTRL
       self.reset(CS.vEgo)
 
     elif self.long_control_state == LongCtrlState.starting:
-      output_accel = self.CP.startAccel
+      output_accel = start_accel
       self.reset(CS.vEgo)
 
     elif self.long_control_state == LongCtrlState.pid:

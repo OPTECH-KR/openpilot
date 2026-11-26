@@ -5,6 +5,7 @@
 #include "selfdrive/ui/qt/util.h"
 
 // dp - for satellite fmin
+#include <algorithm>
 #include <cmath>
 
 void Sidebar::drawMetric(QPainter &p, const QPair<QString, QString> &label, QColor c, int y) {
@@ -84,34 +85,38 @@ void Sidebar::updateState(const UIState &s) {
   int strength = (int)deviceState.getNetworkStrength();
   setProperty("netStrength", strength > 0 ? strength + 1 : 0);
 
-  ItemStatus connectStatus;
-  auto last_ping = deviceState.getLastAthenaPingTime();
-  if (last_ping == 0) {
-    connectStatus = ItemStatus{{tr("CONNECT"), tr("OFFLINE")}, warning_color};
-  } else {
-    connectStatus = nanos_since_boot() - last_ping < 80e9
-                        ? ItemStatus{{tr("CONNECT"), tr("ONLINE")}, good_color}
-                        : ItemStatus{{tr("CONNECT"), tr("ERROR")}, danger_color};
+  // optech: the car battery voltage instead of the comma server connection (not used here).
+  // Resting 12 V battery: 12.4 V+ good, 12.0-12.4 V low (yellow), below 12.0 V very low (red); engine running 13.5 V+
+  ItemStatus connectStatus = {{"전압", "--"}, good_color};
+  if (sm.alive("peripheralState")) {
+    const float volt = sm["peripheralState"].getPeripheralState().getVoltage() / 1000.f;
+    if (volt > 1.f) {
+      const QColor c = volt >= 12.4f ? good_color : (volt >= 12.0f ? warning_color : danger_color);
+      connectStatus = {{"전압", QString::number(volt, 'f', 1) + "V"}, c};
+    }
   }
   setProperty("connectStatus", QVariant::fromValue(connectStatus));
 
-  ItemStatus tempStatus = {{tr("TEMP"), tr("HIGH")}, danger_color};
+  // optech: '온도' with the measured temperature (the hottest sensor, what the thermal status uses);
+  // bar color as before: good white, middle yellow, high red
+  float temp = deviceState.getMaxTempC();
+  if (temp <= 0) {
+    for (auto t : deviceState.getCpuTempC()) temp = std::max(temp, t);
+  }
+  const QString temp_text = QString("%1°C").arg((int)std::round(temp));
+  ItemStatus tempStatus = {{"온도", temp_text}, danger_color};
   auto ts = deviceState.getThermalStatus();
   if (ts == cereal::DeviceState::ThermalStatus::GREEN) {
-    tempStatus = {{tr("TEMP"), tr("GOOD")}, good_color};
+    tempStatus = {{"온도", temp_text}, good_color};
   } else if (ts == cereal::DeviceState::ThermalStatus::YELLOW) {
-    tempStatus = {{tr("TEMP"), tr("OK")}, warning_color};
+    tempStatus = {{"온도", temp_text}, warning_color};
   }
   setProperty("tempStatus", QVariant::fromValue(tempStatus));
 
+  // optech: vehicle / panda only (GPS goes to the driving screen)
   ItemStatus pandaStatus = {{tr("VEHICLE"), tr("ONLINE")}, good_color};
   if (s.scene.pandaType == cereal::PandaState::PandaType::UNKNOWN) {
     pandaStatus = {{tr("NO"), tr("PANDA")}, danger_color};
-  } else if (s.scene.started && !sm["liveLocationKalman"].getLiveLocationKalman().getGpsOK()) {
-    pandaStatus = {{tr("GPS"), tr("SEARCH")}, warning_color};
-  } else if (s.scene.started && sm["liveLocationKalman"].getLiveLocationKalman().getGpsOK()) {
-    float gpsAccuracy = sm["gpsLocationExternal"].getGpsLocationExternal().getAccuracy();
-    pandaStatus = {{tr("GPS"), QString("%1 m").arg(fmin(99, gpsAccuracy), 0, 'f', 2)}, good_color};
   }
   setProperty("pandaStatus", QVariant::fromValue(pandaStatus));
 }

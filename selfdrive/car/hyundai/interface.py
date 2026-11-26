@@ -4,7 +4,8 @@ from openpilot.common.conversions import Conversions as CV
 from openpilot.selfdrive.car.hyundai.hyundaicanfd import CanBus
 from openpilot.selfdrive.car.hyundai.values import HyundaiFlags, CAR, DBC, CANFD_CAR, CAMERA_SCC_CAR, CANFD_RADAR_SCC_CAR, \
                                          CANFD_UNSUPPORTED_LONGITUDINAL_CAR, EV_CAR, HYBRID_CAR, LEGACY_SAFETY_MODE_CAR, \
-                                         UNSUPPORTED_LONGITUDINAL_CAR, Buttons
+                                         UNSUPPORTED_LONGITUDINAL_CAR, Buttons, NON_SCC_CAR, NON_SCC_VARIANT
+from openpilot.selfdrive.car.hyundai.values import is_camera_scc, CAMERA_SCC_PARAM
 from openpilot.selfdrive.car.hyundai.radar_interface import RADAR_START_ADDR
 from openpilot.selfdrive.car import create_button_events, get_safety_config
 from openpilot.selfdrive.car.interfaces import CarInterfaceBase
@@ -35,6 +36,10 @@ def set_safety_config_hyundai(candidate, CAN, can_fd=False):
 class CarInterface(CarInterfaceBase):
   @staticmethod
   def _get_params(ret, candidate, fingerprint, car_fw, experimental_long, docs):
+    # optech (optech-hkg): a model with SCC that shows no SCC11 (1056) on either bus at the start is its trim without SCC
+    if candidate in NON_SCC_VARIANT and len(fingerprint[0]) and 1056 not in fingerprint[0] and 1056 not in fingerprint[2]:
+      candidate = NON_SCC_VARIANT[candidate]
+      ret.carFingerprint = candidate
     ret.carName = "hyundai"
     ret.radarUnavailable = RADAR_START_ADDR not in fingerprint[1] or DBC[ret.carFingerprint]["radar"] is None
     params = Params()
@@ -70,6 +75,14 @@ class CarInterface(CarInterfaceBase):
       # Send LFA message on cars with HDA
       if 0x485 in fingerprint[2]:
         ret.flags |= HyundaiFlags.SEND_LFA.value
+      # optech: no SCC (optech-hkg / StarPilot): only the car's regular cruise control
+      if candidate in NON_SCC_CAR:
+        ret.flags |= HyundaiFlags.NON_SCC.value
+        if 916 not in fingerprint[0] and len(fingerprint[0]) and candidate in (EV_CAR | HYBRID_CAR):  # no TCS13 (Porter II EV)
+          ret.flags |= HyundaiFlags.NON_SCC_NO_TCS.value
+        # the Ray EV's LFAHDA_MFC (0x485) is 8 bytes; ours is the 4-byte one, so do not send it there
+        if fingerprint[2].get(0x485) != 4:
+          ret.flags &= ~HyundaiFlags.SEND_LFA.value
 
       # These cars use the FCA11 message for the AEB and FCW signals, all others use SCC12
       if 0x38d in fingerprint[0] or 0x38d in fingerprint[2]:
@@ -109,12 +122,12 @@ class CarInterface(CarInterfaceBase):
       ret.steerRatio = 15.4            # 14 is Stock | Settled Params Learner values are steerRatio: 15.401566348670535
       ret.tireStiffnessFactor = 0.385    # stiffnessFactor settled on 1.0081302973865127
       ret.minSteerSpeed = 32 * CV.MPH_TO_MS
-    elif candidate == CAR.ELANTRA_2021:
+    elif candidate in (CAR.ELANTRA_2021, CAR.ELANTRA_2022_NON_SCC):
       ret.mass = 2800. * CV.LB_TO_KG
       ret.wheelbase = 2.72
       ret.steerRatio = 12.9
       ret.tireStiffnessFactor = 0.65
-    elif candidate == CAR.ELANTRA_HEV_2021:
+    elif candidate in (CAR.ELANTRA_HEV_2021, CAR.ELANTRA_HEV_2022_NON_SCC):
       ret.mass = 3017. * CV.LB_TO_KG
       ret.wheelbase = 2.72
       ret.steerRatio = 12.9
@@ -124,8 +137,10 @@ class CarInterface(CarInterfaceBase):
       ret.wheelbase = 3.01
       ret.steerRatio = 16.5
       ret.minSteerSpeed = 60 * CV.KPH_TO_MS
-    elif candidate in (CAR.KONA, CAR.KONA_EV, CAR.KONA_HEV, CAR.KONA_EV_2022, CAR.KONA_EV_2ND_GEN):
-      ret.mass = {CAR.KONA_EV: 1685., CAR.KONA_HEV: 1425., CAR.KONA_EV_2022: 1743., CAR.KONA_EV_2ND_GEN: 1740.}.get(candidate, 1275.)
+    elif candidate in (CAR.KONA, CAR.KONA_EV, CAR.KONA_HEV, CAR.KONA_EV_2022, CAR.KONA_EV_2ND_GEN, CAR.KONA_NON_SCC,
+                       CAR.KONA_EV_NON_SCC):
+      ret.mass = {CAR.KONA_EV: 1685., CAR.KONA_HEV: 1425., CAR.KONA_EV_2022: 1743., CAR.KONA_EV_2ND_GEN: 1740.,
+                  CAR.KONA_EV_NON_SCC: 1685.}.get(candidate, 1275.)
       ret.wheelbase = {CAR.KONA_EV_2ND_GEN: 2.66, }.get(candidate, 2.6)
       ret.steerRatio = {CAR.KONA_EV_2ND_GEN: 13.6, }.get(candidate, 13.42)  # Spec
       ret.tireStiffnessFactor = 0.385
@@ -182,7 +197,7 @@ class CarInterface(CarInterfaceBase):
       ret.tireStiffnessFactor = 0.385
       if candidate == CAR.KIA_NIRO_PHEV:
         ret.minSteerSpeed = 32 * CV.MPH_TO_MS
-    elif candidate == CAR.KIA_SELTOS:
+    elif candidate in (CAR.KIA_SELTOS, CAR.KIA_SELTOS_2023_NON_SCC):
       ret.mass = 1337.
       ret.wheelbase = 2.63
       ret.steerRatio = 14.56
@@ -201,7 +216,7 @@ class CarInterface(CarInterfaceBase):
       ret.mass = 1825.
       ret.wheelbase = 2.78
       ret.steerRatio = 14.4 * 1.15   # 15% higher at the center seems reasonable
-    elif candidate == CAR.KIA_FORTE:
+    elif candidate in (CAR.KIA_FORTE, CAR.KIA_FORTE_2019_NON_SCC, CAR.KIA_FORTE_2021_NON_SCC):
       ret.mass = 2878. * CV.LB_TO_KG
       ret.wheelbase = 2.80
       ret.steerRatio = 13.75
@@ -254,7 +269,7 @@ class CarInterface(CarInterfaceBase):
       ret.mass = 1640.0
       ret.wheelbase = 2.84
       ret.steerRatio = 13.56
-    elif candidate == CAR.GENESIS_G70_2020:
+    elif candidate in (CAR.GENESIS_G70_2020, CAR.GENESIS_G70_2021_NON_SCC):
       ret.mass = 3673.0 * CV.LB_TO_KG
       ret.wheelbase = 2.83
       ret.steerRatio = 12.9
@@ -275,6 +290,85 @@ class CarInterface(CarInterfaceBase):
       ret.wheelbase = 2.95
       ret.steerRatio = 14.14
 
+    # optech: Korean market cars, specs from optech-hkg (apilot / carrot; mass here without the cargo it adds)
+    elif candidate in (CAR.GRANDEUR_IG, CAR.GRANDEUR_IG_HEV):
+      ret.mass = 1570.
+      ret.wheelbase = 2.845
+      ret.steerRatio = 16.
+      ret.tireStiffnessFactor = 0.8
+    elif candidate in (CAR.GRANDEUR_IG_FL, CAR.GRANDEUR_IG_FL_HEV):
+      ret.mass = 1675.
+      ret.wheelbase = 2.885
+      ret.steerRatio = 16.5
+      ret.tireStiffnessFactor = 0.8
+      ret.steerActuatorDelay = 0.2
+    elif candidate == CAR.NEXO:
+      ret.mass = 1885.
+      ret.wheelbase = 2.79
+      ret.steerRatio = 15.3
+      ret.tireStiffnessFactor = 0.385
+    elif candidate == CAR.CASPER:
+      ret.mass = 1060.
+      ret.wheelbase = 2.4
+      ret.steerRatio = 14.3
+    elif candidate == CAR.CASPER_EV:
+      ret.mass = 1355.
+      ret.wheelbase = 2.58
+      ret.steerRatio = 14.3
+    elif candidate == CAR.VENUE_2021_NON_SCC:  # sunnypilot (wheelbase, steer ratio); curb weight about 1.2 t
+      ret.mass = 1200.
+      ret.wheelbase = 2.52
+      ret.steerRatio = 14.4
+      ret.tireStiffnessFactor = 0.65
+    elif candidate == CAR.KIA_RAY_EV:  # StarPilot
+      ret.mass = 1295.
+      ret.wheelbase = 2.52
+      ret.steerRatio = 14.5
+      ret.tireStiffnessFactor = 0.65
+    elif candidate == CAR.PORTER_II_EV:  # carrot
+      ret.mass = 1970.
+      ret.wheelbase = 2.64
+      ret.steerRatio = 14.5
+      ret.tireStiffnessFactor = 0.65
+    elif candidate == CAR.KONA_2022:
+      ret.mass = 1491.
+      ret.wheelbase = 2.6
+      ret.steerRatio = 13.42
+      ret.tireStiffnessFactor = 0.385
+    elif candidate in (CAR.K7, CAR.K7_HEV, CAR.K7_PE, CAR.K7_HEV_PE):
+      ret.mass = 1850.
+      ret.wheelbase = 2.855
+      ret.steerRatio = 15.5
+      ret.tireStiffnessFactor = 0.7
+    elif candidate == CAR.KIA_MOHAVE:
+      ret.mass = 2285.
+      ret.wheelbase = 2.895
+      ret.steerRatio = 16.
+      ret.tireStiffnessFactor = 0.7
+    elif candidate in (CAR.KIA_K5_JF, CAR.KIA_K5_HEV_JF, CAR.KIA_K5_HEV_2022):
+      ret.mass = 1705. if candidate == CAR.KIA_K5_HEV_JF else 1515.
+      ret.wheelbase = 2.85 if candidate == CAR.KIA_K5_HEV_2022 else 2.80
+      ret.steerRatio = 15.5
+      ret.tireStiffnessFactor = 0.7
+    elif candidate == CAR.KIA_K9:
+      ret.mass = 2075.
+      ret.wheelbase = 3.15
+      ret.steerRatio = 14.5
+      ret.tireStiffnessFactor = 0.7
+    elif candidate == CAR.GENESIS_EQ900:
+      ret.mass = 2200.
+      ret.wheelbase = 3.15
+      ret.steerRatio = 16.0
+      ret.steerActuatorDelay = 0.075
+    elif candidate == CAR.GENESIS_EQ900_L:
+      ret.mass = 2290.
+      ret.wheelbase = 3.45
+      ret.steerRatio = 16.0
+    elif candidate == CAR.GENESIS_G90_2019:
+      ret.mass = 2150.
+      ret.wheelbase = 3.16
+      ret.steerRatio = 16.0
+
     # *** longitudinal control ***
     if candidate in CANFD_CAR:
       ret.longitudinalTuning.kpV = [0.1]
@@ -283,9 +377,30 @@ class CarInterface(CarInterfaceBase):
     else:
       ret.longitudinalTuning.kpV = [0.5]
       ret.longitudinalTuning.kiV = [0.0]
-      ret.experimentalLongitudinalAvailable = candidate not in (UNSUPPORTED_LONGITUDINAL_CAR | CAMERA_SCC_CAR)
+      # optech: SCC on the camera side (remembered from an earlier drive)
+      if candidate not in CAMERA_SCC_CAR and Params().get_bool(CAMERA_SCC_PARAM):
+        ret.flags |= HyundaiFlags.CAMERA_SCC.value
+      ret.experimentalLongitudinalAvailable = candidate not in UNSUPPORTED_LONGITUDINAL_CAR and not is_camera_scc(ret)
+    if ret.flags & HyundaiFlags.NON_SCC:  # no SCC to command: steering with the car's regular cruise control
+      ret.experimentalLongitudinalAvailable = False
     ret.openpilotLongitudinalControl = experimental_long and ret.experimentalLongitudinalAvailable
     ret.pcmCruise = not ret.openpilotLongitudinalControl
+
+    # optech: Ray EV / Porter II EV with a comma pedal (the car's menu switch on and the pedal box seen at the start):
+    # openpilot does the speed through the accelerator (pedal.py), SET / RES engage, no brake (regen only)
+    from openpilot.selfdrive.car.hyundai import pedal as hkg_pedal
+    if ret.flags & HyundaiFlags.NON_SCC and hkg_pedal.pedal_wanted(candidate, fingerprint):
+      ret.flags |= HyundaiFlags.NON_SCC_PEDAL.value
+      if hkg_pedal.strong_wanted(candidate):
+        ret.flags |= HyundaiFlags.NON_SCC_PEDAL_STRONG.value
+      ret.enableGasInterceptor = True
+      ret.experimentalLongitudinalAvailable = True
+      ret.openpilotLongitudinalControl = True
+      ret.pcmCruise = False
+      ret.radarUnavailable = True  # no radar: the camera finds the lead
+      ret.minEnableSpeed = -1.
+      ret.autoResumeSng = False    # no brake to hold the car
+      hkg_pedal.set_long_tune(ret, candidate)
 
     ret.stoppingControl = True
     ret.startingState = True
@@ -313,8 +428,16 @@ class CarInterface(CarInterfaceBase):
       if ret.flags & HyundaiFlags.CANFD_ALT_BUTTONS:
         ret.safetyConfigs[-1].safetyParam |= Panda.FLAG_HYUNDAI_CANFD_ALT_BUTTONS
 
-    if ret.flags & HyundaiFlags.CANFD_CAMERA_SCC or candidate in CAMERA_SCC_CAR:
+    if ret.flags & HyundaiFlags.CANFD_CAMERA_SCC or is_camera_scc(ret):
       ret.safetyConfigs[-1].safetyParam |= Panda.FLAG_HYUNDAI_CAMERA_SCC
+    if ret.flags & HyundaiFlags.NON_SCC:
+      ret.safetyConfigs[-1].safetyParam |= Panda.FLAG_HYUNDAI_NON_SCC
+      if ret.flags & HyundaiFlags.NON_SCC_NO_TCS:
+        ret.safetyConfigs[-1].safetyParam |= Panda.FLAG_HYUNDAI_NON_SCC_NO_TCS
+      if ret.flags & HyundaiFlags.NON_SCC_PEDAL:
+        ret.safetyConfigs[-1].safetyParam |= Panda.FLAG_HYUNDAI_NON_SCC_PEDAL
+        if ret.flags & HyundaiFlags.NON_SCC_PEDAL_STRONG:
+          ret.safetyConfigs[-1].safetyParam |= Panda.FLAG_HYUNDAI_NON_SCC_PEDAL_STRONG
     if ret.openpilotLongitudinalControl:
       ret.safetyConfigs[-1].safetyParam |= Panda.FLAG_HYUNDAI_LONG
     if candidate in HYBRID_CAR:
@@ -322,7 +445,7 @@ class CarInterface(CarInterfaceBase):
     elif candidate in EV_CAR:
       ret.safetyConfigs[-1].safetyParam |= Panda.FLAG_HYUNDAI_EV_GAS
 
-    if candidate in (CAR.KONA, CAR.KONA_EV, CAR.KONA_HEV, CAR.KONA_EV_2022):
+    if candidate in (CAR.KONA, CAR.KONA_EV, CAR.KONA_HEV, CAR.KONA_EV_2022, CAR.KONA_NON_SCC, CAR.KONA_EV_NON_SCC):
       ret.flags |= HyundaiFlags.ALT_LIMITS.value
       ret.safetyConfigs[-1].safetyParam |= Panda.FLAG_HYUNDAI_ALT_LIMITS
 
@@ -336,7 +459,9 @@ class CarInterface(CarInterfaceBase):
 
   @staticmethod
   def init(CP, logcan, sendcan):
-    if CP.openpilotLongitudinalControl and not (CP.flags & HyundaiFlags.CANFD_CAMERA_SCC.value):
+    # optech: no SCC radar to switch off on the cars without SCC (the pedal ones run openpilot long without one)
+    if CP.openpilotLongitudinalControl and not (CP.flags & HyundaiFlags.CANFD_CAMERA_SCC.value) and \
+       not (CP.flags & HyundaiFlags.NON_SCC.value):
       addr, bus = 0x7d0, 0
       if CP.flags & HyundaiFlags.CANFD_HDA2.value:
         addr, bus = 0x730, CanBus(CP).ECAN
@@ -347,6 +472,7 @@ class CarInterface(CarInterfaceBase):
       disable_ecu(logcan, sendcan, bus=CanBus(CP).ECAN, addr=0x7B1, com_cont_req=b'\x28\x83\x01')
 
   def _update(self, c):
+    self.CS.cp_pedal = self.cp_body  # optech: comma pedal GAS_SENSOR (None unless NON_SCC_PEDAL)
     ret = self.CS.update(self.cp, self.cp_cam)
 
     if self.CS.CP.openpilotLongitudinalControl:
@@ -357,6 +483,8 @@ class CarInterface(CarInterfaceBase):
     # Main button also can trigger an engagement on these cars
     allow_enable = any(btn in ENABLE_BUTTONS for btn in self.CS.cruise_buttons) or any(self.CS.main_buttons)
     events = self.create_common_events(ret, pcm_enable=self.CS.CP.pcmCruise, allow_enable=allow_enable)
+    if self.CS.scc_bus_changed:  # optech: SCC found on the other bus; saved, applies from the next start
+      events.add(EventName.dataNeededDEPRECATED)
 
     # low speed steer alert hysteresis logic (only for cars with steer cut off above 10 m/s)
     if ret.vEgo < (self.CP.minSteerSpeed + 2.) and self.CP.minSteerSpeed > 10.:

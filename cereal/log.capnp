@@ -2335,7 +2335,7 @@ struct Event {
     controlsStateExt @110 :Custom.ControlsStateExt;
     optechSpeedCam @111 :Custom.OptechSpeedCam;
     customReserved5 @112 :Custom.CustomReserved5;
-    customReserved6 @113 :Custom.CustomReserved6;
+    roadLimitSpeed @113 :Custom.RoadLimitSpeed;
     customReserved7 @114 :Custom.CustomReserved7;
     customReserved8 @115 :Custom.CustomReserved8;
     customReserved9 @116 :Custom.CustomReserved9;

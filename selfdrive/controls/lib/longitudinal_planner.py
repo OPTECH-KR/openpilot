@@ -14,6 +14,7 @@ from openpilot.selfdrive.car.interfaces import ACCEL_MIN, ACCEL_MAX
 from openpilot.selfdrive.controls.lib.longcontrol import LongCtrlState
 from openpilot.selfdrive.controls.lib.longitudinal_mpc_lib.long_mpc import LongitudinalMpc
 from openpilot.selfdrive.controls.lib.longitudinal_mpc_lib.long_mpc import T_IDXS as T_IDXS_MPC
+from openpilot.selfdrive.controls.lib.longitudinal_mpc_lib.long_mpc import STOP_DISTANCE
 from openpilot.selfdrive.controls.lib.drive_helpers import V_CRUISE_MAX, CONTROL_N, get_speed_error
 from openpilot.system.swaglog import cloudlog
 
@@ -90,6 +91,12 @@ class LongitudinalPlanner:
     self.dp_long_use_df_tune = self.params.get_bool('dp_long_use_df_tune')
     self.dp_long_use_krkeegen_tune = self.params.get_bool('dp_long_use_krkeegen_tune')
     self.optech_cam_decel = self.params.get_bool('OptechSpeedCamDecel')
+    # optech 속도 > 앞차 뒤 정지 거리 (cm, 200-1000; 600 = openpilot's own 6 m)
+    try:
+      stop_cm = int(self.params.get('StopDistance') or 600)
+    except ValueError:
+      stop_cm = 600
+    self.mpc.stop_distance_offset = min(max(stop_cm, 200), 1000) / 100. - STOP_DISTANCE
 
   @staticmethod
   def parse_model(model_msg, model_error, v_ego, taco=False):

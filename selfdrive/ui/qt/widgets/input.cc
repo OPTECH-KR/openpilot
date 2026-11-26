@@ -201,7 +201,8 @@ ConfirmationDialog::ConfirmationDialog(const QString &prompt_text, const QString
   QLabel *prompt = new QLabel(prompt_text, this);
   prompt->setWordWrap(true);
   prompt->setAlignment(rich ? Qt::AlignLeft : Qt::AlignHCenter);
-  prompt->setStyleSheet((rich ? "font-size: 32px; font-weight: light;" : "font-size: 70px; font-weight: bold;") + QString(" margin: 45px;"));
+  // optech: 42 px like optech-hkg (the update's change list, drive log, 조향 방식 info)
+  prompt->setStyleSheet((rich ? "font-size: 42px; font-weight: light;" : "font-size: 70px; font-weight: bold;") + QString(" margin: 45px;"));
   main_layout->addWidget(rich ? (QWidget*)new ScrollView(prompt, this) : (QWidget*)prompt, 1, Qt::AlignTop);
 
   // cancel + confirm buttons
@@ -240,6 +241,11 @@ bool ConfirmationDialog::confirm(const QString &prompt_text, const QString &conf
 
 bool ConfirmationDialog::rich(const QString &prompt_text, QWidget *parent) {
   ConfirmationDialog d = ConfirmationDialog(prompt_text, tr("Ok"), "", true, parent);
+  return d.exec();
+}
+
+bool ConfirmationDialog::richConfirm(const QString &prompt_text, const QString &confirm_text, QWidget *parent) {
+  ConfirmationDialog d = ConfirmationDialog(prompt_text, confirm_text, tr("Cancel"), true, parent);
   return d.exec();
 }
 

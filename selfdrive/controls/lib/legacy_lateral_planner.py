@@ -10,6 +10,14 @@ from openpilot.selfdrive.controls.lib.desire_helper import DesireHelper
 import cereal.messaging as messaging
 from cereal import log
 from openpilot.common.params import Params
+
+
+def optech_path_offset(params):
+  """optech 조향 탭 '경로 좌우 보정' (PathOffset, cm; optech-hkg): + moves the path to the right, - to the left"""
+  try:
+    return -float(int(params.get("PathOffset", encoding="utf8") or 0)) * 0.01
+  except (TypeError, ValueError):
+    return 0.
 from openpilot.common.conversions import Conversions as CV
 
 STEER_RATE_COST = {
@@ -31,6 +39,8 @@ class LateralPlanner:
     self.LP = LanePlanner()
     self.DH = DesireHelper()
     self.params = Params()
+    self.path_offset = optech_path_offset(self.params)
+    self.path_offset_counter = 0
     self._dp_lat_lane_priority_mode = self.params.get_bool("dp_lat_lane_priority_mode")
     self._dp_lat_lane_priority_mode_active = False
     self._dp_lat_lane_priority_mode_active_prev = False
@@ -61,6 +71,9 @@ class LateralPlanner:
   def update(self, sm):
     v_ego = sm['carState'].vEgo
     measured_curvature = sm['controlsState'].curvature
+    if self.path_offset_counter % 100 == 0:
+      self.path_offset = optech_path_offset(self.params)
+    self.path_offset_counter += 1
 
     # Parse model predictions
     md = sm['modelV2']
@@ -98,6 +111,9 @@ class LateralPlanner:
       heading_cost = interp(v_ego, [5.0, 10.0], [MPC_COST_LAT.HEADING, 0.0])
       self.lat_mpc.set_weights(path_cost, heading_cost, self.steer_rate_cost)
 
+    if self.path_offset != 0.:
+      d_path_xyz = d_path_xyz.copy()
+      d_path_xyz[:, 1] += self.path_offset
     self._d_path_w_lines_xyz = d_path_xyz
 
     y_pts = np.interp(v_ego * self.t_idxs[:LAT_MPC_N + 1], np.linalg.norm(d_path_xyz, axis=1), d_path_xyz[:, 1])

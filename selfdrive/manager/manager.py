@@ -27,6 +27,24 @@ import json
 from openpilot.selfdrive.car.fingerprints import all_known_cars, all_legacy_fingerprint_cars
 
 
+def optech_navi_link_migrate(params) -> None:
+  """optech 2026-11-25 (same as optech-hkg): 내비 연동 방식 (OptechNaviLinkMode) names the phone app now: 0 사용 안 함,
+  1 TmapNda (NDA 843 + carrot 7706), 2 당근내비 (carrot 7706). It was 0 내비 안 씀 / 1 APM / 2 APM + 순정 / 3 NDA, and
+  APM (APilotMan + Mappy) is no longer received. Old values move once, like optech-hkg's: 3 NDA -> 1, 1 APM and
+  2 APM + 순정 -> 2, 0 stays. spst has no AutoNaviSpeedCtrl to tell an old 1 from a new 1, so OptechNaviLinkVer "2"
+  marks a device that has the new meaning (a new install gets it before the defaults are written: nothing to move)."""
+  if params.get("OptechNaviLinkVer", encoding="utf8") == "2":
+    return
+  old = params.get("OptechNaviLinkMode", encoding="utf8")
+  if old is not None:
+    try:
+      new = {0: 0, 1: 2, 2: 2, 3: 1}.get(int(old), 1)
+    except ValueError:
+      new = 1  # a broken value: the new default
+    params.put("OptechNaviLinkMode", str(new))
+  params.put("OptechNaviLinkVer", "2")
+
+
 def manager_init() -> None:
   # update system time from panda
   set_time(cloudlog)
@@ -51,7 +69,7 @@ def manager_init() -> None:
     ("dp_no_gps_ctrl", "0"),
     ("dp_no_fan_ctrl", "0"),
     ("dp_logging", "1"),
-    ("dp_0813", "1"),
+    ("dp_0813", "0"),  # optech 2026-11-23: new 0.8.16 model by default (실험 모드, openpilot 가감속, 카메라 감속 need it)
     ("dp_lat_controller", "0"),
 
     # dp addition
@@ -79,19 +97,83 @@ def manager_init() -> None:
     ("BoltPedal", "0"),
     ("BoltPedalMax", "100"),
     ("BoltYear2017", "0"),
+    ("ShowDmInfo", "0"),
     ("dp_long_use_df_tune", "0"),
     ("dp_long_de2e", "0"),
     ("dp_mapd_vision_turn_control", "0"),
     ("dp_hkg_min_steer_speed_bypass", "0"),
+    ("OptechCruiseSetCurrent", "1"),
     ("dp_lat_lane_priority_mode_speed_based", "0"),
     ("dp_long_use_krkeegen_tune", "0"),
     ("dp_toyota_zss", "0"),
     ("dp_long_accel_btn", "0"),
     ("dp_long_personality_btn", "0"),
     ("dp_lat_lane_change_assist_speed", "20"),
+    # optech-hkg menu items (same keys and first values as optech-hkg)
+    ("OptechLdwsCar", "0"),             # 토글 > LDWS 차량 (LKAS11 CF_Lkas_LdwsOpt_USM = 3)
+    ("OptechSettingsTimeout", "180"),   # 화면 > 화면 유지 시간 (seconds, -1 항상)
+    ("OptechDriveDim", "0"),            # 화면 > 주행 중 밝기 (%, 0 off)
+    ("OpkrHotspotOnBoot", "0"),         # 고급 > 부팅 시 핫스팟 켜기
+    ("OptechLatMethod", "0"),           # 조향 > 조향 방식 (0 기본, 1 PID, 2 INDI, 3 LQR) and their values
+    ("OptechPidKp", "25"),
+    ("OptechPidKi", "40"),
+    ("OptechPidKf", "7"),
+    ("OptechIndiInner", "35"),
+    ("OptechIndiOuter", "20"),
+    ("OptechIndiTime", "14"),
+    ("OptechIndiAct", "20"),
+    ("OptechLqrScale", "1500"),
+    ("OptechLqrKi", "16"),
+    ("OptechLqrDcGain", "265"),
+    ("SteerRatioApply", "0"),           # 조향 > 조향 세부 (0.1 units, 0 = learned value)
+    ("LiveSteerRatioApply", "100"),     # % of the learned steer ratio
+    ("SteerActuatorDelay", "0"),        # 0.01 s, 0 = the car's own value
+    ("LateralTorqueCustom", "0"),
+    ("LateralTorqueAccelFactor", "2500"),
+    ("LateralTorqueFriction", "100"),
+    # optech-hkg stage 2 (same first values as optech-hkg)
+    ("OptechNaviLinkMode", "1"),            # 주행 > 과속카메라 > 내비 연동 방식 (0 사용 안 함, 1 TmapNda, 2 당근내비)
+    ("HapticFeedbackWhenSpeedCamera", "0"), # 과속 단속 알림 (0 off, 1 핸들 진동, 2 계기판, 3 화면)
+    ("OptechSignalEnable", "1"),            # 주행 > 신호등 > 신호등 사용
+    ("OptechGreenAlert", "1"),              # 주행 > 신호등 > 초록불 알림
+    ("ShowTpms", "1"),
+    ("ShowGpsInfo", "1"),
+    ("ShowBlindSpot", "1"),
+    ("ShowRadarInfo", "1"),
+    ("ShowConnInfo", "1"),
+    ("OptechShowRecordBtn", "0"),
+    ("PathOffset", "0"),
+    ("NNFF", "0"),
+    ("NNFFLite", "0"),
+    ("JerkStartLimit", "10"),
+    ("StartAccelApply", "0"),
+    ("StopAccelApply", "0"),
+    ("StopDistance", "600"),
+    # optech: Ray EV / Porter II EV (no SCC) comma pedal, under 차종 선택 when that car is chosen (optech-hkg)
+    ("RayPedal", "0"),
+    ("RayPedalMax", "70"),
+    ("RayPedalStrong", "0"),
+    ("RayPedalKi", "50"),
+    ("PorterPedal", "0"),
+    ("PorterPedalMax", "40"),
   ]
   if not PC:
     default_params.append(("LastUpdateTime", datetime.datetime.utcnow().isoformat().encode('utf8')))
+
+  # optech: settings that replaced dragonpilot ones keep the old choice the first time
+  if params.get("OptechDmMode") is None:  # 토글 > 운전자 모니터링: 0 기본 사용, 1 경도 사용, 2 사용 안 함
+    params.put("OptechDmMode", "2" if params.get_bool("dp_device_no_ir_ctrl") else "0")
+  if params.get("OptechOffShutdown") is None:  # 고급 > 시동 끈 뒤 꺼짐 (seconds, 0 off)
+    off_s = 0
+    if params.get_bool("dp_device_auto_shutdown"):
+      try:
+        mins = int(params.get("dp_device_auto_shutdown_in", encoding="utf8") or 0)
+      except ValueError:
+        mins = 0
+      off_s = min((30, 60, 180, 300, 600), key=lambda s: abs(s - mins * 60))
+    params.put("OptechOffShutdown", str(off_s))
+  params.put_bool("OptechHud", True)  # the OPTECH 주행 화면 is always on, as on optech-hkg (no menu item)
+  optech_navi_link_migrate(params)  # before the defaults: a new install has no old 내비 연동 방식 to move
 
   params.put("dp_car_list", get_support_car_list())
 
@@ -123,6 +205,14 @@ def manager_init() -> None:
   params.put("TermsVersion", terms_version)
   params.put("TrainingVersion", training_version)
   params.put("GitCommit", get_commit(default=""))
+  # optech: release date of the code (Korea time), shown as 브랜치 커밋 on the software page
+  try:
+    commit_date = subprocess.check_output(["git", "log", "-1", "--format=%cd", "--date=format-local:%Y-%m-%d %H:%M:%S"],
+                                          cwd=BASEDIR, encoding="utf8", stderr=subprocess.DEVNULL,
+                                          env=dict(os.environ, TZ="KST-9")).strip()
+  except Exception:
+    commit_date = ""
+  params.put("GitCommitDate", commit_date)
   params.put("GitBranch", get_short_branch(default=""))
   params.put("GitRemote", get_origin(default=""))
   params.put_bool("IsTestedBranch", is_tested_branch())
@@ -302,6 +392,13 @@ def get_support_car_list():
   except Exception:
     cloudlog.exception("optech: could not list every car model")
   cars["cars"] = sorted(list)
+
+  # optech: Hyundai / Kia / Genesis menu (normal CAN cars only) = brand, then model family, then year, names like optech-hkg
+  try:
+    from openpilot.selfdrive.car.hyundai.car_menu import hkg_menu
+    cars["hkg_menu"] = hkg_menu()
+  except Exception:
+    cloudlog.exception("optech: could not make the Hyundai / Kia / Genesis menu")
   return json.dumps(cars)
 
 

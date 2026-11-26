@@ -5,15 +5,29 @@ from openpilot.common.params import Params
 from openpilot.system.hardware import PC, TICI, EON
 from openpilot.selfdrive.manager.process import PythonProcess, NativeProcess, DaemonProcess
 
-NO_IR_CTRL = os.path.isfile('/data/media/0/no_ir_ctrl')
+# optech: driver monitoring off (OPTECH > 화면 > 운전자 모니터링 '기능 끄기' = dp_device_no_ir_ctrl) stops its processes too
+NO_IR_CTRL = os.path.isfile('/data/media/0/no_ir_ctrl') or Params().get_bool('dp_device_no_ir_ctrl')
+# optech 토글 > 운전자 모니터링 '경도 사용' (OptechDmMode 1): no camera, dragonpilot's steering / pedal check instead
+DM_LITE = NO_IR_CTRL and Params().get("OptechDmMode", encoding="utf8") == "1"
 
 WEBCAM = os.getenv("USE_WEBCAM") is not None
 
 def driverview(started: bool, params: Params, CP: car.CarParams) -> bool:
   return params.get_bool("IsDriverViewEnabled")  # type: ignore
 
+def optech_navi_link(params: Params) -> int:
+  try:
+    return int(params.get("OptechNaviLinkMode", encoding="utf8") or 0)
+  except (TypeError, ValueError):
+    return 0
+
 def optech_speedcam(started: bool, params: Params, CP: car.CarParams) -> bool:
-  return started and params.get_bool("OptechSpeedCam")
+  # built-in camera DB or the navigation app's cameras (주행 > 과속카메라)
+  return started and (params.get_bool("OptechSpeedCam") or optech_navi_link(params) > 0)
+
+def optech_road_speed_limiter(started: bool, params: Params, CP: car.CarParams) -> bool:
+  # 내비 연동 방식 1 TmapNda / 2 당근내비: listen for the phone navigation app, also with the car off so it can pair
+  return optech_navi_link(params) > 0
 
 def notcar(started: bool, params: Params, CP: car.CarParams) -> bool:
   return CP.notCar  # type: ignore
@@ -34,7 +48,8 @@ def ublox(started, params, CP: car.CarParams) -> bool:
   use_ublox = ublox_available()
   if use_ublox != params.get_bool("UbloxAvailable"):
     params.put_bool("UbloxAvailable", use_ublox)
-  return started and use_ublox
+  # optech 고급 > 'GPS 확인' runs it with the car off too
+  return (started or params.get_bool("GpsCheck")) and use_ublox
 
 def qcomgps(started, params, CP: car.CarParams) -> bool:
   return started and not ublox_available()
@@ -66,6 +81,7 @@ procs = [
   PythonProcess("controlsd", "selfdrive.controls.controlsd"),
   PythonProcess("deleter", "selfdrive.loggerd.deleter", offroad=True),
   PythonProcess("dmonitoringd", "selfdrive.legacy_monitoring.dmonitoringd", enabled=(not PC or WEBCAM) and not NO_IR_CTRL, callback=driverview),
+  PythonProcess("dpmonitoringd", "selfdrive.dragonpilot.dpmonitoringd", enabled=DM_LITE),
   # PythonProcess("laikad", "selfdrive.locationd.laikad"),
   # PythonProcess("rawgpsd", "system.sensord.rawgps.rawgpsd", enabled=TICI, onroad=False, callback=qcomgps),
   # PythonProcess("navd", "selfdrive.navd.navd"),
@@ -77,7 +93,8 @@ procs = [
   PythonProcess("radard", "selfdrive.controls.radard"),
   PythonProcess("thermald", "selfdrive.thermald.thermald", offroad=True),
   PythonProcess("tombstoned", "selfdrive.tombstoned", enabled=not PC, offroad=True),
-  PythonProcess("updated", "selfdrive.updated", enabled=not PC, onroad=False, offroad=True),
+  # optech: comma's updater is off on C2; the software page checks and pulls with git (selfdrive/assets/addon/sh)
+  PythonProcess("updated", "selfdrive.updated", enabled=False, onroad=False, offroad=True),
   # PythonProcess("uploader", "selfdrive.loggerd.uploader", offroad=True),
   # PythonProcess("statsd", "selfdrive.statsd", offroad=True),
 
@@ -95,6 +112,9 @@ procs = [
   PythonProcess("mapd", "selfdrive.mapd.mapd"),
   # optech - built-in speed camera DB
   PythonProcess("speedcamd", "selfdrive.optech.speedcamd", onroad=False, callback=optech_speedcam),
+  PythonProcess("road_speed_limiter", "selfdrive.optech.road_speed_limiter", onroad=False, callback=optech_road_speed_limiter),
+  PythonProcess("drivelog", "selfdrive.optech.drivelog"),  # optech 고급 > 주행 기록: small text log while onroad
+  PythonProcess("logserver", "selfdrive.optech.logserver", offroad=True),  # 주행 기록 내려받기 (QR page, 15 min)
   # gpxd
   # PythonProcess("gpxd", "selfdrive.dragonpilot.gpxd"),
   # PythonProcess("gpx_uploader", "selfdrive.dragonpilot.gpx_uploader", offroad=True),

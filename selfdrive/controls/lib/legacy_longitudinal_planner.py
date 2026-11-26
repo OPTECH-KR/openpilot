@@ -79,6 +79,12 @@ class LongitudinalPlanner:
     self.personality = int(self.params.get('LongitudinalPersonality'))
     self.dp_long_use_df_tune = self.params.get_bool('dp_long_use_df_tune')
     self.dp_long_use_krkeegen_tune = self.params.get_bool('dp_long_use_krkeegen_tune')
+    # optech 속도 > 앞차 뒤 정지 거리 (cm, 200-1000; 600 = openpilot's own 6 m)
+    try:
+      stop_cm = int(self.params.get('StopDistance') or 600)
+    except ValueError:
+      stop_cm = 600
+    self.mpc.stop_distance_offset = min(max(stop_cm, 200), 1000) / 100. - STOP_DISTANCE
 
   def update(self, sm):
     if self.param_read_counter % 50 == 0:
