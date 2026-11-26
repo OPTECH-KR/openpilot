@@ -772,7 +772,7 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
     disp->addItem(dim_btn);
   }
   toggle(disp, "OptechShowRecordBtn", "녹화 버튼",
-    "켜 두면(초록색) 주행 화면 오른쪽 아래에 동그란 'REC' 녹화 버튼이 보입니다. 누르면 기기 화면을 동영상으로 녹화하고 "
+    "켜 두면(초록색) 주행 화면 왼쪽 아래(운전자 아이콘 오른쪽)에 동그란 'REC' 녹화 버튼이 보입니다. 누르면 기기 화면을 동영상으로 녹화하고 "
     "(녹화 중에는 버튼이 빨갛게 깜빡입니다), 다시 누르면 멈춥니다. 영상은 3분마다 나뉘어 기기 저장공간(videos 폴더)에 남습니다. "
     "주행 영상을 남기고 싶을 때만 켜세요. 끄면 버튼이 사라지고 하던 녹화도 멈춥니다.");
   toggle(disp, "ShowTpms", "타이어 공기압",
@@ -815,7 +815,7 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
          "RADAR(주황): 레이더가 여러 물체를 보내는 차");
   // '운전자 모니터링 아이콘' (ShowDmInfo 0 / 1); the mode itself is chosen on the 토글 page
   dm_icon = new ToggleControl("운전자 모니터링 아이콘",
-    "주행 화면 아래쪽(왼쪽 칸 바로 오른쪽)에 운전자 모니터링 아이콘(얼굴 모양)을 보여 줍니다. 토글 화면의 운전자 모니터링이 '기본 사용'일 때만 쓸 수 있습니다.",
+    "주행 화면 왼쪽 아래(녹화 버튼 왼쪽)에 운전자 모니터링 아이콘(얼굴 모양)을 보여 줍니다. 토글 화면의 운전자 모니터링이 '기본 사용'일 때만 쓸 수 있습니다.",
     "", QString::fromStdString(params.get("ShowDmInfo")).toInt() >= 1, this);
   QObject::connect(dm_icon, &ToggleControl::toggleFlipped, [=](bool on) {
     if (QString::fromStdString(params.get("OptechDmMode")).toInt() == 0) params.put("ShowDmInfo", on ? "1" : "0");

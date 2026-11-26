@@ -59,13 +59,15 @@ OnroadWindow::OnroadWindow(QWidget *parent) : QWidget(parent) {
   alerts->setAttribute(Qt::WA_TransparentForMouseEvents, true);
   stacked_layout->addWidget(alerts);
 
-  // optech 화면 > '녹화 버튼' (optech-hkg / neokii): REC in the lower right corner, under the right '차량 주의' mark
+  // optech 화면 > '녹화 버튼' (optech-hkg / neokii). spst (user 2026-11-26): lower left, under the left column, right of
+  // the driver monitoring icon (that icon spans x 30..222 in this area, drawOptechHud); the lower right corner holds
+  // dragonpilot's accel / personality buttons, which it covered
   QWidget *recorder_widget = new QWidget(this);
   QVBoxLayout *recorder_layout = new QVBoxLayout(recorder_widget);
-  recorder_layout->setContentsMargins(0, 0, 20, 40);
+  recorder_layout->setContentsMargins(246, 0, 0, 40);
   recorder = new ScreenRecorder(this);
   recorder_layout->addWidget(recorder);
-  recorder_layout->setAlignment(recorder, Qt::AlignRight | Qt::AlignBottom);
+  recorder_layout->setAlignment(recorder, Qt::AlignLeft | Qt::AlignBottom);
   recorder->setVisible(false);
   stacked_layout->addWidget(recorder_widget);
   recorder_widget->raise();
@@ -1346,11 +1348,10 @@ void AnnotatedCameraWidget::drawOptechHud(QPainter &p) {
     if (optech_right_bsd) drawOptechBsd(p, true, optech_right_blinker);
   }
 
-  // driver monitoring icon (OPTECH > 화면 > 운전자 모니터링 아이콘): just right of the left column, at the bottom
-  // (user 2026-11-26, marked on a screenshot; in the corner it covered the sign's "남음" box)
+  // driver monitoring icon (OPTECH > 화면 > 운전자 모니터링 아이콘): lower left under the left column, left of the REC
+  // button and level with it (user 2026-11-26: the square sign tiles left that corner free)
   if (optech_show_dm && !hideBottomIcons) {
-    const int offset = UI_BORDER_SIZE + btn_size / 2;
-    drawIcon(p, QPoint((int)(lx + CW + 105), height() - offset), dm_img, blackColor(70), dmActive ? 1.0 : 0.2);
+    drawIcon(p, QPoint((int)(lx + btn_size / 2), height() - 40 - 70), dm_img, blackColor(70), dmActive ? 1.0 : 0.2);
   }
   p.restore();
 }
