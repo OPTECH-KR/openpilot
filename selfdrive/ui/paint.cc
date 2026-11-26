@@ -1232,11 +1232,34 @@ static void drawOptechHud(const UIState* s) {
             const float lab_need = (lb1[2] - lb1[0]) + (lb2[2] - lb2[0]) + 18;
             if (lab_need > w - 2 * pad) lab_fs *= (w - 2 * pad) / lab_need;
         }
-        optech_text(s, lx + pad, col_y + 58, set_lab, lab_fs, txt, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
-        optech_text(s, lx + pad, col_y + h - 12, set_s, fs_set, txt, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
+        // two columns, each label centred over its number (user 2026-11-26: '설정속도' / '110' and '감속목표' / '100'
+        // did not line up - left / right aligned text starts at the glyph box, and a '1' sits inside a wide box).
+        // Column = the wider of label and number; set speed on the left edge, the target on the right edge
+        float sb[4];
+        nvgFontSize(s->vg, lab_fs);
+        nvgTextBounds(s->vg, 0, 0, set_lab, NULL, sb);
+        float col1 = sb[2] - sb[0], col2 = 0;
+        nvgFontSize(s->vg, fs_set);
+        nvgTextBounds(s->vg, 0, 0, set_s, NULL, sb);
+        col1 = std::max(col1, sb[2] - sb[0]);
         if (slowing) {
-            optech_text(s, lx + w - pad, col_y + 58, hold_lab, lab_fs, nvgRGBA(250, 199, 117, 255), NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
-            optech_text(s, lx + w - pad, col_y + h - 18, hold_s, fs_hold, nvgRGBA(250, 199, 117, 255), NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
+            nvgFontSize(s->vg, lab_fs);
+            nvgTextBounds(s->vg, 0, 0, hold_lab, NULL, sb);
+            col2 = sb[2] - sb[0];
+            nvgFontSize(s->vg, fs_hold);
+            nvgTextBounds(s->vg, 0, 0, hold_s, NULL, sb);
+            col2 = std::max(col2, sb[2] - sb[0]);
+            const float avail = w - 2 * pad, cols = col1 + col2 + 12;
+            if (cols > avail) { const float k = avail / cols; lab_fs *= k; fs_set *= k; fs_hold *= k; col1 *= k; col2 *= k; }
+        }
+        const float c1 = lx + pad + col1 / 2, c2 = lx + w - pad - col2 / 2;
+        optech_text(s, c1, col_y + 58, set_lab, lab_fs, txt, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+        // both numbers on one baseline (was bottom-aligned with a 6 px nudge for the smaller one)
+        const float num_base = col_y + h - 42;
+        optech_text(s, c1, num_base, set_s, fs_set, txt, NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
+        if (slowing) {
+            optech_text(s, c2, col_y + 58, hold_lab, lab_fs, nvgRGBA(250, 199, 117, 255), NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+            optech_text(s, c2, num_base, hold_s, fs_hold, nvgRGBA(250, 199, 117, 255), NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
         }
         col_y += h + 16;
     }
