@@ -14,6 +14,11 @@ def create_lkas11(packer, frame, car_fingerprint, send_lfa_mfa, apply_steer, ste
   # fields (lane state, car icon, lane lines), so the cluster / HUD looks like the car without openpilot. Before, a
   # faint white car + lanes (SysState 1, FcwOpt_USM 1) showed on the HUD before SCC was set; the camera sends 0 there.
   values = lkas11
+  # ... but a camera that reports 15 (= not available; the K5 2021 camera always does, the K7 HEV one while openpilot
+  # steers) has nothing to show: forwarding it lit an amber lane icon on the K5 cluster (user's video 2026-11-26), so
+  # then send the values from before (white car + lanes)
+  if stock_display and int(lkas11.get("CF_Lkas_LdwsSysState", 15)) == 15:
+    stock_display = False
   if not stock_display:
     values["CF_Lkas_LdwsSysState"] = sys_state
   values["CF_Lkas_SysWarning"] = 0 # ajouatom: 계기판에 안나오게함..   #3 if sys_warning else 0
@@ -189,7 +194,10 @@ def create_acc_commands_mix_scc(CP, packer, enabled, accel, upper_jerk, lower_je
     commands.append(packer.make_can_msg("SCC11", 0, scc11_values))
   elif CS.scc11 is not None:
     values = CS.scc11
-    values["MainMode_ACC"] = 1 if enabled else 0 
+    # optech 2026-11-26 (user's K5 2021, SCC2): while openpilot is off keep the radar's own cruise main state, so the
+    # cluster shows the SCC standby (white cars, ---) like the stock car before cruise is pressed; it was forced 0 and
+    # the SCC area stayed empty. carstate reads cruiseState.available from this same dict, so it is not changed by it.
+    values["MainMode_ACC"] = 1 if enabled or values["MainMode_ACC"] == 1 else 0
     values["TauGapSet"] = cruiseGap
     values["VSetDis"] = set_speed if longEnabled else 0
     values["AliveCounterACC"] = idx % 0x10
