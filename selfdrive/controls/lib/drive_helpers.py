@@ -12,8 +12,12 @@ from openpilot.selfdrive.hybrid_modeld.constants import ModelConstants
 V_CRUISE_MIN = 8
 V_CRUISE_MAX = 145
 V_CRUISE_UNSET = 255
-V_CRUISE_INITIAL = 40
-V_CRUISE_INITIAL_EXPERIMENTAL_MODE = 55
+# optech: SET sets the current speed in every mode (normal, 실험 모드, 자동 E2E / ACC 전환, or both). Experimental mode
+# started at 55 km/h (comma: 105), so SET at 40 km/h set 55 and the car sped up on its own (Bolt EUV tester 2026-11-26),
+# and normal mode at 40. User 2026-11-26: SET at 15 km/h must set 15. Only below 10 km/h (standstill) it starts at 10.
+# RESUME still brings back the last set speed.
+V_CRUISE_INITIAL = 10
+V_CRUISE_INITIAL_EXPERIMENTAL_MODE = V_CRUISE_INITIAL
 IMPERIAL_INCREMENT = 1.6  # should be CV.MPH_TO_KPH, but this causes rounding errors
 
 MIN_SPEED = 1.0
