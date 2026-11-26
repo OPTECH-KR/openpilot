@@ -815,7 +815,7 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
          "RADAR(주황): 레이더가 여러 물체를 보내는 차");
   // '운전자 모니터링 아이콘' (ShowDmInfo 0 / 1); the mode itself is chosen on the 토글 page
   dm_icon = new ToggleControl("운전자 모니터링 아이콘",
-    "주행 화면 왼쪽 위에 운전자 모니터링 아이콘(얼굴 모양)을 보여 줍니다. 토글 화면의 운전자 모니터링이 '기본 사용'일 때만 쓸 수 있습니다.",
+    "주행 화면 아래쪽(왼쪽 칸 바로 오른쪽)에 운전자 모니터링 아이콘(얼굴 모양)을 보여 줍니다. 토글 화면의 운전자 모니터링이 '기본 사용'일 때만 쓸 수 있습니다.",
     "", QString::fromStdString(params.get("ShowDmInfo")).toInt() >= 1, this);
   QObject::connect(dm_icon, &ToggleControl::toggleFlipped, [=](bool on) {
     if (QString::fromStdString(params.get("OptechDmMode")).toInt() == 0) params.put("ShowDmInfo", on ? "1" : "0");

@@ -863,13 +863,17 @@ static void optech_turn_arrow(QPainter &p, float x, float y, float S, int kind) 
 }
 
 // text standing on a baseline (the big speed and its unit share one): halign -1 left / 0 centre / 1 right
+// shadow: the dark copy under the letters that keeps them readable over the camera picture; false for dark / red text
+// on a light tile (it smudged it there, optech-hkg 2026-11-26)
 static void optech_txt_base(QPainter &p, float x, float base, const QString &text, int px, const QColor &color,
-                            int halign = 0) {
+                            int halign = 0, bool shadow = true) {
   p.setFont(InterFont(px, QFont::Bold));
   const float w = p.fontMetrics().boundingRect(text).width();
   const float left = halign < 0 ? x : (halign > 0 ? x - w : x - w / 2);
-  p.setPen(QColor(0, 0, 0, 160));
-  p.drawText(QPointF(left + 2, base + 2), text);
+  if (shadow) {
+    p.setPen(QColor(0, 0, 0, 160));
+    p.drawText(QPointF(left + 2, base + 2), text);
+  }
   p.setPen(color);
   p.drawText(QPointF(left, base), text);
 }
@@ -877,8 +881,8 @@ static void optech_txt_base(QPainter &p, float x, float base, const QString &tex
 // text placed like optech-hkg's NVG_ALIGN_BOTTOM: y is just under the letters (Qt's AlignBottom puts the font's
 // descent there too, which drew every such label 10-20 px higher than on optech-hkg). Measured on both screens.
 static void optech_txt_hb(QPainter &p, float x, float y, const QString &text, int px, const QColor &color,
-                          int halign = 0) {
-  optech_txt_base(p, x, y - 0.06f * px, text, px, color, halign);
+                          int halign = 0, bool shadow = true) {
+  optech_txt_base(p, x, y - 0.06f * px, text, px, color, halign, shadow);
 }
 
 // font size that makes text fit max_w (never bigger than px)
@@ -887,14 +891,13 @@ static int optech_fit(QPainter &p, const QString &text, int px, float max_w) {
   return w > max_w && w > 0 ? std::max(12, (int)(px * max_w / w)) : px;
 }
 
-// small camera mark (optech-hkg optech_camera_icon)
-static void optech_camera_icon(QPainter &p, float cx, float cy, float r) {
-  p.setPen(QPen(QColor(255, 255, 255), 3));
-  p.setBrush(QColor(44, 44, 42));
-  p.drawEllipse(QPointF(cx, cy), r, r);
-  p.setBrush(Qt::NoBrush);
-  p.drawRoundedRect(QRectF(cx - r * 0.55f, cy - r * 0.32f, r * 1.1f, r * 0.72f), 3, 3);
-  p.drawEllipse(QPointF(cx, cy + r * 0.04f), r * 0.2f, r * 0.2f);
+// a short rounded bar standing in for a number that is not there (optech-hkg 2026-11-26): centred on cx, vertically on
+// the middle of a number of size px standing on base
+static void optech_hbar(QPainter &p, float cx, float base, int px, const QColor &c) {
+  const float bw = 70, bh = 16, by = base - 0.36f * px - bh / 2;
+  p.setPen(Qt::NoPen);
+  p.setBrush(c);
+  p.drawRoundedRect(QRectF(cx - bw / 2, by, bw, bh), bh / 2, bh / 2);
 }
 
 // optech-hkg 2026-11-25 alerts: a rounded box low in the middle (3/4 of the height) between the left and right
@@ -1150,7 +1153,10 @@ void AnnotatedCameraWidget::drawOptechHud(QPainter &p) {
   // 2) GPS box, centred between the badge row and the set speed box
   if (optech_show_gps) drawOptechGps(p, lx, (ry + BH + col_y) / 2 - 58 / 2);
 
-  // 3) set speed box: set speed big on the left, '감속 중' + the speed openpilot slows to on the right
+  // 3) set speed box (optech-hkg 2026-11-26, fixed layout): left half '설정속도' + the set speed, a dotted line in the
+  //    middle, right half '감속목표' + the speed openpilot slows to for a speed camera (yellow; a yellow bar while it is
+  //    not slowing, so nothing moves when the target comes and goes). Labels centred over their numbers, both numbers
+  //    on one baseline, each shrunk only to fit its half. Not while stopped (the target stays put at a red light)
   const int cam_disp = optech_cam_limit > 0 ? (int)std::nearbyint(optech_cam_limit * to_unit) : 0;
   {
     const float w = CW, h = 240, pad = 22;
@@ -1168,61 +1174,71 @@ void AnnotatedCameraWidget::drawOptechHud(QPainter &p) {
       txt = QColor(180, 178, 169);
     }
     if (draw) optech_box(p, lx, col_y, w, h, fill, 18, 3, line);
-    optech_txt_hb(p, lx + pad, col_y + 58, "설정 속도", 44, txt, -1);
     const QString set_s = is_cruise_set ? QString::number((int)std::nearbyint(setSpeed)) : "--";
     const float target = optech_cam_target * to_unit;
-    const bool slowing = optech_enabled && optech_long && target > 0 && target + 0.5f < setSpeed;
+    const bool slowing = optech_enabled && optech_long && target > 0 && target + 0.5f < setSpeed && speed >= 3.f;
     const QString hold_s = QString::number((int)std::nearbyint(target));
-    int fs_set = 150, fs_hold = 110;
-    const float need = optech_text_w(p, set_s, fs_set) + (slowing ? optech_text_w(p, hold_s, fs_hold) + 30 : 0);
-    if (need > w - 2 * pad) {  // 3-digit speeds: both numbers shrink together
-      const float k = (w - 2 * pad) / need;
-      fs_set = (int)(fs_set * k);
-      fs_hold = (int)(fs_hold * k);
-    }
-    optech_txt_hb(p, lx + pad, col_y + h - 12, set_s, fs_set, txt, -1);
-    if (slowing) {
-      optech_txt_hb(p, lx + w - pad, col_y + 58, "감속 중", 44, amber, 1);
-      optech_txt_hb(p, lx + w - pad, col_y + h - 18, hold_s, fs_hold, amber, 1);
-    }
+    const float half = (w - 2 * pad - 32) / 2;  // 32: room for the dotted line
+    const float c1 = lx + pad + half / 2, c2 = lx + w - pad - half / 2, dot_x = lx + w / 2;
+    const int lab_fs = std::min(optech_fit(p, "설정속도", 44, half), optech_fit(p, "감속목표", 44, half));
+    const int fs_set = optech_fit(p, set_s, 150, half), fs_hold = optech_fit(p, hold_s, 110, half);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(255, 255, 255, 150));
+    for (float dy = col_y + 20; dy <= col_y + h - 20; dy += 13) p.drawEllipse(QPointF(dot_x, dy), 2.6, 2.6);
+    const float num_base = col_y + h - 42;
+    optech_txt_hb(p, c1, col_y + 58, "설정속도", lab_fs, txt, 0);
+    optech_txt_base(p, c1, num_base, set_s, fs_set, txt, 0);
+    optech_txt_hb(p, c2, col_y + 58, "감속목표", lab_fs, amber, 0);
+    if (slowing) optech_txt_base(p, c2, num_base, hold_s, fs_hold, amber, 0);
+    else optech_hbar(p, c2, num_base, 110, amber);
     col_y += h + 16;
   }
 
-  // 4) ONE sign under the set speed, centred on the column:
-  //    camera ahead: yellow disc in a red ring, the enforced speed, a small camera, "550m 남음" under it (redder as it
-  //    gets close) / speed bump: the bump picture / otherwise the road limit: white disc in a red ring
+  // 4) road limit | speed camera under the set speed (optech-hkg 2026-11-26: the one big round sign was too big and
+  //    came and went with the data). Two square tiles side by side, the height of the set speed box, in the sign
+  //    colours: left '제한속도' white with a red frame (label and number red), right '단속속도' / '구간단속' / '방지턱'
+  //    yellow with a red frame (dark text, '방지턱' red, the bump picture for a bump). The distance left sits in its
+  //    own small box under the camera tile (red within 200 m). Without data a tile keeps its colours and shows a red bar
+  //    instead of the number, so nothing comes and goes. Dark / red text on these light tiles has no shadow.
   {
-    const float d = 330, ring = 34, pill_h = 76, pill_w = 300;
-    const float y2 = col_y + 50, ccx = lx + CW / 2, lab_y = y2 + 56, top = y2 + 72, cy = top + d / 2;
+    const float th = 240, gap = 14, tw = (CW - gap) / 2, tt = col_y, frame = 10;
+    const float tx1 = lx, tx2 = lx + tw + gap;
+    const float num_base = tt + th - 42;  // numbers' baseline, as in the set speed box
     const int road_disp = optech_road_limit > 0 ? (int)std::nearbyint(optech_road_limit * to_unit)
                                                 : (speedLimit > 1 ? (int)std::nearbyint(speedLimit) : 0);
     const bool cam = cam_disp > 0, bump = !cam && optech_bump;
-    if (cam || bump || road_disp > 0) {
-      const QString lab = cam ? (optech_cam_section ? "구간 단속" : "단속 속도") : bump ? "방지턱" : "제한 속도";
-      optech_txt_hb(p, ccx, lab_y, lab, 56, cam || bump ? white : label_c);
-      if (bump) {
-        p.drawPixmap(QRectF(ccx - d / 2, top, d, d), bump_img, QRectF(bump_img.rect()));
-      } else {
-        p.setPen(Qt::NoPen);
-        p.setBrush(white);
-        p.drawEllipse(QPointF(ccx, cy), d / 2 + 4, d / 2 + 4);  // thin white rim
-        p.setBrush(QColor(226, 75, 74));
-        p.drawEllipse(QPointF(ccx, cy), d / 2, d / 2);
-        p.setBrush(cam ? QColor(250, 199, 117) : white);
-        p.drawEllipse(QPointF(ccx, cy), d / 2 - ring, d / 2 - ring);
-        const QString num = QString::number(cam ? cam_disp : road_disp);
-        const int nfs = optech_fit(p, num, 175, d - 2 * ring - 34);  // 3-digit limits shrink to fit the disc
-        optech_txt_base(p, ccx, cy + 0.36f * nfs - 8 + (cam ? 15 : 0), num, nfs, dark, 0);
-        if (cam) optech_camera_icon(p, ccx, top + 68, 27);  // small camera above the number
+    const QString rlab = bump ? "방지턱" : optech_cam_section ? "구간단속" : "단속속도";
+    const QColor red(226, 75, 74), yellow(250, 199, 117);
+    const float inner = tw - 2 * frame - 18;
+    const int tlab_fs = std::min(optech_fit(p, "제한속도", 44, inner), optech_fit(p, rlab, 44, inner));
+    auto tile = [&](float tx, const QString &tlab, const QColor &tfill, const QColor &lab_col) {
+      optech_box(p, tx, tt, tw, th, tfill, 18, frame, red);
+      optech_txt_hb(p, tx + tw / 2, tt + 58, tlab, tlab_fs, lab_col, 0, false);
+    };
+    auto tile_num = [&](float tx, int sv, const QColor &num_col) {
+      const float ncx = tx + tw / 2;
+      if (sv <= 0) {  // no data: a red bar where the number goes
+        optech_hbar(p, ncx, num_base, 130, red);
+        return;
       }
-      const float left = cam ? optech_cam_dist : bump ? optech_bump_dist : 0;
-      if (left > 0) {
-        const QString dist = optech_dist((int)left, " 남음");
-        const float btop = top + d + 16;
-        const float a = std::clamp((600.f - left) / 600.f, 0.25f, 1.f);
-        optech_box(p, ccx - pill_w / 2, btop, pill_w, pill_h, QColor(226, 75, 74, (int)(255 * a)), 14, 3);
-        optech_txt(p, ccx, btop + pill_h / 2, dist, optech_fit(p, dist, 52, pill_w - 20), white, 0, 1);
-      }
+      const QString nb = QString::number(sv);
+      optech_txt_base(p, ncx, num_base, nb, optech_fit(p, nb, 130, inner), num_col, 0, false);
+    };
+    tile(tx1, "제한속도", white, red);
+    tile_num(tx1, road_disp, red);
+    tile(tx2, rlab, yellow, bump ? red : dark);
+    if (bump) {
+      const float bs = 130;
+      p.drawPixmap(QRectF(tx2 + tw / 2 - bs / 2, tt + 72, bs, bs), bump_img, QRectF(bump_img.rect()));
+    } else {
+      tile_num(tx2, cam ? cam_disp : 0, dark);
+    }
+    const float left = cam ? optech_cam_dist : bump ? optech_bump_dist : 0;
+    if (left > 0) {  // distance left: its own box under the camera tile, red within 200 m
+      const QString dist = optech_dist((int)left, " 남음");
+      const float dh = 50, dt = tt + th + 10;
+      optech_box(p, tx2, dt, tw, dh, left < 200 ? red : QColor(30, 30, 30, 225), 14, 3);
+      optech_txt(p, tx2 + tw / 2, dt + dh / 2, dist, optech_fit(p, dist, 36, tw - 20), white, 0, 1);
     }
   }
 
