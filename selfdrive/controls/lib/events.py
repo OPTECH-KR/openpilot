@@ -151,6 +151,14 @@ class NoEntryAlert(Alert):
                      AudibleAlert.refuse, 3.)
 
 
+class NoEntryOneLineAlert(Alert):
+  # optech 2026-11-27: the reason alone in one line, without '오픈파일럿을 켤 수 없음' (same sound and time as NoEntryAlert)
+  def __init__(self, alert_text_1: str):
+    super().__init__(alert_text_1, "", AlertStatus.normal,
+                     AlertSize.small, Priority.LOW, VisualAlert.none,
+                     AudibleAlert.refuse, 3.)
+
+
 class SoftDisableAlert(Alert):
   def __init__(self, alert_text_2: str):
     super().__init__("즉시 운전하세요", alert_text_2,
@@ -614,12 +622,12 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
 
   EventName.brakeHold: {
     ET.USER_DISABLE: EngagementAlert(AudibleAlert.disengage),
-    ET.NO_ENTRY: NoEntryAlert("오토 홀드"),
+    ET.NO_ENTRY: NoEntryOneLineAlert("오토 홀드"),
   },
 
   EventName.parkBrake: {
     ET.USER_DISABLE: EngagementAlert(AudibleAlert.disengage),
-    ET.NO_ENTRY: NoEntryAlert("주차 브레이크"),
+    ET.NO_ENTRY: NoEntryOneLineAlert("주차 브레이크"),
   },
 
   EventName.pedalPressed: {
