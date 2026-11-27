@@ -2950,8 +2950,12 @@ static void optech_draw_alert(UIState* s) {
     // user 2026-11-25: all bigger again (one line 116/124 -> 132/144, two lines 92/104 -> 108/124, 2nd 58 -> 70,
     // 3rd 46 -> 54) and the box as wide as the space between the left and right columns allows
     // user 2026-11-27: auto hold / parking brake / soft hold alerts as big as the hold box below (OPTECH_HOLD_FS),
-    // not the big one-line size
-    const bool compact = alert.type.startsWith("brakeHold/") || alert.type.startsWith("parkBrake/") || alert.type.startsWith("autoHold/");
+    // not the big one-line size; that night also 초록불로 바뀌었어요 / 신호가 바뀌었어요 / 후진 기어 / 조이스틱 모드
+    // ("글 너무 커 ... 오토홀드 그정도 사이즈로")
+    static const char* const compact_types[] = {"brakeHold/", "parkBrake/", "autoHold/", "trafficSignGreen/",
+                                                "trafficSignChanged/", "reverseGear/permanent", "joystickDebug/permanent"};
+    bool compact = false;
+    for (const char* ct : compact_types) compact = compact || alert.type.startsWith(ct);
     float fs1 = compact ? OPTECH_HOLD_FS : one_line ? (full ? 144 : 132) : (full ? 124 : 108), fs2 = 70, fs3 = 54;
     const float pad = compact ? (OPTECH_HOLD_H - OPTECH_HOLD_FS * 0.95f) / 2 : 26;
     // user 2026-11-27: long lines (openpilot Unavailable, Calibration in Progress: 40%) shrank too much in a 1060 wide
