@@ -2907,7 +2907,11 @@ static void optech_draw_alert(UIState* s) {
     const bool one_line = alert.text2.isEmpty() && !line3;
     // user 2026-11-25: all bigger again (one line 116/124 -> 132/144, two lines 92/104 -> 108/124, 2nd 58 -> 70,
     // 3rd 46 -> 54) and the box as wide as the space between the left and right columns allows
-    float fs1 = one_line ? (full ? 144 : 132) : (full ? 124 : 108), fs2 = 70, fs3 = 54;
+    // user 2026-11-27: auto hold / parking brake / soft hold alerts as small as the hold box below (72, the size the
+    // K7 HEV tester asked for), not the big one-line size
+    const bool compact = alert.type.startsWith("brakeHold/") || alert.type.startsWith("parkBrake/") || alert.type.startsWith("autoHold/");
+    float fs1 = compact ? 72 : one_line ? (full ? 144 : 132) : (full ? 124 : 108), fs2 = 70, fs3 = 54;
+    const float pad = compact ? 21 : 26;
     // user 2026-11-27: long lines (openpilot Unavailable, Calibration in Progress: 40%) shrank too much in a 1060 wide
     // box -> up to 1420 wide (x 250..1670: the left column ends above the box, the right one starts at 1710)
     const float maxw = std::min(1420.f, s->fb_w - 2 * 250.f);
@@ -2919,7 +2923,7 @@ static void optech_draw_alert(UIState* s) {
     if (w2 > maxw - 60) { fs2 *= (maxw - 60) / w2; w2 = maxw - 60; }
     tw = std::max(w1, w2);
     const float l1 = fs1 * 0.95f, l2 = t2.empty() ? 0 : fs2 * 0.95f + 14, l3 = line3 ? fs3 * 0.95f + 12 : 0;
-    const float h = 26 + l1 + l2 + l3 + 26, w = std::min(maxw, std::max(640.f, tw + 100));
+    const float h = pad + l1 + l2 + l3 + pad, w = std::min(maxw, compact ? std::max(380.f, tw + 90) : std::max(640.f, tw + 100));
     const float cx = s->fb_w / 2.f, top = std::min(s->fb_h * 0.75f - h / 2, s->fb_h - 20.f - h), x = cx - w / 2;  // low, like the user's picture
     const bool blink_on = (s->sm->frame % 12) < 7;
     // normal (information, e.g. auto hold): like the other fork's AUTO HOLD box the user liked - see-through dark box,
@@ -2930,7 +2934,7 @@ static void optech_draw_alert(UIState* s) {
     if (s->status == STATUS_ALERT) { fill = blink_on ? nvgRGBA(215, 35, 35, 245) : nvgRGBA(150, 20, 20, 245); line = COLOR_WHITE; lw = 5; c1 = COLOR_WHITE; }
     else if (s->status == STATUS_WARNING) { fill = nvgRGBA(225, 115, 25, 240); line = COLOR_WHITE; lw = 4; c1 = COLOR_WHITE; }
     carrot_round_box(s, x, top, w, h, fill, line, 22, lw);
-    float y = top + 26;
+    float y = top + pad;
     optech_text_vc(s, cx, y + l1 / 2, t1.c_str(), fs1, c1, NVG_ALIGN_CENTER);
     y += l1;
     if (!t2.empty()) { y += 14; optech_text_vc(s, cx, y + fs2 * 0.95f / 2, t2.c_str(), fs2, COLOR_WHITE, NVG_ALIGN_CENTER); y += fs2 * 0.95f; }
