@@ -192,6 +192,14 @@ class Controls:
     self.current_alert_types = [ET.PERMANENT]
     self.logged_comm_issue = None
     self.logged_radar_fault = None
+    # optech (2026-11-27, Soul EV SK3 tester): the services whose problems raise commIssue. liveTorqueParameters is left
+    # out: torqued marks its message invalid whenever one of its own inputs (carControl / carState / liveLocationKalman)
+    # is a little late - on a busy C2 (cpu 92 %) that happened twice in one commute ('즉시 운전하세요 / 기기 내부 통신
+    # 문제' for 1-3 s) and 12 times in older drives. The torque params are only applied while that message passes its
+    # checks (Update Torque Params below), so a late or invalid one just keeps the last learned values. Logged to diag.
+    self.comm_services = [s for s in self.sm.alive.keys() if s != 'liveTorqueParameters']
+    self.logged_torque_issue = None
+    self.torque_issue_log_frame = -1000
     self.not_running = set()
     self.last_step_t = 0.
     self.prof_gap_max = 0.
@@ -408,10 +416,10 @@ class Controls:
     # generic catch-all. ideally, a more specific event should be added above instead
     has_disable_events = self.events.any(ET.NO_ENTRY) and (self.events.any(ET.SOFT_DISABLE) or self.events.any(ET.IMMEDIATE_DISABLE))
     no_system_errors = (not has_disable_events) or (len(self.events) == num_events)
-    if (not self.sm.all_checks() or self.can_rcv_timeout) and no_system_errors:
-      if not self.sm.all_alive():
+    if (not self.sm.all_checks(self.comm_services) or self.can_rcv_timeout) and no_system_errors:
+      if not self.sm.all_alive(self.comm_services):
         self.events.add(EventName.commIssue)
-      elif not self.sm.all_freq_ok():
+      elif not self.sm.all_freq_ok(self.comm_services):
         self.events.add(EventName.commIssueAvgFreq)
       else:  # invalid or can_rcv_timeout.
         self.events.add(EventName.commIssue)
@@ -428,6 +436,18 @@ class Controls:
         self.logged_comm_issue = logs
     else:
       self.logged_comm_issue = None
+
+    # liveTorqueParameters: no event (see comm_services), but keep it visible in the diag log
+    torque_issue = None
+    if self.initialized and not self.sm.all_checks(['liveTorqueParameters']):
+      torque_issue = (self.sm.valid['liveTorqueParameters'], self.sm.alive['liveTorqueParameters'],
+                      self.sm.freq_ok['liveTorqueParameters'])
+    if torque_issue != self.logged_torque_issue:
+      # at most one line per 10 s (the flags can flip at torqued's 4 Hz)
+      if torque_issue is not None and self.sm.frame - self.torque_issue_log_frame >= 1000:
+        diag_write("liveTorqueParameters not ok (no warning, last learned values kept): valid={} alive={} freq_ok={}".format(*torque_issue))
+        self.torque_issue_log_frame = self.sm.frame
+      self.logged_torque_issue = torque_issue
 
     if not self.sm['liveParameters'].valid:
       self.events.add(EventName.vehicleModelInvalid)
@@ -499,7 +519,7 @@ class Controls:
     self.sm.update(0)
 
     if not self.initialized:
-      all_valid = CS.canValid and self.sm.all_checks()
+      all_valid = CS.canValid and self.sm.all_checks(self.comm_services)
       timed_out = self.sm.frame * DT_CTRL > (6. if REPLAY else 3.5)
       if all_valid or timed_out or SIMULATION:
         if not self.read_only:
