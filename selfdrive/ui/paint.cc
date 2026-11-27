@@ -2908,7 +2908,9 @@ static void optech_draw_alert(UIState* s) {
     // user 2026-11-25: all bigger again (one line 116/124 -> 132/144, two lines 92/104 -> 108/124, 2nd 58 -> 70,
     // 3rd 46 -> 54) and the box as wide as the space between the left and right columns allows
     float fs1 = one_line ? (full ? 144 : 132) : (full ? 124 : 108), fs2 = 70, fs3 = 54;
-    const float maxw = std::min(1300.f, s->fb_w - 2 * 430.f);  // between the left and right columns
+    // user 2026-11-27: long lines (openpilot Unavailable, Calibration in Progress: 40%) shrank too much in a 1060 wide
+    // box -> up to 1420 wide (x 250..1670: the left column ends above the box, the right one starts at 1710)
+    const float maxw = std::min(1420.f, s->fb_w - 2 * 250.f);
     float b[4], tw = 0;
     nvgFontFace(s->vg, BOLD);
     nvgFontSize(s->vg, fs1); nvgTextBounds(s->vg, 0, 0, t1.c_str(), NULL, b); float w1 = b[2] - b[0];
