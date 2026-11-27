@@ -220,14 +220,34 @@ def load_meta():
     return None
 
 
+SHOW_IF = re.compile(r'^([A-Za-z0-9_]+)(==|=|>)(.*)$')
+
+
+def navi_ctrl(mode):
+  """settings.cc navi_ctrl: 내비 연동 방식 -> the AutoNaviSpeedCtrl value '카메라 감속' stores while on"""
+  return {1: 3, 2: 2}.get(mode, 1)
+
+
+def pint(key, default=0):
+  try:
+    return int(pget(key))
+  except ValueError:
+    return default
+
+
 @app.route('/api/settings')
 def api_settings():
   meta = load_meta()
   if meta is None:
     return jsonify(ok=False, msg="설정 목록이 아직 없어요. 화면 프로그램이 켜지면 만들어집니다.", items=[])
+  vals = {}
   for it in meta:
-    it['value'] = pget(it['key'])
-  return jsonify(ok=True, items=meta, can_change=can_change())
+    if it.get('key'):
+      it['value'] = vals[it['key']] = pget(it['key'])
+    m = SHOW_IF.match(it.get('showIf', ''))
+    if m and m.group(1) not in vals:  # a condition on a param that is not an item itself (e.g. SelectedCar)
+      vals[m.group(1)] = pget(m.group(1))
+  return jsonify(ok=True, items=meta, vals=vals, can_change=can_change())
 
 
 @app.route('/api/settings', methods=['POST'])
@@ -236,13 +256,15 @@ def api_settings_set():
     return change_refused()
   body = request.get_json(force=True, silent=True) or {}
   key, value = str(body.get('key', '')), str(body.get('value', ''))
-  item = next((it for it in (load_meta() or []) if it['key'] == key), None)
+  item = next((it for it in (load_meta() or []) if key and it.get('key') == key), None)
   if item is None:
     return jsonify(ok=False, msg="메뉴에 없는 설정이에요."), 400
   t = item['type']
   if t == 'toggle':
     if value not in ('0', '1'):
       return jsonify(ok=False, msg="켜기/끄기 값이 아니에요."), 400
+    if item.get('special') == 'camDecel':  # '카메라 감속': on stores the value of the chosen 내비 연동 방식
+      value = str(navi_ctrl(pint('OptechNaviLinkMode', 1))) if value == '1' else '0'
   elif t == 'number':
     try:
       n = int(value)
@@ -258,6 +280,9 @@ def api_settings_set():
     return jsonify(ok=False, msg="바꿀 수 없는 항목이에요."), 400
   try:
     params.put(key, value)
+    # like the menu's choice callback: a new 내비 연동 방식 also changes what '카메라 감속' (when on) stores
+    if key == 'OptechNaviLinkMode' and pint('AutoNaviSpeedCtrl') > 0:
+      params.put('AutoNaviSpeedCtrl', str(navi_ctrl(int(value))))
   except Exception as e:
     return jsonify(ok=False, msg=f"저장하지 못했어요 ({e})"), 500
   return jsonify(ok=True, reboot=bool(item.get('reboot')))
