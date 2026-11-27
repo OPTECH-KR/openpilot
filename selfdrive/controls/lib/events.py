@@ -580,13 +580,13 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
   EventName.cameraMalfunction: {
     ET.PERMANENT: camera_malfunction_alert,
     ET.SOFT_DISABLE: soft_disable_alert("Camera Malfunction"),
-    ET.NO_ENTRY: NoEntryAlert("Camera Malfunction: Reboot Your Device"),
+    ET.NO_ENTRY: NoEntryAlert("Camera Malfunction: Reboot Your Device", alert_text_1="openpilot Unavailable"),
   },
   # Camera framerate too low
   EventName.cameraFrameRate: {
     ET.PERMANENT: NormalPermanentAlert("Camera Frame Rate Low", "Reboot your Device"),
     ET.SOFT_DISABLE: soft_disable_alert("Camera Frame Rate Low"),
-    ET.NO_ENTRY: NoEntryAlert("Camera Frame Rate Low: Reboot Your Device"),
+    ET.NO_ENTRY: NoEntryAlert("Camera Frame Rate Low: Reboot Your Device", alert_text_1="openpilot Unavailable"),
   },
 
   # Unused
@@ -758,7 +758,7 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
 
   EventName.espDisabled: {
     ET.SOFT_DISABLE: soft_disable_alert("Electronic Stability Control Disabled"),
-    ET.NO_ENTRY: NoEntryAlert("Electronic Stability Control Disabled"),
+    ET.NO_ENTRY: NoEntryAlert("Electronic Stability Control Disabled", alert_text_1="openpilot Unavailable"),
   },
 
   EventName.lowBattery: {
@@ -941,7 +941,7 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
   EventName.relayMalfunction: {
     ET.IMMEDIATE_DISABLE: ImmediateDisableAlert("Harness Relay Malfunction"),
     ET.PERMANENT: NormalPermanentAlert("Harness Relay Malfunction", "Check Hardware"),
-    ET.NO_ENTRY: NoEntryAlert("Harness Relay Malfunction"),
+    ET.NO_ENTRY: NoEntryAlert("Harness Relay Malfunction", alert_text_1="openpilot Unavailable"),
   },
 
   EventName.speedTooLow: {
