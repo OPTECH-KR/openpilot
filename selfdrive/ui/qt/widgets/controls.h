@@ -54,6 +54,11 @@ public:
     return description->text();
   }
 
+  // optech web (settings list export, settings.cc optech_export_web_meta)
+  const QString getTitle() {
+    return title_label->text();
+  }
+
   QLabel *icon_label;
   QPixmap icon_pixmap;
 
@@ -148,6 +153,9 @@ class ParamControl : public ToggleControl {
 public:
   ParamControl(const QString &param, const QString &title, const QString &desc, const QString &icon, QWidget *parent = nullptr) : ToggleControl(title, desc, icon, false, parent) {
     key = param.toStdString();
+    // optech web: which param this switch is (settings.cc optech_export_web_meta)
+    setProperty("optechKey", param);
+    setProperty("optechType", "toggle");
     QObject::connect(this, &ParamControl::toggleFlipped, [=](bool state) {
       QString content("<body><h2 style=\"text-align: center;\">" + title + "</h2><br>"
                       "<p style=\"text-align: center; margin: 0 128px; font-size: 50px;\">" + getDescription() + "</p></body>");
@@ -215,6 +223,7 @@ class ListWidget : public QWidget {
   inline void addItem(QWidget *w) { inner_layout.addWidget(w); }
   inline void addItem(QLayout *layout) { inner_layout.addLayout(layout); }
   inline void setSpacing(int spacing) { inner_layout.setSpacing(spacing); }
+  inline QLayout *itemLayout() { return &inner_layout; }  // optech web: walk the items in order
 
 private:
   void paintEvent(QPaintEvent *) override {

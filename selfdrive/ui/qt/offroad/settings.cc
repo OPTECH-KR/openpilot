@@ -7,6 +7,12 @@
 #include <memory>
 
 #include <QDebug>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 
 #ifndef QCOM
 #include "selfdrive/ui/qt/offroad/networking.h"
@@ -750,7 +756,90 @@ public:
 static QLabel *carrot_section(const QString &title) {
   QLabel *label = new QLabel(title);
   label->setStyleSheet("font-size: 42px; font-weight: 600; color: #33ab4c; padding-top: 25px; padding-left: 10px;");
+  label->setProperty("optechSection", true);  // optech web: a section title in the settings list
   return label;
+}
+
+// ---- optech web (2026-11-27, like carrot's web settings): the OPTECH menu writes its own item list (tab, section,
+// param, title, description, kind, range / choices) to OPTECH_WEB_META when the UI starts, so the web page
+// (selfdrive/optech_web) shows the same items with the same Korean text and never drifts from the menu.
+// Items carry what the web needs as Qt properties: optechKey / optechType (toggle: ParamControl, number:
+// CValueControl, choice: optech_web_choice) and for choices optechNames / optechValues ----
+static const char *OPTECH_WEB_META = "/data/optech_web/settings_meta.json";
+
+static QStringList optech_index_values(int n) {
+  QStringList v;
+  for (int i = 0; i < n; i++) v << QString::number(i);
+  return v;
+}
+
+static QStringList optech_int_values(const QList<int> &l) {
+  QStringList v;
+  for (int i : l) v << QString::number(i);
+  return v;
+}
+
+// a '이름: 지금 값' + 선택 button: param and its choices (names shown, values stored)
+static void optech_web_choice(QWidget *w, const QString &key, const QStringList &names, const QStringList &values,
+                              bool reboot = false) {
+  w->setProperty("optechKey", key);
+  w->setProperty("optechType", "choice");
+  w->setProperty("optechNames", names);
+  w->setProperty("optechValues", values);
+  if (reboot) w->setProperty("optechReboot", true);
+}
+
+static void optech_web_walk(QLayout *layout, const QString &tab, QString &section, QJsonArray &items) {
+  for (int i = 0; i < layout->count(); i++) {
+    QLayoutItem *it = layout->itemAt(i);
+    if (it->layout()) {
+      optech_web_walk(it->layout(), tab, section, items);
+      continue;
+    }
+    QWidget *w = it->widget();
+    if (!w) continue;
+    if (w->property("optechSection").toBool()) {
+      section = qobject_cast<QLabel *>(w)->text();
+      continue;
+    }
+    const QString key = w->property("optechKey").toString();
+    AbstractControl *c = qobject_cast<AbstractControl *>(w);
+    if (key.isEmpty() || !c || w->isHidden()) continue;  // hidden: e.g. the gains of the other steering methods
+    QJsonObject o;
+    o["tab"] = tab;
+    o["section"] = section;
+    o["key"] = key;
+    const QString type = w->property("optechType").toString();
+    o["type"] = type;
+    o["title"] = type == "choice" ? c->getTitle().section(": ", 0, 0) : c->getTitle();
+    o["desc"] = c->getDescription();
+    if (type == "number") {
+      o["min"] = w->property("optechMin").toInt();
+      o["max"] = w->property("optechMax").toInt();
+      o["step"] = w->property("optechStep").toInt();
+    } else if (type == "choice") {
+      o["names"] = QJsonArray::fromStringList(w->property("optechNames").toStringList());
+      o["values"] = QJsonArray::fromStringList(w->property("optechValues").toStringList());
+    }
+    if (w->property("optechReboot").toBool()) o["reboot"] = true;
+    items.append(o);
+  }
+}
+
+static void optech_export_web_meta(const QList<QPair<QString, ListWidget *>> &tabs) {
+  QJsonArray items;
+  for (const auto &t : tabs) {
+    QString section;
+    optech_web_walk(t.second->itemLayout(), t.first, section, items);
+  }
+  QDir().mkpath(QFileInfo(OPTECH_WEB_META).absolutePath());
+  QFile f(QString(OPTECH_WEB_META) + ".tmp");
+  if (f.open(QIODevice::WriteOnly)) {
+    f.write(QJsonDocument(items).toJson(QJsonDocument::Compact));
+    f.close();
+    QFile::remove(OPTECH_WEB_META);
+    f.rename(OPTECH_WEB_META);
+  }
 }
 
 CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
@@ -855,6 +944,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     Params().put("OptechBrakeResumeMode", std::to_string(brake_resume_names.indexOf(sel)));
     brake_resume_btn->setTitle(brake_resume_name());
   });
+  optech_web_choice(brake_resume_btn, "OptechBrakeResumeMode", brake_resume_names, {"0", "1", "2"});
   cruiseToggles->addItem(brake_resume_btn);
   // OptechGasResume (cruise_helper): brake, then straight onto the gas also brings speed control back (driver feedback)
   cruiseToggles->addItem(new ParamControl("OptechGasResume", "악셀로 다시 켜기",
@@ -1038,6 +1128,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
       lm_refresh();
       ConfirmationDialog::alert("기기를 다시 켜야 적용됩니다.", this);
     });
+    optech_web_choice(lm_btn, "OptechLatMethod", lm_names, optech_index_values(lm_names.size()), true);
     steerToggles->addItem(lm_btn);
     for (auto& v : *vals) steerToggles->addItem(v.ctl);
     lm_refresh();
@@ -1099,6 +1190,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
       Params().put("OptechSettingsTimeout", std::to_string(keep_secs[keep_names.indexOf(sel)]));
       keep_btn->setTitle(keep_name());
     });
+    optech_web_choice(keep_btn, "OptechSettingsTimeout", keep_names, optech_int_values(keep_secs));
     dispToggles->addItem(keep_btn);
   }
   // OptechDriveDim '주행 중 밝기' (ui.cc Device::updateBrightness): in D only (not N / P / R), 30 s without a touch
@@ -1136,6 +1228,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
                                  "· 터치한 뒤 30초 동안 안 만지면 · N·P·R에서 D로 바꾸고 30초가 지나면", this);
       }
     });
+    optech_web_choice(dim_btn, "OptechDriveDim", dim_names, optech_int_values(dim_pcts));
     dispToggles->addItem(dim_btn);
   }
   dispToggles->addItem(new ParamControl("OptechShowRecordBtn", "녹화 버튼",
@@ -1173,6 +1266,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
       Params().put("ShowRadarInfo", std::to_string(radar_names.indexOf(sel)));
       radar_btn->setTitle(radar_name());
     });
+    optech_web_choice(radar_btn, "ShowRadarInfo", radar_names, optech_index_values(radar_names.size()));
     dispToggles->addItem(radar_btn);
   }
   dispToggles->addItem(new ParamControl("ShowConnInfo", "연결 상태 표시", "켜 두면(초록색) 주행 화면 왼쪽 위에 연결 상태를 보여 줍니다.\nTMAP: TmapNda가 NDA 방식으로 보내는 중\nCARROT: 당근 방식으로 들어옴 (당근내비, 당근 방식으로 설정한 TmapNda)\n초록은 정보가 들어오는 중, 회색은 연결됐지만 아직 정보가 없음\nHDA(보라): 차 순정 내비의 카메라 정보를 쓰는 중\nSCC2(빨강): SCC 버스2(롱컨) 차량\nRADAR(주황): 레이더 트랙 사용 중", SHELL_ICON, this));
@@ -1188,6 +1282,12 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   // ---- 고급: experimental / developer ----
   advancedToggles = new ListWidget(this);
   advancedToggles->addItem(carrot_section("기기"));
+  // OptechWebServer (selfdrive/optech_web/server.py, user 2026-11-27: like carrot's web page on the same wifi)
+  advancedToggles->addItem(new ParamControl("OptechWebServer", "웹 접속 (같은 와이파이)",
+    "켜 두면(초록색) 같은 와이파이에 연결된 휴대폰·PC의 인터넷 창(브라우저)에서 http://[기기 IP]:7000 으로 들어와 "
+    "기기 상태와 지금 화면을 보고, 주행 기록·녹화 영상을 받고, OPTECH 설정을 바꾸고, 업데이트·다시 켜기를 할 수 있습니다. "
+    "기기 IP는 홈 화면 왼쪽에 있습니다. 같은 와이파이의 누구나 들어올 수 있으니 공용 와이파이에서는 끄세요. "
+    "바꾼 뒤 다시 켜야 적용됩니다. 처음 값: 켜짐", SHELL_ICON, this));
   // OptechOffShutdown (autoshutdownd): after a drive, turn the device off this long after the car is off (tester feedback)
   {
     auto off_btn = new ButtonControl("", "선택",
@@ -1209,6 +1309,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
       Params().put("OptechOffShutdown", std::to_string(off_secs[off_names.indexOf(sel)]));
       off_btn->setTitle(off_name());
     });
+    optech_web_choice(off_btn, "OptechOffShutdown", off_names, optech_int_values(off_secs));
     advancedToggles->addItem(off_btn);
   }
   advancedToggles->addItem(new ParamControl("OpkrHotspotOnBoot", "부팅 시 핫스팟 켜기", "켜 두면 기기가 켜질 때 핫스팟(테더링)이 자동으로 켜집니다.", SHELL_ICON, this));
@@ -1333,6 +1434,9 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
 
   togglesCarrot(0);
 
+  // optech web: the item list for the web page (see optech_export_web_meta)
+  optech_export_web_meta({{"시작", startToggles}, {"주행", cruiseToggles}, {"속도", speedToggles},
+                          {"조향", steerToggles}, {"화면", dispToggles}, {"고급", advancedToggles}});
 }
 
 
@@ -1363,6 +1467,7 @@ void CarrotPanel::showEvent(QShowEvent *event) {
 ButtonControl *CarrotPanel::choice(const QString &param, const QString &title, const QString &desc, const QStringList &names,
                                    int def, std::function<void(int)> changed) {
   ButtonControl *btn = new ButtonControl("", "선택", desc);
+  optech_web_choice(btn, param, names, optech_index_values(names.size()));
   const std::string key = param.toStdString();
   auto current = [=]() {
     const std::string v = Params().get(key);
@@ -1404,6 +1509,12 @@ CValueControl::CValueControl(const QString& params, const QString& title, const 
     m_min = min;
     m_max = max;
     m_unit = unit;
+    // optech web: a number with -/+ (settings.cc optech_export_web_meta)
+    setProperty("optechKey", params);
+    setProperty("optechType", "number");
+    setProperty("optechMin", min);
+    setProperty("optechMax", max);
+    setProperty("optechStep", unit);
 
     label.setAlignment(Qt::AlignVCenter | Qt::AlignRight);
     label.setStyleSheet("color: #e0e879");

@@ -49,6 +49,8 @@ procs = [
   PythonProcess("drivelog", "selfdrive.carrot.tools.drivelog"),  # small text log in /data/drivelog while onroad
   # persistent: works only offroad - shows what CAN the panda hears when the car is on but no ignition is seen
   PythonProcess("can_diag", "selfdrive.carrot.tools.can_diag", persistent=True),
+  # OPTECH web page on the same wifi, http://<device IP>:7000 (고급 > 웹 접속, user 2026-11-27: like carrot)
+  PythonProcess("optech_web", "selfdrive.optech_web.server", persistent=True),
   #PythonProcess("logmessaged", "selfdrive.logmessaged", persistent=True),
   PythonProcess("pandad", "selfdrive.boardd.pandad", persistent=True),
   PythonProcess("paramsd", "selfdrive.locationd.paramsd"),
