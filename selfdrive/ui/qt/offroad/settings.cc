@@ -7,6 +7,12 @@
 #include <memory>
 
 #include <QDebug>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 
 #ifndef QCOM
 #include "selfdrive/ui/qt/offroad/networking.h"
@@ -766,7 +772,119 @@ public:
 static QLabel *carrot_section(const QString &title) {
   QLabel *label = new QLabel(title);
   label->setStyleSheet("font-size: 42px; font-weight: 600; color: #33ab4c; padding-top: 25px; padding-left: 10px;");
+  label->setProperty("optechSection", true);  // optech web: a section title in the settings list
   return label;
+}
+
+// ---- optech web (2026-11-27, like carrot's web settings): the OPTECH menu writes its own item list (tab, section,
+// param, title, description, kind, range / choices) to OPTECH_WEB_META when the UI starts, so the web page
+// (selfdrive/optech_web) shows the same items with the same Korean text and never drifts from the menu.
+// Items carry what the web needs as Qt properties: optechKey / optechType (toggle: ParamControl, number:
+// CValueControl, choice: optech_web_choice) and for choices optechNames / optechValues ----
+static const char *OPTECH_WEB_META = "/data/optech_web/settings_meta.json";
+
+static QStringList optech_index_values(int n) {
+  QStringList v;
+  for (int i = 0; i < n; i++) v << QString::number(i);
+  return v;
+}
+
+static QStringList optech_int_values(const QList<int> &l) {
+  QStringList v;
+  for (int i : l) v << QString::number(i);
+  return v;
+}
+
+// a '이름: 지금 값' + 선택 button: param and its choices (names shown, values stored)
+static void optech_web_choice(QWidget *w, const QString &key, const QStringList &names, const QStringList &values,
+                              bool reboot = false) {
+  w->setProperty("optechKey", key);
+  w->setProperty("optechType", "choice");
+  w->setProperty("optechNames", names);
+  w->setProperty("optechValues", values);
+  if (reboot) w->setProperty("optechReboot", true);
+}
+
+// Items the menu shows only under a condition carry it in optechShowIf ("KEY>0", "KEY=N" number, "KEY==text"), the
+// web page applies the same rule (user 2026-11-27: '카메라 감속' and what is under it were missing on the web).
+// A widget with optechGroup (a car's own settings page) is walked into, its condition passed on to its items.
+// optechNote: an explanation box, optechSpecial: a switch whose stored value the web server works out (camDecel).
+static void optech_web_walk(QLayout *layout, const QString &tab, QString &section, QJsonArray &items,
+                            const QString &inherit = "") {
+  for (int i = 0; i < layout->count(); i++) {
+    QLayoutItem *it = layout->itemAt(i);
+    if (it->layout()) {
+      optech_web_walk(it->layout(), tab, section, items, inherit);
+      continue;
+    }
+    QWidget *w = it->widget();
+    if (!w) continue;
+    if (w->property("optechSection").toBool()) {
+      section = qobject_cast<QLabel *>(w)->text();
+      continue;
+    }
+    const QString own_if = w->property("optechShowIf").toString();
+    const QString show_if = own_if.isEmpty() ? inherit : own_if;
+    if (w->property("optechGroup").toBool()) {
+      for (ListWidget *l : w->findChildren<ListWidget *>(QString(), Qt::FindDirectChildrenOnly)) {
+        optech_web_walk(l->itemLayout(), tab, section, items, show_if);
+      }
+      continue;
+    }
+    if (w->property("optechNote").toBool()) {
+      QJsonObject o;
+      o["tab"] = tab;
+      o["section"] = section;
+      o["type"] = "note";
+      o["key"] = "";
+      o["title"] = "";
+      o["desc"] = qobject_cast<QLabel *>(w)->text();
+      if (!show_if.isEmpty()) o["showIf"] = show_if;
+      items.append(o);
+      continue;
+    }
+    const QString key = w->property("optechKey").toString();
+    AbstractControl *c = qobject_cast<AbstractControl *>(w);
+    // hidden without a known condition: leave it out (it is not meant for this car / setup)
+    if (key.isEmpty() || !c || (w->isHidden() && show_if.isEmpty())) continue;
+    QJsonObject o;
+    o["tab"] = tab;
+    o["section"] = section;
+    o["key"] = key;
+    if (!show_if.isEmpty()) o["showIf"] = show_if;
+    const QString special = w->property("optechSpecial").toString();
+    if (!special.isEmpty()) o["special"] = special;
+    const QString type = w->property("optechType").toString();
+    o["type"] = type;
+    o["title"] = type == "choice" ? c->getTitle().section(": ", 0, 0) : c->getTitle();
+    o["desc"] = c->getDescription();
+    if (type == "number") {
+      o["min"] = w->property("optechMin").toInt();
+      o["max"] = w->property("optechMax").toInt();
+      o["step"] = w->property("optechStep").toInt();
+    } else if (type == "choice") {
+      o["names"] = QJsonArray::fromStringList(w->property("optechNames").toStringList());
+      o["values"] = QJsonArray::fromStringList(w->property("optechValues").toStringList());
+    }
+    if (w->property("optechReboot").toBool()) o["reboot"] = true;
+    items.append(o);
+  }
+}
+
+static void optech_export_web_meta(const QList<QPair<QString, ListWidget *>> &tabs) {
+  QJsonArray items;
+  for (const auto &t : tabs) {
+    QString section;
+    optech_web_walk(t.second->itemLayout(), t.first, section, items);
+  }
+  QDir().mkpath(QFileInfo(OPTECH_WEB_META).absolutePath());
+  QFile f(QString(OPTECH_WEB_META) + ".tmp");
+  if (f.open(QIODevice::WriteOnly)) {
+    f.write(QJsonDocument(items).toJson(QJsonDocument::Compact));
+    f.close();
+    QFile::remove(OPTECH_WEB_META);
+    f.rename(OPTECH_WEB_META);
+  }
 }
 
 CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
@@ -876,23 +994,18 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   startToggles->addItem(hda_mode_btn);
   startToggles->addItem(lfa2_settings);
   // (no 'GPS 확인' button on 고급 since 2026-11-26, user; boardd still powers the uBlox while GpsCheck is set)
-  // EngageWithLong: what the cruise button turns on (controlsd / cruise_helper); no reboot needed
-  auto engage_mode_btn = new ButtonControl("", "선택", "크루즈 버튼으로 openpilot을 켤 때 무엇을 켤지 고릅니다. 조향+가감속 사용: 조향과 가감속이 함께 켜지고, 설정 속도는 그때의 현재 속도입니다. 브레이크를 밟았다 뗐을 때의 동작은 아래 '브레이크 후 다시 켜기'에서 고릅니다. 조향만 사용: 조향만 켜지고, 어떤 버튼이나 페달로도 가감속은 켜지지 않습니다. 어느 쪽이든 크루즈 버튼을 다시 누르면 모두 꺼지고, +/- 버튼은 가감속이 켜져 있을 때 설정 속도만 바꿉니다.");
-  auto engage_mode_name = []() {
-    return Params().getBool("EngageWithLong") ? QString("조향+가감속 사용") : QString("조향만 사용");
-  };
-  engage_mode_btn->setTitle("사용 방식: " + engage_mode_name());  // 이름: 지금 값 (like the other choice buttons)
-  QObject::connect(engage_mode_btn, &ButtonControl::clicked, [=]() {
-    const QStringList names = {"조향+가감속 사용", "조향만 사용"};
-    const QString sel = MultiOptionDialog::getSelection("사용 방식을 고르세요", names, engage_mode_name(), this);
-    if (sel.isEmpty() || sel == engage_mode_name()) return;
-    Params().putBool("EngageWithLong", sel == names[0]);
-    engage_mode_btn->setTitle("사용 방식: " + engage_mode_name());
-  });
+  // '사용 방식' (EngageWithLong: 조향+가감속 / 조향만) was removed 2026-11-27 for carrot's cruise button rule (controlsd
+  // engage_long_user, cruise_helper button_control / stock_scc_follow); this note at the top of 주행 says how the buttons work
+  QLabel *button_note = new QLabel("● 크루즈 버튼: CAN 순정 SCC 차는 누르면 조향이 켜지고, 다시 누르면 모두 꺼집니다. CAN FD 차와 롱컨 차는 SET이나 RES로 켭니다.\n"
+                                   "● SET(-) / RES(+): 가감속을 켭니다. SET은 지금 속도로, RES는 이전 설정 속도로 켜지고, 켜져 있을 때는 설정 속도를 바꿉니다.\n"
+                                   "● CANCEL: 짧게 누르면 가감속만 꺼지고 조향은 남습니다 (SET/RES로 다시 켜기). 0.4초 넘게 누르면 모두 꺼집니다.\n"
+                                   "● 브레이크: 가감속만 꺼지고, 떼면 아래 '브레이크 후 다시 켜기'를 따릅니다.");
+  button_note->setWordWrap(true);
+  button_note->setStyleSheet("font-size: 36px; color: #E0E0E0; background-color: #333333; border-radius: 10px; padding: 20px; margin: 10px 0px;");
 
   // ---- 주행: brake / cruise buttons ----
   cruiseToggles = new ListWidget(this);
-  cruiseToggles->addItem(engage_mode_btn);  // 조향+가감속 사용 / 조향만 사용 (made with the 시작 items above)
+  cruiseToggles->addItem(button_note);  // how the cruise buttons work (replaces the '사용 방식' choice)
   cruiseToggles->addItem(carrot_section("브레이크"));
   // OptechBrakeResumeMode (cruise_helper): what speed control does after the driver brakes and lets go (조향+가감속)
   auto brake_resume_btn = new ButtonControl("", "선택",
@@ -900,7 +1013,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     "현재 속도로 (처음 값): 브레이크로 줄인 그 속도로 다시 켜집니다 (시속 30km 미만에서 앞차를 따라갈 때는 원래 설정 속도). "
     "브레이크로 속도를 줄이면 줄인 속도가 유지됩니다.\n"
     "원래 설정 속도로: 브레이크를 밟기 전의 설정 속도로 다시 가속합니다.\n"
-    "다시 켜지 않음: 순정 크루즈처럼 꺼진 채로 있고, RES나 + 버튼을 눌러야 다시 켜집니다. "
+    "다시 켜지 않음: 순정 크루즈처럼 꺼진 채로 있고, RES(+)나 SET(-)을 눌러야 다시 켜집니다. "
     "'스마트 크루즈 컨트롤 작동조건이 아님' 메시지가 자주 뜨면 이것을 고르세요.");
   const QStringList brake_resume_names = {"원래 설정 속도로", "현재 속도로", "다시 켜지 않음"};
   auto brake_resume_name = [=]() {
@@ -916,6 +1029,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     Params().put("OptechBrakeResumeMode", std::to_string(brake_resume_names.indexOf(sel)));
     brake_resume_btn->setTitle(brake_resume_name());
   });
+  optech_web_choice(brake_resume_btn, "OptechBrakeResumeMode", brake_resume_names, {"0", "1", "2"});
   cruiseToggles->addItem(brake_resume_btn);
   // OptechGasResume (cruise_helper): brake, then straight onto the gas also brings speed control back (driver feedback)
   cruiseToggles->addItem(new ParamControl("OptechGasResume", "악셀로 다시 켜기",
@@ -953,13 +1067,17 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   }
   ToggleControl *cam_decel = new ToggleControl("카메라 감속", "과속카메라 앞에서 제한 속도까지 미리 줄입니다. 켜면 아래에 동작 설명이 나옵니다.", ROAD_ICON,
                                                std::atoi(Params().get("AutoNaviSpeedCtrl").c_str()) > 0, this);
+  // optech web: on = the value for the chosen 내비 연동 방식 (navi_ctrl), worked out by the web server like here
+  cam_decel->setProperty("optechKey", "AutoNaviSpeedCtrl");
+  cam_decel->setProperty("optechType", "toggle");
+  cam_decel->setProperty("optechSpecial", "camDecel");
   // shown right under '카메라 감속' while it is on: how it works with the navigation link and with the built-in DB
   QLabel *cam_note = new QLabel("● 과속카메라 앞 '감속 시작'에 정한 시간(처음 값 22초) 전부터 설정 속도를 조금씩 내려서, '감속 끝'(6초 전)까지 '목표 속도'(처음 값: 제한 속도 그대로 100%)에 맞춥니다. "
                                 "구간단속은 구간이 끝날 때까지 제한 속도를 지킵니다.\n"
-                                "● 내비 연동(TmapNda·당근내비): 폰 내비 앱이 보내는 카메라 정보를 먼저 쓰고, 앱 정보가 없을 때는 내장 카메라 DB와 차 순정 내비의 카메라 정보로 채웁니다.\n"
+                                "● 내비 연동(TmapNda·당근내비): 폰 내비 앱이 보내는 카메라 정보를 먼저 쓰고, 앱 정보가 없을 때는 내장 카메라 DB로 채웁니다.\n"
                                 "● 내장 카메라 DB만(내비 연동 '사용 안 함'): 내비 앱 없이 기기 GPS와 전국 카메라 위치(약 3만 1천 대)로 찾습니다. "
                                 "이동식·새 카메라는 모르고, 반대 차로의 카메라에도 줄일 수 있습니다.\n"
-                                "● '사용 방식'이 조향+가감속일 때만 속도를 줄입니다. GPS가 안 잡히면 동작하지 않습니다.");
+                                "● 가감속이 켜져 있을 때만 속도를 줄입니다. GPS가 안 잡히면 동작하지 않습니다.");
   cam_note->setWordWrap(true);
   cam_note->setStyleSheet("font-size: 36px; color: #E0E0E0; background-color: #333333; border-radius: 10px; padding: 20px; margin: 10px 0px;");
   // AutoNaviSpeedCtrlStart / End / SafetyFactor (cruise_helper reads them while driving: no reboot needed)
@@ -991,7 +1109,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     "사용 안 함: 내비 앱 정보를 받지 않고 내장 카메라 DB만 씁니다.\n"
     "TmapNda(처음 값): 앱의 오픈파일럿 연결이 당근 방식이든 NDA 방식이든 모두 받습니다. 앱에서 NDA 방식으로 두면 주행 화면에 TMAP으로 떠서 당근내비(CARROT)와 구별됩니다.\n"
     "당근내비: 당근 방식으로 받습니다.\n"
-    "TmapNda·당근내비 공통: 폰과 C2가 같은 와이파이(핫스팟)에 붙어 있어야 합니다. 앱 정보가 없을 때는 내장 카메라 DB와 차 순정 내비의 카메라 정보로 채웁니다.\n"
+    "TmapNda·당근내비 공통: 폰과 C2가 같은 와이파이(핫스팟)에 붙어 있어야 합니다. 앱 정보가 없을 때는 내장 카메라 DB로 채웁니다.\n"
     "'카메라 감속'이 켜져 있을 때 적용되고, 바꾼 뒤 재부팅해야 적용됩니다.",
     {"사용 안 함", "TmapNda", "당근내비"}, 1, [=](int cam_v) {
       Params cam_params;
@@ -1001,6 +1119,8 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   QList<QWidget*> cam_group = {cam_note};
   cam_group += cam_tune;
   cam_group += QList<QWidget*>{cam_haptic, navi_mode, cam_db};
+  for (auto w : cam_group) w->setProperty("optechShowIf", "AutoNaviSpeedCtrl>0");  // optech web: as below
+  cam_note->setProperty("optechNote", true);
   QObject::connect(cam_decel, &ToggleControl::toggleFlipped, [=](bool cam_on) {
     Params cam_params;
     const int cam_mode = std::atoi(cam_params.get("OptechNaviLinkMode").c_str());
@@ -1028,6 +1148,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     "신호등을 직접 보는 것이 아니라, 주행 모델이 멈출지 출발할지 예측한 것으로 판단합니다. "
     "앞차가 출발할 때도 울릴 수 있고, 늦거나 빠를 수 있으니 출발 전에는 꼭 신호를 직접 확인하세요. "
     "주행 화면의 신호등 표시도 같은 판단으로 켜집니다.", ROAD_ICON, this);
+  green_alert->setProperty("optechShowIf", "OptechSignalEnable=1");  // optech web: as below
   cruiseToggles->addItem(green_alert);
   // visibility only after addItem (a widget without a parent would open as its own window, see 카메라 감속 above)
   green_alert->setVisible(Params().getBool("OptechSignalEnable"));
@@ -1084,6 +1205,8 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
       {3, new CValueControl("OptechLqrKi", "LQR 적분 (Ki, 0.001 단위)", "오래 남은 차이를 메우는 세기입니다. 처음 값 16.", ROAD_ICON, 0, 100, 1)},
       {3, new CValueControl("OptechLqrDcGain", "LQR DC 게인 (0.00001 단위)", "핸들 각도와 조향 힘의 비율입니다. 처음 값 265.", ROAD_ICON, 100, 500, 5)},
     };
+    // optech web: each method's values only while that method is chosen (as lm_refresh does here)
+    for (auto& v : *vals) v.ctl->setProperty("optechShowIf", "OptechLatMethod=" + QString::number(v.method));
     auto lm_refresh = [=]() {
       const int m = lm_mode();
       lm_btn->setTitle("조향 방식: " + lm_names[m]);
@@ -1099,6 +1222,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
       lm_refresh();
       ConfirmationDialog::alert("기기를 다시 켜야 적용됩니다.", this);
     });
+    optech_web_choice(lm_btn, "OptechLatMethod", lm_names, optech_index_values(lm_names.size()), true);
     steerToggles->addItem(lm_btn);
     for (auto& v : *vals) steerToggles->addItem(v.ctl);
     lm_refresh();
@@ -1131,6 +1255,8 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   steerToggles->addItem(torqueFriction);
   // show the two torque values only while 토크 사용자 설정 is on
   auto showTorqueValues = [=](bool on) { torqueAccel->setVisible(on); torqueFriction->setVisible(on); };
+  torqueAccel->setProperty("optechShowIf", "LateralTorqueCustom=1");  // optech web: as showTorqueValues
+  torqueFriction->setProperty("optechShowIf", "LateralTorqueCustom=1");
   QObject::connect(torqueCustom, &ToggleControl::toggleFlipped, showTorqueValues);
   showTorqueValues(Params().getBool("LateralTorqueCustom"));
 
@@ -1160,6 +1286,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
       Params().put("OptechSettingsTimeout", std::to_string(keep_secs[keep_names.indexOf(sel)]));
       keep_btn->setTitle(keep_name());
     });
+    optech_web_choice(keep_btn, "OptechSettingsTimeout", keep_names, optech_int_values(keep_secs));
     dispToggles->addItem(keep_btn);
   }
   // OptechDriveDim '주행 중 밝기' (ui.cc Device::updateBrightness): in D only (not N / P / R), 30 s without a touch
@@ -1197,6 +1324,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
                                  "· 터치한 뒤 30초 동안 안 만지면 · N·P·R에서 D로 바꾸고 30초가 지나면", this);
       }
     });
+    optech_web_choice(dim_btn, "OptechDriveDim", dim_names, optech_int_values(dim_pcts));
     dispToggles->addItem(dim_btn);
   }
   dispToggles->addItem(new ParamControl("OptechShowRecordBtn", "녹화 버튼",
@@ -1204,12 +1332,12 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     "(녹화 중에는 버튼이 빨개집니다), 다시 누르면 멈춥니다. 영상은 3분마다 나뉘어 기기 저장공간(videos 폴더)에 남습니다. "
     "주행 영상을 남기고 싶을 때만 켜세요. 끄면 버튼이 사라지고 하던 녹화도 멈춥니다.", SHELL_ICON, this));
   dispToggles->addItem(new ParamControl("OptechShowGpsSpeed", "GPS 속도",
-    "켜 두면(초록색) 주행 화면 설정 속도 칸 오른쪽 작은 칸에 GPS로 잰 속도(km/h)를 초록 숫자로 보여 줍니다. 계기판 속도는 실제보다 몇 % 높게 "
+    "켜 두면(초록색) 주행 화면 설정 속도 칸 아래 작은 칸에 GPS로 잰 속도(km/h)를 초록 숫자로 보여 줍니다. 계기판 속도는 실제보다 몇 % 높게 "
     "나오므로, 실제로 몇 km/h로 달리는지 볼 때 씁니다. GPS가 안 잡히면 숫자 대신 초록 가로 막대가 나옵니다. 끄면 칸이 사라집니다.", SHELL_ICON, this));
   // (no '시간 표시' (ShowDateTime): the optech 주행 화면 has no clock, user 2026-11-23)
   // optech (user 2026-11-26): the 0 / 1 items are on/off switches like 녹화 버튼 (ui.cc still reads them with atoi)
   dispToggles->addItem(new ParamControl("ShowTpms", "타이어 공기압", "켜 두면(초록색) 주행 화면 오른쪽 맨 아래 칸에 네 바퀴의 타이어 공기압(psi)을 보여 줍니다. 위 줄이 앞바퀴(왼쪽·오른쪽), 아래 줄이 뒷바퀴입니다.", SHELL_ICON, this));
-  dispToggles->addItem(new ParamControl("ShowGpsInfo", "GPS 상태", "켜 두면(초록색) 주행 화면 왼쪽 위(내비 연결 표시 옆)에 GPS가 잡혔는지와 신호 세기(막대 4칸)를 보여 줍니다. 초록: 잘 잡힘, 주황: 찾는 중·약함. GPS는 시동이 켜져 있을 때만 동작합니다.", SHELL_ICON, this));
+  dispToggles->addItem(new ParamControl("ShowGpsInfo", "GPS 상태", "켜 두면(초록색) 주행 화면 왼쪽 위(배터리 칸 옆)에 'GPS'와 신호 세기(막대 4칸)를 보여 줍니다. 초록: 잡힘, 빨강: 안 잡힘(막대도 모두 꺼짐). GPS는 시동이 켜져 있을 때만 동작합니다.", SHELL_ICON, this));
   dispToggles->addItem(new ParamControl("ShowDeviceState", "기기 상태", "켜 두면(초록색) 주행 화면 오른쪽 가운데 칸에 기기의 CPU 온도와 CPU 사용률을 보여 줍니다. 80°C를 넘거나 사용률이 90%를 넘으면 빨갛게 깜빡입니다.", SHELL_ICON, this));
   dispToggles->addItem(new ParamControl("ShowBlindSpot", "후측방(BSD) 경고", "켜 두면(초록색) 옆 차로 뒤쪽에 차가 있을 때 도로 양옆(앞차 정보 옆)에 노란 차량 표시가 뜹니다. 그쪽으로 방향지시등을 켜면 그 표시가 깜빡입니다. 시속 30km 이상에서만 보이고, 차에 후측방 감지(BSD)가 있어야 합니다.", SHELL_ICON, this));
   // ShowRadarInfo '레이더 물체 표시' (paint.cc ui_draw_radar_info): 0 off, 1 moving objects + speed,
@@ -1234,12 +1362,13 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
       Params().put("ShowRadarInfo", std::to_string(radar_names.indexOf(sel)));
       radar_btn->setTitle(radar_name());
     });
+    optech_web_choice(radar_btn, "ShowRadarInfo", radar_names, optech_index_values(radar_names.size()));
     dispToggles->addItem(radar_btn);
   }
-  dispToggles->addItem(new ParamControl("ShowConnInfo", "연결 상태 표시", "켜 두면(초록색) 주행 화면 왼쪽 위에 연결 상태를 보여 줍니다.\nTMAP: TmapNda가 NDA 방식으로 보내는 중\nCARROT: 당근 방식으로 들어옴 (당근내비, 당근 방식으로 설정한 TmapNda)\n초록은 정보가 들어오는 중, 회색은 연결됐지만 아직 정보가 없음\nHDA(보라): 차 순정 내비의 카메라 정보를 쓰는 중\nSCC2(빨강): SCC 버스2(롱컨) 차량\nRADAR(주황): 레이더 트랙 사용 중", SHELL_ICON, this));
+  dispToggles->addItem(new ParamControl("ShowConnInfo", "연결 상태 표시", "켜 두면(초록색) 주행 화면 왼쪽 위에 연결 상태를 보여 줍니다.\nTMAP: TmapNda가 NDA 방식으로 보내는 중\nCARROT: 당근 방식으로 들어옴 (당근내비, 당근 방식으로 설정한 TmapNda)\n초록은 정보가 들어오는 중, 회색은 연결됐지만 아직 정보가 없음\nSCC2(빨강): SCC 버스2(롱컨) 차량\nRADAR(주황): 레이더 트랙 사용 중", SHELL_ICON, this));
   // '운전자 모니터링 아이콘' (ShowDmInfo 0 / 1); the mode itself is chosen on the 토글 page (optech_dm_mode)
   dmIcon = new ToggleControl("운전자 모니터링 아이콘",
-    "주행 화면 오른쪽 아래(녹화 버튼을 켜 두면 그 왼쪽)에 운전자 모니터링 아이콘(얼굴 모양)을 보여 줍니다. 얼굴을 잘 보고 있으면 선명하게, 아니면 흐리게 보입니다. 토글 화면의 운전자 모니터링이 '기본 사용'일 때만 쓸 수 있습니다.",
+    "주행 화면 왼쪽 아래에 운전자 모니터링 아이콘(얼굴 모양)을 보여 줍니다. 얼굴을 잘 보고 있으면 선명하게, 아니면 흐리게 보입니다. 토글 화면의 운전자 모니터링이 '기본 사용'일 때만 쓸 수 있습니다.",
     SHELL_ICON, std::atoi(Params().get("ShowDmInfo").c_str()) >= 1, this);
   QObject::connect(dmIcon, &ToggleControl::toggleFlipped, [=](bool on) {
     if (optech_dm_mode() == 0) Params().put("ShowDmInfo", on ? "1" : "0");
@@ -1249,6 +1378,12 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   // ---- 고급: experimental / developer ----
   advancedToggles = new ListWidget(this);
   advancedToggles->addItem(carrot_section("기기"));
+  // OptechWebServer (selfdrive/optech_web/server.py, user 2026-11-27: like carrot's web page on the same wifi)
+  advancedToggles->addItem(new ParamControl("OptechWebServer", "웹 접속 (같은 와이파이)",
+    "켜 두면(초록색) 같은 와이파이에 연결된 휴대폰·PC의 인터넷 창(브라우저)에서 http://[기기 IP]:7000 으로 들어와 "
+    "기기 상태와 지금 화면을 보고, 주행 기록·녹화 영상을 받고, OPTECH 설정을 바꾸고, 업데이트·다시 켜기를 할 수 있습니다. "
+    "기기 IP는 홈 화면 왼쪽에 있습니다. 같은 와이파이의 누구나 들어올 수 있으니 공용 와이파이에서는 끄세요. "
+    "바꾼 뒤 다시 켜야 적용됩니다. 처음 값: 켜짐", SHELL_ICON, this));
   // OptechOffShutdown (autoshutdownd): after a drive, turn the device off this long after the car is off (tester feedback)
   {
     auto off_btn = new ButtonControl("", "선택",
@@ -1270,6 +1405,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
       Params().put("OptechOffShutdown", std::to_string(off_secs[off_names.indexOf(sel)]));
       off_btn->setTitle(off_name());
     });
+    optech_web_choice(off_btn, "OptechOffShutdown", off_names, optech_int_values(off_secs));
     advancedToggles->addItem(off_btn);
   }
   advancedToggles->addItem(new ParamControl("OpkrHotspotOnBoot", "부팅 시 핫스팟 켜기", "켜 두면 기기가 켜질 때 핫스팟(테더링)이 자동으로 켜집니다.", SHELL_ICON, this));
@@ -1354,9 +1490,18 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     auto op_long = new ParamControl("ExperimentalLongitudinalEnabled", "openpilot 가감속 제어 (알파)", "CAN FD 현대·기아용 롱컨 스위치입니다. 일반 CAN 현대·기아는 이 스위치 대신 토글의 '롱컨'으로 롱컨을 켜지만, 실험 모드 스위치는 이 값이 켜져 있어야 동작합니다. 켜면 자동 긴급 제동(AEB)이 꺼질 수 있습니다.", SHELL_ICON, this);
     op_long->setConfirmation(true, false);
     advancedToggles->addItem(op_long);
-    auto e2e = new ParamControl("ExperimentalMode", "실험 모드", "가감속을 항상 주행 모델 주도(blended)로 고정합니다. apilot은 평소 레이더 방식(acc)과 모델 방식을 상황에 따라 자동으로 바꾸고 신호 정지도 자체 기능으로 하므로 보통은 꺼 두는 것을 권장합니다. 롱컨(openpilot 가감속 제어)일 때만 적용됩니다. 알파 단계 기능이라 실수가 있을 수 있습니다.", SHELL_ICON, this);
+    auto e2e = new ParamControl("ExperimentalMode", "실험 모드", "가감속을 항상 E2E(주행 모델이 판단하는 가감속)로 고정합니다. 앞차가 없어도 빨간불·정지선 앞에서 서고 커브 앞에서 줄이지만, 앞차를 따라갈 때도 모델이 가감속을 정해서 레이더 방식(ACC)보다 덜 부드러울 수 있습니다. 상황에 따라 바꾸려면 아래 '자동 E2E / ACC 전환'을 쓰세요(켜 두면 그쪽이 먼저 적용됩니다). 롱컨(openpilot 가감속 제어)일 때만 적용됩니다. 알파 단계 기능이라 실수가 있을 수 있습니다.", SHELL_ICON, this);
     e2e->setConfirmation(true, true);
     advancedToggles->addItem(e2e);
+    // OptechAutoE2E (longitudinal_planner.update_auto_e2e, spst dp_long_de2e / dragonpilot dynamic e2e)
+    auto auto_e2e = new ParamControl("OptechAutoE2E", "자동 E2E / ACC 전환",
+      "상황에 따라 E2E(주행 모델이 판단하는 가감속)와 ACC(레이더로 앞차를 따라가는 가감속)를 자동으로 바꿉니다(optech-spst와 같은 기능).\n"
+      "앞차를 따라갈 때는 ACC로 부드럽게 따라가고, 앞차가 없을 때 주행 모델이 '앞에서 서야 한다'고 보면(빨간불·정지선·급한 커브), "
+      "정차 중일 때, 시속 75km 아래에서 방향지시등을 켰을 때, 앞차가 갑자기 가까워져 세게 서야 할 때는 E2E로 바꿉니다.\n"
+      "켜 두면 '실험 모드'보다 먼저 적용됩니다. 롱컨(openpilot 가감속 제어)일 때만 적용됩니다. 시험 기능이라 항상 주의하세요.",
+      SHELL_ICON, this);
+    auto_e2e->setConfirmation(true, false);
+    advancedToggles->addItem(auto_e2e);
   }
   advancedToggles->addItem(carrot_section("개발용"));
   advancedToggles->addItem(new ParamControl("ShowDebugUI", "디버그 정보", "켜 두면 주행 화면에 개발용 상세 정보를 글자로 보여줍니다.", SHELL_ICON, this));
@@ -1386,6 +1531,9 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
 
   togglesCarrot(0);
 
+  // optech web: the item list for the web page (see optech_export_web_meta)
+  optech_export_web_meta({{"시작", startToggles}, {"주행", cruiseToggles}, {"속도", speedToggles},
+                          {"조향", steerToggles}, {"화면", dispToggles}, {"고급", advancedToggles}});
 }
 
 
@@ -1416,6 +1564,7 @@ void CarrotPanel::showEvent(QShowEvent *event) {
 ButtonControl *CarrotPanel::choice(const QString &param, const QString &title, const QString &desc, const QStringList &names,
                                    int def, std::function<void(int)> changed) {
   ButtonControl *btn = new ButtonControl("", "선택", desc);
+  optech_web_choice(btn, param, names, optech_index_values(names.size()));
   const std::string key = param.toStdString();
   auto current = [=]() {
     const std::string v = Params().get(key);
@@ -1457,6 +1606,12 @@ CValueControl::CValueControl(const QString& params, const QString& title, const 
     m_min = min;
     m_max = max;
     m_unit = unit;
+    // optech web: a number with -/+ (settings.cc optech_export_web_meta)
+    setProperty("optechKey", params);
+    setProperty("optechType", "number");
+    setProperty("optechMin", min);
+    setProperty("optechMax", max);
+    setProperty("optechStep", unit);
 
     label.setAlignment(Qt::AlignVCenter | Qt::AlignRight);
     label.setStyleSheet("color: #e0e879");

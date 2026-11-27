@@ -16,6 +16,8 @@ class Sidebar : public QFrame {
   Q_PROPERTY(QString netType MEMBER net_type NOTIFY valueChanged);
   Q_PROPERTY(int netStrength MEMBER net_strength NOTIFY valueChanged);
   Q_PROPERTY(QString wifiAddr MEMBER wifi_addr NOTIFY valueChanged);
+  Q_PROPERTY(int battPercent MEMBER batt_percent NOTIFY valueChanged);
+  Q_PROPERTY(bool battCharging MEMBER batt_charging NOTIFY valueChanged);
 
 public:
   explicit Sidebar(QWidget* parent = 0);
@@ -56,6 +58,8 @@ protected:
   QString net_type;
   int net_strength = 0;
   QString wifi_addr = "--";
+  int batt_percent = 0;        // optech: phone battery under the IP, 0 = no battery (C2) / not known
+  bool batt_charging = false;
 
 private:
   std::unique_ptr<PubMaster> pm;

@@ -74,13 +74,13 @@ struct Alert {
       // Handle controls timeout
       if (sm.rcv_frame("controlsState") < started_frame) {
         // car is started, but controlsState hasn't been seen at all
-        return {"오픈파일럿을 켤 수 없음", "제어 프로그램 시작 대기 중",
+        return {"openpilot Unavailable", "Waiting for controls to start",
                 "controlsWaiting", cereal::ControlsState::AlertSize::MID,
                 AudibleAlert::NONE};
       } else if (controls_missing > CONTROLS_TIMEOUT && !Hardware::PC()) {
         // car is started, but controls is lagging or died
         if (cs.getEnabled() && (controls_missing - CONTROLS_TIMEOUT) < 10) {
-          return {"즉시 운전하세요", "제어 프로그램 응답 없음",
+          return {"즉시 핸들 잡으세요", "제어 프로그램 응답 없음",
                   "controlsUnresponsive", cereal::ControlsState::AlertSize::FULL,
                   AudibleAlert::WARNING_IMMEDIATE};
         } else {
@@ -219,7 +219,7 @@ public:
   int settings_timeout_s = 180;  // optech '화면 유지 시간' (OptechSettingsTimeout seconds, -1: never)
   int drive_dim = 0;             // optech '주행 중 밝기' (OptechDriveDim %, 0: off, -1: screen off)
   bool show_record_btn = false;  // optech '녹화 버튼' (OptechShowRecordBtn)
-  bool show_gps_speed = true;    // optech 'GPS 속도' (OptechShowGpsSpeed), the box right of the set speed
+  bool show_gps_speed = true;    // optech 'GPS 속도' (OptechShowGpsSpeed), the box under the set speed
   bool radar_tracks = false;     // EnableRadarTracks (badge)
   int path_offset = 0;           // PathOffset cm (optech wheel panel)
   bool optech_tune_open = false; // optech wheel panel shown

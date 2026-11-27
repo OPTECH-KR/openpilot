@@ -15,6 +15,8 @@ REMOTE_HASH=$(git rev-parse --verify origin/$BRANCH)
 # release branches (optech-hkg, optech-hkg-fd, optech-spst) are published as release commits and may be rewritten:
 # take the published code as it is instead of merging (git pull fails on rewritten history)
 if [ -n "$REMOTE_HASH" ]; then
+  # where '이전 버전으로 되돌리기' (optech_git.sh restore) goes back to
+  [ "$HASH" != "$REMOTE_HASH" ] && echo "$BRANCH $HASH $(git remote get-url origin)" > /data/optech_prev_commit
   /usr/bin/git reset --hard origin/$BRANCH
 fi
 
