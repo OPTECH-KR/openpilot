@@ -1148,7 +1148,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   // (no '시간 표시' (ShowDateTime): the optech 주행 화면 has no clock, user 2026-11-23)
   // optech (user 2026-11-26): the 0 / 1 items are on/off switches like 녹화 버튼 (ui.cc still reads them with atoi)
   dispToggles->addItem(new ParamControl("ShowTpms", "타이어 공기압", "켜 두면(초록색) 주행 화면 오른쪽 맨 아래 칸에 네 바퀴의 타이어 공기압(psi)을 보여 줍니다. 위 줄이 앞바퀴(왼쪽·오른쪽), 아래 줄이 뒷바퀴입니다.", SHELL_ICON, this));
-  dispToggles->addItem(new ParamControl("ShowGpsInfo", "GPS 상태", "켜 두면(초록색) 주행 화면 왼쪽 위(내비 연결 표시 옆)에 GPS가 잡혔는지와 신호 세기(막대 4칸)를 보여 줍니다. 초록: 잘 잡힘, 주황: 찾는 중·약함. GPS는 시동이 켜져 있을 때만 동작합니다.", SHELL_ICON, this));
+  dispToggles->addItem(new ParamControl("ShowGpsInfo", "GPS 상태", "켜 두면(초록색) 주행 화면 왼쪽 위(배터리 칸 옆)에 'GPS'와 신호 세기(막대 4칸)를 보여 줍니다. 초록: 잡힘, 빨강: 안 잡힘(막대도 모두 꺼짐). GPS는 시동이 켜져 있을 때만 동작합니다.", SHELL_ICON, this));
   dispToggles->addItem(new ParamControl("ShowDeviceState", "기기 상태", "켜 두면(초록색) 주행 화면 오른쪽 가운데 칸에 기기의 CPU 온도와 CPU 사용률을 보여 줍니다. 80°C를 넘거나 사용률이 90%를 넘으면 빨갛게 깜빡입니다.", SHELL_ICON, this));
   dispToggles->addItem(new ParamControl("ShowBlindSpot", "후측방(BSD) 경고", "켜 두면(초록색) 옆 차로 뒤쪽에 차가 있을 때 도로 양옆(앞차 정보 옆)에 노란 차량 표시가 뜹니다. 그쪽으로 방향지시등을 켜면 그 표시가 깜빡입니다. 시속 30km 이상에서만 보이고, 차에 후측방 감지(BSD)가 있어야 합니다.", SHELL_ICON, this));
   // ShowRadarInfo '레이더 물체 표시' (paint.cc ui_draw_radar_info): 0 off, 1 moving objects + speed,
