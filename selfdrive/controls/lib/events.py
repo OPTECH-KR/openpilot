@@ -365,12 +365,12 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
 
   # Car is recognized, but marked as dashcam only
   EventName.startupNoControl: {
-    ET.PERMANENT: StartupAlert("Dashcam mode"),
+    ET.PERMANENT: StartupAlert("Dashcam mode", "Always keep hands on wheel and eyes on road"),
   },
 
   # Car is not recognized
   EventName.startupNoCar: {
-    ET.PERMANENT: StartupAlert("Dashcam mode for unsupported car"),
+    ET.PERMANENT: StartupAlert("Dashcam mode for unsupported car", "Always keep hands on wheel and eyes on road"),
   },
 
   EventName.startupNoFw: {
@@ -398,7 +398,7 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
   # See https://github.com/commaai/openpilot/wiki/Fingerprinting for more information
   EventName.carUnrecognized: {
     ET.PERMANENT: NormalPermanentAlert("Dashcam Mode",
-                                       "차종을 알 수 없음",
+                                       "Car Unrecognized",
                                        priority=Priority.LOWEST),
   },
 
