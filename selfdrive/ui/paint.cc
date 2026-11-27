@@ -1160,6 +1160,14 @@ static void drawOptechHud(const UIState* s) {
         const char* nav = optech_nav_badge(activeNDA, road.getNaviSource(), &nav_fill);
         if (nav) bx += optech_badge(s, bx, ry, BH, nav, nav_fill) + 14;
         if (radar_tracks) bx += optech_badge(s, bx, ry, BH, "RADAR", nvgRGBA(230, 130, 20, 235)) + 14;
+        // how openpilot does the speed right now (user 2026-11-27: "e2e모드를 켰는데 ... 상황따라서 바뀌나?"): while
+        // openpilot long is on, E2E (teal: the driving model decides, longitudinalPlan.mpcMode 1 = 'blended' -
+        // 실험 모드, or 자동 E2E / ACC 전환 picking it) or ACC (blue: follows the radar lead). Last in the row, so
+        // the other badges stay put when it comes and goes with engaging
+        if (car_params.getOpenpilotLongitudinalControl() && enabled && longActiveUser > 0) {
+            const bool e2e = sm["longitudinalPlan"].getLongitudinalPlan().getMpcMode() == 1;
+            bx += optech_badge(s, bx, ry, BH, e2e ? "E2E" : "ACC", e2e ? nvgRGBA(0, 150, 140, 235) : nvgRGBA(24, 95, 165, 235)) + 14;
+        }
     }
     // user 2026-11-25 (marked on a screenshot): the set speed + signs block starts lower, at y 180, whether the badge
     // row is shown or not
