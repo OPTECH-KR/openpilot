@@ -93,7 +93,7 @@ def manager_init() -> None:
     ("ShowGpsInfo", "1"),
     ("AutoShutdown", "1"),
     ("GpsSource", "1"),
-    ("EngageWithLong", "1"),
+    # ("EngageWithLong" '사용 방식' removed 2026-11-27: carrot's cruise button rule, nothing reads it any more)
     # Ray EV / Porter II EV (no SCC): each car its own settings page (start tab, shown when the car is chosen)
     ("RaySpeedButtons", "0"),      # let openpilot press the cruise buttons to set the speed (no pedal)
     ("RayPedal", "0"),             # comma pedal: openpilot long through the accelerator
@@ -280,7 +280,7 @@ def manager_init() -> None:
   for k in ("EnableAutoEngage", "CruiseOnDist", "AutoResumeFromGas", "AutoCancelFromGasMode", "KeepEngage", "TrafficStopMode", "CruiseControlMode", "DisengageOnAccelerator"):
     params.put(k, "0")
   # apilot's own brake release resume (AutoResumeFromBrakeRelease) is pinned off below and removed from the menu;
-  # cruise_helper resumes at the set speed instead (EngageWithLong). These conditions stay pinned for its code path:
+  # cruise_helper resumes at the set speed instead (brake_paused). These conditions stay pinned for its code path:
   for k, v in (("AutoResumeFromBrakeReleaseLeadCar", "1"), ("AutoResumeFromBrakeReleaseDist", "20"),
                ("AutoResumeFromBrakeCarSpeed", "40"), ("AutoResumeFromBrakeReleaseTrafficSign", "0"),
                ("TFollowGap1", "110"), ("TFollowGap2", "120"), ("TFollowGap3", "140"), ("TFollowGap4", "160"),
@@ -300,7 +300,7 @@ def manager_init() -> None:
                ("CruiseButtonMode", "0"), ("CruiseSpeedMin", "10"),
                ("ShowHudMode", "7"),
                ("GpsSource", "1"),
-               # brake release resume is done by cruise_helper (EngageWithLong): the old apilot conditions are off
+               # brake release resume is done by cruise_helper (brake_paused): the old apilot conditions are off
                ("AutoResumeFromBrakeRelease", "0"), ("BrakeResumeSpeedMode", "1")):  # GPS is always the phone built-in one; the selector is removed  # screen mode fixed to the optech 주행 화면 (7); the selector is removed
     params.put(k, v)
 

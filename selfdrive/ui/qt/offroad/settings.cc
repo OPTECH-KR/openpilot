@@ -820,23 +820,18 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   startToggles->addItem(selectCarBtn);
   for (auto page : ccOnlyPages) startToggles->addItem(page);
   // (no 'GPS 확인' button on 고급 since 2026-11-26, user; boardd still powers the uBlox while GpsCheck is set)
-  // EngageWithLong: what the cruise button turns on (controlsd / cruise_helper); no reboot needed
-  auto engage_mode_btn = new ButtonControl("", "선택", "크루즈 버튼으로 openpilot을 켤 때 무엇을 켤지 고릅니다. 조향+가감속 사용: 조향과 가감속이 함께 켜지고, 설정 속도는 그때의 현재 속도입니다. 브레이크를 밟았다 뗐을 때의 동작은 아래 '브레이크 후 다시 켜기'에서 고릅니다. 조향만 사용: 조향만 켜지고, 어떤 버튼이나 페달로도 가감속은 켜지지 않습니다. 어느 쪽이든 크루즈 버튼을 다시 누르면 모두 꺼지고, +/- 버튼은 가감속이 켜져 있을 때 설정 속도만 바꿉니다.");
-  auto engage_mode_name = []() {
-    return Params().getBool("EngageWithLong") ? QString("조향+가감속 사용") : QString("조향만 사용");
-  };
-  engage_mode_btn->setTitle("사용 방식: " + engage_mode_name());  // 이름: 지금 값 (like the other choice buttons)
-  QObject::connect(engage_mode_btn, &ButtonControl::clicked, [=]() {
-    const QStringList names = {"조향+가감속 사용", "조향만 사용"};
-    const QString sel = MultiOptionDialog::getSelection("사용 방식을 고르세요", names, engage_mode_name(), this);
-    if (sel.isEmpty() || sel == engage_mode_name()) return;
-    Params().putBool("EngageWithLong", sel == names[0]);
-    engage_mode_btn->setTitle("사용 방식: " + engage_mode_name());
-  });
+  // '사용 방식' (EngageWithLong: 조향+가감속 / 조향만) was removed 2026-11-27 for carrot's cruise button rule (controlsd
+  // engage_long_user, cruise_helper button_control / stock_scc_follow); this note at the top of 주행 says how the buttons work
+  QLabel *button_note = new QLabel("● 크루즈 버튼: 순정 SCC 차는 누르면 조향이 켜지고, 다시 누르면 모두 꺼집니다. 롱컨 차는 SET이나 RES로 켭니다.\n"
+                                   "● SET(-) / RES(+): 가감속을 켭니다. SET은 지금 속도로, RES는 이전 설정 속도로 켜지고, 켜져 있을 때는 설정 속도를 바꿉니다.\n"
+                                   "● CANCEL: 짧게 누르면 가감속만 꺼지고 조향은 남습니다 (SET/RES로 다시 켜기). 0.4초 넘게 누르면 모두 꺼집니다.\n"
+                                   "● 브레이크: 가감속만 꺼지고, 떼면 아래 '브레이크 후 다시 켜기'를 따릅니다.");
+  button_note->setWordWrap(true);
+  button_note->setStyleSheet("font-size: 36px; color: #E0E0E0; background-color: #333333; border-radius: 10px; padding: 20px; margin: 10px 0px;");
 
   // ---- 주행: brake / cruise buttons ----
   cruiseToggles = new ListWidget(this);
-  cruiseToggles->addItem(engage_mode_btn);  // 조향+가감속 사용 / 조향만 사용 (made with the 시작 items above)
+  cruiseToggles->addItem(button_note);  // how the cruise buttons work (replaces the '사용 방식' choice)
   cruiseToggles->addItem(carrot_section("브레이크"));
   // OptechBrakeResumeMode (cruise_helper): what speed control does after the driver brakes and lets go (조향+가감속)
   auto brake_resume_btn = new ButtonControl("", "선택",
@@ -844,7 +839,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     "현재 속도로 (처음 값): 브레이크로 줄인 그 속도로 다시 켜집니다 (시속 30km 미만에서 앞차를 따라갈 때는 원래 설정 속도). "
     "브레이크로 속도를 줄이면 줄인 속도가 유지됩니다.\n"
     "원래 설정 속도로: 브레이크를 밟기 전의 설정 속도로 다시 가속합니다.\n"
-    "다시 켜지 않음: 순정 크루즈처럼 꺼진 채로 있고, RES나 + 버튼을 눌러야 다시 켜집니다. "
+    "다시 켜지 않음: 순정 크루즈처럼 꺼진 채로 있고, RES(+)나 SET(-)을 눌러야 다시 켜집니다. "
     "'스마트 크루즈 컨트롤 작동조건이 아님' 메시지가 자주 뜨면 이것을 고르세요.");
   const QStringList brake_resume_names = {"원래 설정 속도로", "현재 속도로", "다시 켜지 않음"};
   auto brake_resume_name = [=]() {
@@ -903,7 +898,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
                                 "● 내비 연동(TmapNda·당근내비): 폰 내비 앱이 보내는 카메라 정보를 먼저 쓰고, 앱 정보가 없을 때는 내장 카메라 DB와 차 순정 내비의 카메라 정보로 채웁니다.\n"
                                 "● 내장 카메라 DB만(내비 연동 '사용 안 함'): 내비 앱 없이 기기 GPS와 전국 카메라 위치(약 3만 1천 대)로 찾습니다. "
                                 "이동식·새 카메라는 모르고, 반대 차로의 카메라에도 줄일 수 있습니다.\n"
-                                "● '사용 방식'이 조향+가감속일 때만 속도를 줄입니다. GPS가 안 잡히면 동작하지 않습니다.");
+                                "● 가감속이 켜져 있을 때만 속도를 줄입니다. GPS가 안 잡히면 동작하지 않습니다.");
   cam_note->setWordWrap(true);
   cam_note->setStyleSheet("font-size: 36px; color: #E0E0E0; background-color: #333333; border-radius: 10px; padding: 20px; margin: 10px 0px;");
   // AutoNaviSpeedCtrlStart / End / SafetyFactor (cruise_helper reads them while driving: no reboot needed)

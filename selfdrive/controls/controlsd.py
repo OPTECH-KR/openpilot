@@ -31,7 +31,7 @@ from selfdrive.controls.lib.vehicle_model import VehicleModel
 from selfdrive.locationd.calibrationd import Calibration
 from selfdrive.hardware import HARDWARE, TICI, EON
 from selfdrive.manager.process_config import managed_processes
-from selfdrive.controls.lib.cruise_helper import CruiseHelper
+from selfdrive.controls.lib.cruise_helper import CruiseHelper, engage_long_user
 
 GearShifter = car.CarState.GearShifter
 
@@ -651,10 +651,14 @@ class Controls:
             self.state = State.enabled
           self.current_alert_types.append(ET.ENABLE)
           self.v_cruise_helper.initialize_v_cruise(CS)
-          # C2 port (one-button use, 시작 탭 '사용 방식' EngageWithLong, default 조향+가감속): speed control starts
-          # together with steering at the current speed. Off: steering only; speed control starts with a +/- press
-          # as in apilot (the gas-pedal auto resume is forced off here).
-          self.cruise_helper.longActiveUser = 1 if self.params.get_bool("EngageWithLong") else 0
+          # carrot's cruise button rule (2026-11-27, replaces the '사용 방식' choice EngageWithLong): the cruise button
+          # turns steering on, SET/RES turn speed control on. Stock SCC: engaged by the cruise button -> steering only
+          # until the car's SCC is on (the driver's SET/RES, cruise_helper.stock_scc_follow); engaged because the car's
+          # SCC came on (SET/RES with the cruise standby on) -> both. openpilot long: engaged by SET/RES -> both.
+          self.cruise_helper.longActiveUser = engage_long_user(self.CP, CS)
+          diag_write(f"cruise: engaged, {'steering + speed control' if self.cruise_helper.longActiveUser > 0 else 'steering only'} "
+                     f"({'openpilot long' if self.CP.openpilotLongitudinalControl else 'stock SCC'}, car SCC "
+                     f"{'on' if CS.cruiseState.enabled else 'off'}, {CS.vEgo * 3.6:.0f} km/h)")
 
     # Check if openpilot is engaged and actuators are enabled
     self.enabled = self.state in ENABLED_STATES
