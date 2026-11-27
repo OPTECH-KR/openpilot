@@ -348,7 +348,10 @@ class CarInterface(CarInterfaceBase):
       ret.enableBsm = 0x58b in fingerprint[0]
       ret.sccBus = 2 if 1056 in fingerprint[2] else 0 if 1056 in fingerprint[0] else -1
 
-      ret.naviCluster = 1 if 1348 in fingerprint[0] else 0
+      # optech (user 2026-11-27): the car's own navigation (Navi_HU 1348, 'HDA') is not read any more - it gave only a
+      # camera limit with a guessed distance and its purple HDA badge made testers think the phone navigation was
+      # linked. Camera info comes from the phone navigation app or the built-in camera DB only.
+      ret.naviCluster = 0
 
       ret.sccBus = 0
       if Params().get_bool("SccConnectedBus2") and candidate not in NON_SCC_CAR:

@@ -1020,7 +1020,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   // shown right under '카메라 감속' while it is on: how it works with the navigation link and with the built-in DB
   QLabel *cam_note = new QLabel("● 과속카메라 앞 '감속 시작'에 정한 시간(처음 값 22초) 전부터 설정 속도를 조금씩 내려서, '감속 끝'(6초 전)까지 '목표 속도'(처음 값: 제한 속도 그대로 100%)에 맞춥니다. "
                                 "구간단속은 구간이 끝날 때까지 제한 속도를 지킵니다.\n"
-                                "● 내비 연동(TmapNda·당근내비): 폰 내비 앱이 보내는 카메라 정보를 먼저 쓰고, 앱 정보가 없을 때는 내장 카메라 DB와 차 순정 내비의 카메라 정보로 채웁니다.\n"
+                                "● 내비 연동(TmapNda·당근내비): 폰 내비 앱이 보내는 카메라 정보를 먼저 쓰고, 앱 정보가 없을 때는 내장 카메라 DB로 채웁니다.\n"
                                 "● 내장 카메라 DB만(내비 연동 '사용 안 함'): 내비 앱 없이 기기 GPS와 전국 카메라 위치(약 3만 1천 대)로 찾습니다. "
                                 "이동식·새 카메라는 모르고, 반대 차로의 카메라에도 줄일 수 있습니다.\n"
                                 "● 가감속이 켜져 있을 때만 속도를 줄입니다. GPS가 안 잡히면 동작하지 않습니다.");
@@ -1055,7 +1055,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     "사용 안 함: 내비 앱 정보를 받지 않고 내장 카메라 DB만 씁니다.\n"
     "TmapNda(처음 값): 앱의 오픈파일럿 연결이 당근 방식이든 NDA 방식이든 모두 받습니다. 앱에서 NDA 방식으로 두면 주행 화면에 TMAP으로 떠서 당근내비(CARROT)와 구별됩니다.\n"
     "당근내비: 당근 방식으로 받습니다.\n"
-    "TmapNda·당근내비 공통: 폰과 C2가 같은 와이파이(핫스팟)에 붙어 있어야 합니다. 앱 정보가 없을 때는 내장 카메라 DB와 차 순정 내비의 카메라 정보로 채웁니다.\n"
+    "TmapNda·당근내비 공통: 폰과 C2가 같은 와이파이(핫스팟)에 붙어 있어야 합니다. 앱 정보가 없을 때는 내장 카메라 DB로 채웁니다.\n"
     "'카메라 감속'이 켜져 있을 때 적용되고, 바꾼 뒤 재부팅해야 적용됩니다.",
     {"사용 안 함", "TmapNda", "당근내비"}, 1, [=](int cam_v) {
       Params cam_params;
@@ -1311,7 +1311,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     optech_web_choice(radar_btn, "ShowRadarInfo", radar_names, optech_index_values(radar_names.size()));
     dispToggles->addItem(radar_btn);
   }
-  dispToggles->addItem(new ParamControl("ShowConnInfo", "연결 상태 표시", "켜 두면(초록색) 주행 화면 왼쪽 위에 연결 상태를 보여 줍니다.\nTMAP: TmapNda가 NDA 방식으로 보내는 중\nCARROT: 당근 방식으로 들어옴 (당근내비, 당근 방식으로 설정한 TmapNda)\n초록은 정보가 들어오는 중, 회색은 연결됐지만 아직 정보가 없음\nHDA(보라): 차 순정 내비의 카메라 정보를 쓰는 중\nSCC2(빨강): SCC 버스2(롱컨) 차량\nRADAR(주황): 레이더 트랙 사용 중", SHELL_ICON, this));
+  dispToggles->addItem(new ParamControl("ShowConnInfo", "연결 상태 표시", "켜 두면(초록색) 주행 화면 왼쪽 위에 연결 상태를 보여 줍니다.\nTMAP: TmapNda가 NDA 방식으로 보내는 중\nCARROT: 당근 방식으로 들어옴 (당근내비, 당근 방식으로 설정한 TmapNda)\n초록은 정보가 들어오는 중, 회색은 연결됐지만 아직 정보가 없음\nSCC2(빨강): SCC 버스2(롱컨) 차량\nRADAR(주황): 레이더 트랙 사용 중", SHELL_ICON, this));
   // '운전자 모니터링 아이콘' (ShowDmInfo 0 / 1); the mode itself is chosen on the 토글 page (optech_dm_mode)
   dmIcon = new ToggleControl("운전자 모니터링 아이콘",
     "주행 화면 왼쪽 아래에 운전자 모니터링 아이콘(얼굴 모양)을 보여 줍니다. 얼굴을 잘 보고 있으면 선명하게, 아니면 흐리게 보입니다. 토글 화면의 운전자 모니터링이 '기본 사용'일 때만 쓸 수 있습니다.",

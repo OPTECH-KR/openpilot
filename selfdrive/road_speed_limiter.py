@@ -831,19 +831,8 @@ class RoadSpeedLimiter:
 
         self.session_limit = False if cam_limit_speed_left_dist < 50 else self.session_limit
 
+      # optech (user 2026-11-27): the car's own navigation (HDA, CS.speedLimit) is not used any more (interface.py)
       hda_limit_active = False
-      if CS.speedLimit>0 and CS.speedLimitDistance>0:
-        #log = "hda_limit={:.1f},{:.1f}".format(float(CS.speedLimit), CS.speedLimitDistance)
-        hda_limit_active = True
-
-      if cam_limit_speed <= 0:
-        if CS.speedLimit>0 and CS.speedLimitDistance>0:
-          cam_limit_speed_left_dist = CS.speedLimitDistance
-          cam_limit_speed = CS.speedLimit
-          self.session_limit = True if cam_limit_speed_left_dist > 3000 else False
-          log = "HDA_limit={:.1f},{:.1f}".format(float(CS.speedLimit), CS.speedLimitDistance)
-          self.session_limit = False if cam_limit_speed_left_dist < 50 else self.session_limit
-          hda_limit_active = True
 
       section_limit_speed = self.roadLimitSpeed.sectionLimitSpeed
       section_left_dist = self.roadLimitSpeed.sectionLeftDist
