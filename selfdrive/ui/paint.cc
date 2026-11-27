@@ -1346,7 +1346,7 @@ static void drawOptechHud(const UIState* s) {
             if (dbb[2] - dbb[0] > dw - 20) dfs *= (dw - 20) / (dbb[2] - dbb[0]);
             optech_text_vc(s, ccx, dy + bh2 / 2, tu, dfs, COLOR_WHITE, NVG_ALIGN_CENTER);
         };
-        const float sx = lx + SW + 33 + (s->show_gps_speed ? 236 + 24 : 0);
+        const float sx = lx + SW + 33;  // user 2026-11-27: the GPS speed box no longer pushes it right (it is below the set speed)
         const float ccx = sx + ring / 2 + r, ccy = 180 + ring / 2 + r;
         if (limit_speed > 0) {  // a camera / section / bump ahead
             draw_sign(ccx, ccy, limit_speed, bump, true);
@@ -1365,10 +1365,10 @@ static void drawOptechHud(const UIState* s) {
     }
 
     // 5) GPS speed (화면 > 'GPS 속도', OptechShowGpsSpeed): the speed from the GPS - the dashboard speed reads a few %
-    //    high. User 2026-11-26 (marked on a screenshot): a small box right of the set speed box, level with its top,
-    //    in the gap before the big speed; '46 km/h' in the green of 'GPS 잡힘'. No GPS fix -> a green bar.
+    //    high. '46 km/h' in the green of 'GPS 잡힘'. No GPS fix -> a green bar. User 2026-11-27: under the set speed
+    //    box with a gap, as wide as it (right of it, it pushed the speed camera sign away from the set speed)
     if (s->show_gps_speed) {
-        const float gw = 236, gh = 128, gx = lx + SW + 24, gy = 180;  // 180: the set speed box's top (col_y start)
+        const float gw = SW, gh = 128, gx = lx, gy = 180 + SH + 24;  // 180: the set speed box's top (col_y start)
         const NVGcolor gps_c = nvgRGBA(151, 196, 89, 255);
         carrot_round_box(s, gx, gy, gw, gh, nvgRGBA(20, 20, 20, 170), nvgRGBA(235, 235, 235, 200), 18, 3);
         optech_text(s, gx + gw / 2, gy + 46, "GPS 속도", 34, COLOR_WHITE, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
