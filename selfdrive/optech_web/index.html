@@ -37,6 +37,7 @@
   .item .d { color: #9a9a9a; font-size: 13px; margin-top: 6px; white-space: pre-line; display: none; }
   .item.open .d { display: block; }
   .item .more { color: #777; font-size: 12px; margin-left: 4px; }
+  .item.d-note { background: #2b2b2b; color: #d8d8d8; font-size: 13px; white-space: pre-line; line-height: 1.5; }
   .num { display: flex; align-items: center; gap: 6px; }
   .num button { width: 38px; height: 38px; border-radius: 19px; border: 0; background: #3a3a3a; color: #fff; font-size: 20px; }
   .num input { width: 72px; text-align: center; background: #111; color: #e0e879; border: 1px solid #444; border-radius: 8px; padding: 7px 4px; font-size: 16px; }
@@ -162,13 +163,24 @@ async function loadFiles() {
 }
 
 // ---------------- 설정 ----------------
+// the menu's own rule for items it shows only sometimes: "KEY>0", "KEY=N" (number), "KEY==text"
+function shown(it, vals) {
+  if (!it.showIf) return true;
+  const m = it.showIf.match(/^([A-Za-z0-9_]+)(==|=|>)(.*)$/);
+  if (!m) return true;
+  const v = vals[m[1]] === undefined ? '' : vals[m[1]];
+  if (m[2] === '==') return v === m[3];
+  const n = parseInt(v) || 0;
+  return m[2] === '>' ? n > parseInt(m[3]) : n === parseInt(m[3]);
+}
 async function loadSettings() {
-  const r = await api('/api/settings'), s = $('settings'); s.innerHTML = '';
+  const r = await api('/api/settings'), s = $('settings'), y = window.scrollY; s.innerHTML = '';
   if (!r.ok) { s.append(el('div', 'note', r.msg)); return; }
-  setItems = r.items; canChange = r.can_change;
+  canChange = r.can_change;
+  setItems = r.items.filter(it => shown(it, r.vals || {}));
   if (!canChange) s.append(el('div', 'note', '시동이 켜져 있어요. 기어를 P에 놓고 오픈파일럿을 끄면 바꿀 수 있어요.'));
   s.append(el('div', 'small', '항목 이름을 누르면 설명이 나옵니다. 바꾸면 바로 저장되고, 기기 화면의 메뉴는 다시 열 때 바뀐 값이 보입니다.'));
-  const tabs = [...new Set(setItems.map(i => i.tab))];
+  const tabs = [...new Set(setItems.filter(i => i.type !== 'note').map(i => i.tab))];
   if (!tabs.includes(setTab)) setTab = tabs[0];
   const tb = el('div', 'subtabs');
   for (const t of tabs) { const b = el('button', t === setTab ? 'on' : '', t); b.onclick = () => { setTab = t; loadSettings(); }; tb.append(b); }
@@ -176,8 +188,9 @@ async function loadSettings() {
   let sec = null;
   for (const it of setItems.filter(i => i.tab === setTab)) {
     if (it.section !== sec) { sec = it.section; if (sec) s.append(el('div', 'sec', sec)); }
-    s.append(itemView(it));
+    s.append(it.type === 'note' ? el('div', 'item d-note', it.desc) : itemView(it));
   }
+  window.scrollTo(0, y);
 }
 function itemView(it) {
   const box = el('div', 'item'), top = el('div', 'top'), t = el('div', 't', it.title);
@@ -185,11 +198,13 @@ function itemView(it) {
   top.append(t);
   const save = async (v) => {
     const r = await api('/api/settings', {key: it.key, value: String(v)});
-    if (r.ok) { it.value = String(v); toast(r.reboot ? '저장했어요. 기기를 다시 켜야 적용돼요.' : '저장했어요.'); }
-    else { toast(r.msg || '저장하지 못했어요.'); loadSettings(); }
+    if (r.ok) { toast(r.reboot ? '저장했어요. 기기를 다시 켜야 적용돼요.' : '저장했어요.'); }
+    else toast(r.msg || '저장하지 못했어요.');
+    loadSettings();  // items that depend on this one appear / disappear like in the menu
   };
   if (it.type === 'toggle') {
-    const l = el('label', 'sw'), i = el('input'); i.type = 'checkbox'; i.checked = it.value === '1'; i.disabled = !canChange;
+    // on = any value above 0 ('카메라 감속' stores 1-3)
+    const l = el('label', 'sw'), i = el('input'); i.type = 'checkbox'; i.checked = (parseInt(it.value) || 0) > 0; i.disabled = !canChange;
     i.onchange = () => save(i.checked ? 1 : 0); l.append(i, el('span')); top.append(l);
   } else if (it.type === 'number') {
     const w = el('div', 'num'), m = el('button', '', '−'), p = el('button', '', '+'), i = el('input');

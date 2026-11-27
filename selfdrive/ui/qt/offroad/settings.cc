@@ -789,11 +789,16 @@ static void optech_web_choice(QWidget *w, const QString &key, const QStringList 
   if (reboot) w->setProperty("optechReboot", true);
 }
 
-static void optech_web_walk(QLayout *layout, const QString &tab, QString &section, QJsonArray &items) {
+// Items the menu shows only under a condition carry it in optechShowIf ("KEY>0", "KEY=N" number, "KEY==text"), the
+// web page applies the same rule (user 2026-11-27: '카메라 감속' and what is under it were missing on the web).
+// A widget with optechGroup (a car's own settings page) is walked into, its condition passed on to its items.
+// optechNote: an explanation box, optechSpecial: a switch whose stored value the web server works out (camDecel).
+static void optech_web_walk(QLayout *layout, const QString &tab, QString &section, QJsonArray &items,
+                            const QString &inherit = "") {
   for (int i = 0; i < layout->count(); i++) {
     QLayoutItem *it = layout->itemAt(i);
     if (it->layout()) {
-      optech_web_walk(it->layout(), tab, section, items);
+      optech_web_walk(it->layout(), tab, section, items, inherit);
       continue;
     }
     QWidget *w = it->widget();
@@ -802,13 +807,37 @@ static void optech_web_walk(QLayout *layout, const QString &tab, QString &sectio
       section = qobject_cast<QLabel *>(w)->text();
       continue;
     }
+    const QString own_if = w->property("optechShowIf").toString();
+    const QString show_if = own_if.isEmpty() ? inherit : own_if;
+    if (w->property("optechGroup").toBool()) {
+      for (ListWidget *l : w->findChildren<ListWidget *>(QString(), Qt::FindDirectChildrenOnly)) {
+        optech_web_walk(l->itemLayout(), tab, section, items, show_if);
+      }
+      continue;
+    }
+    if (w->property("optechNote").toBool()) {
+      QJsonObject o;
+      o["tab"] = tab;
+      o["section"] = section;
+      o["type"] = "note";
+      o["key"] = "";
+      o["title"] = "";
+      o["desc"] = qobject_cast<QLabel *>(w)->text();
+      if (!show_if.isEmpty()) o["showIf"] = show_if;
+      items.append(o);
+      continue;
+    }
     const QString key = w->property("optechKey").toString();
     AbstractControl *c = qobject_cast<AbstractControl *>(w);
-    if (key.isEmpty() || !c || w->isHidden()) continue;  // hidden: e.g. the gains of the other steering methods
+    // hidden without a known condition: leave it out (it is not meant for this car / setup)
+    if (key.isEmpty() || !c || (w->isHidden() && show_if.isEmpty())) continue;
     QJsonObject o;
     o["tab"] = tab;
     o["section"] = section;
     o["key"] = key;
+    if (!show_if.isEmpty()) o["showIf"] = show_if;
+    const QString special = w->property("optechSpecial").toString();
+    if (!special.isEmpty()) o["special"] = special;
     const QString type = w->property("optechType").toString();
     o["type"] = type;
     o["title"] = type == "choice" ? c->getTitle().section(": ", 0, 0) : c->getTitle();
@@ -889,6 +918,8 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   // chosen one; choosing such a car also pops up a note to check them
   for (int i = 0; i < CcOnlyCarPage::count(); i++) {
     CcOnlyCarPage* page = new CcOnlyCarPage(i, this);
+    page->setProperty("optechGroup", true);  // optech web: its items, only while that car is chosen
+    page->setProperty("optechShowIf", QString("SelectedCar==") + CcOnlyCarPage::carName(i));
     page->setVisible(selected == CcOnlyCarPage::carName(i));
     ccOnlyPages.append(page);
   }
@@ -982,6 +1013,10 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   }
   ToggleControl *cam_decel = new ToggleControl("카메라 감속", "과속카메라 앞에서 제한 속도까지 미리 줄입니다. 켜면 아래에 동작 설명이 나옵니다.", ROAD_ICON,
                                                std::atoi(Params().get("AutoNaviSpeedCtrl").c_str()) > 0, this);
+  // optech web: on = the value for the chosen 내비 연동 방식 (navi_ctrl), worked out by the web server like here
+  cam_decel->setProperty("optechKey", "AutoNaviSpeedCtrl");
+  cam_decel->setProperty("optechType", "toggle");
+  cam_decel->setProperty("optechSpecial", "camDecel");
   // shown right under '카메라 감속' while it is on: how it works with the navigation link and with the built-in DB
   QLabel *cam_note = new QLabel("● 과속카메라 앞 '감속 시작'에 정한 시간(처음 값 22초) 전부터 설정 속도를 조금씩 내려서, '감속 끝'(6초 전)까지 '목표 속도'(처음 값: 제한 속도 그대로 100%)에 맞춥니다. "
                                 "구간단속은 구간이 끝날 때까지 제한 속도를 지킵니다.\n"
@@ -1030,6 +1065,8 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   QList<QWidget*> cam_group = {cam_note};
   cam_group += cam_tune;
   cam_group += QList<QWidget*>{cam_haptic, navi_mode, cam_db};
+  for (auto w : cam_group) w->setProperty("optechShowIf", "AutoNaviSpeedCtrl>0");  // optech web: as below
+  cam_note->setProperty("optechNote", true);
   QObject::connect(cam_decel, &ToggleControl::toggleFlipped, [=](bool cam_on) {
     Params cam_params;
     const int cam_mode = std::atoi(cam_params.get("OptechNaviLinkMode").c_str());
@@ -1057,6 +1094,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     "신호등을 직접 보는 것이 아니라, 주행 모델이 멈출지 출발할지 예측한 것으로 판단합니다. "
     "앞차가 출발할 때도 울릴 수 있고, 늦거나 빠를 수 있으니 출발 전에는 꼭 신호를 직접 확인하세요. "
     "주행 화면의 신호등 표시도 같은 판단으로 켜집니다.", ROAD_ICON, this);
+  green_alert->setProperty("optechShowIf", "OptechSignalEnable=1");  // optech web: as below
   cruiseToggles->addItem(green_alert);
   // visibility only after addItem (a widget without a parent would open as its own window, see 카메라 감속 above)
   green_alert->setVisible(Params().getBool("OptechSignalEnable"));
@@ -1113,6 +1151,8 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
       {3, new CValueControl("OptechLqrKi", "LQR 적분 (Ki, 0.001 단위)", "오래 남은 차이를 메우는 세기입니다. 처음 값 16.", ROAD_ICON, 0, 100, 1)},
       {3, new CValueControl("OptechLqrDcGain", "LQR DC 게인 (0.00001 단위)", "핸들 각도와 조향 힘의 비율입니다. 처음 값 265.", ROAD_ICON, 100, 500, 5)},
     };
+    // optech web: each method's values only while that method is chosen (as lm_refresh does here)
+    for (auto& v : *vals) v.ctl->setProperty("optechShowIf", "OptechLatMethod=" + QString::number(v.method));
     auto lm_refresh = [=]() {
       const int m = lm_mode();
       lm_btn->setTitle("조향 방식: " + lm_names[m]);
@@ -1161,6 +1201,8 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   steerToggles->addItem(torqueFriction);
   // show the two torque values only while 토크 사용자 설정 is on
   auto showTorqueValues = [=](bool on) { torqueAccel->setVisible(on); torqueFriction->setVisible(on); };
+  torqueAccel->setProperty("optechShowIf", "LateralTorqueCustom=1");  // optech web: as showTorqueValues
+  torqueFriction->setProperty("optechShowIf", "LateralTorqueCustom=1");
   QObject::connect(torqueCustom, &ToggleControl::toggleFlipped, showTorqueValues);
   showTorqueValues(Params().getBool("LateralTorqueCustom"));
 
