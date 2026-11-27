@@ -80,7 +80,7 @@ struct Alert {
       } else if (controls_missing > CONTROLS_TIMEOUT && !Hardware::PC()) {
         // car is started, but controls is lagging or died
         if (cs.getEnabled() && (controls_missing - CONTROLS_TIMEOUT) < 10) {
-          return {"즉시 운전하세요", "제어 프로그램 응답 없음",
+          return {"즉시 핸들 잡으세요", "제어 프로그램 응답 없음",
                   "controlsUnresponsive", cereal::ControlsState::AlertSize::FULL,
                   AudibleAlert::WARNING_IMMEDIATE};
         } else {

@@ -144,7 +144,7 @@ class Alert:
 
 class NoEntryAlert(Alert):
   def __init__(self, alert_text_2: str,
-               alert_text_1: str = "오픈파일럿을 켤 수 없음",
+               alert_text_1: str = "오픈파일럿 사용 불가",
                visual_alert: car.CarControl.HUDControl.VisualAlert=VisualAlert.none):
     super().__init__(alert_text_1, alert_text_2, AlertStatus.normal,
                      AlertSize.mid, Priority.LOW, visual_alert,
@@ -152,7 +152,7 @@ class NoEntryAlert(Alert):
 
 
 class NoEntryOneLineAlert(Alert):
-  # optech 2026-11-27: the reason alone in one line, without '오픈파일럿을 켤 수 없음' (same sound and time as NoEntryAlert)
+  # optech 2026-11-27: the reason alone in one line, without '오픈파일럿 사용 불가' (same sound and time as NoEntryAlert)
   def __init__(self, alert_text_1: str):
     super().__init__(alert_text_1, "", AlertStatus.normal,
                      AlertSize.small, Priority.LOW, VisualAlert.none,
@@ -161,7 +161,7 @@ class NoEntryOneLineAlert(Alert):
 
 class SoftDisableAlert(Alert):
   def __init__(self, alert_text_2: str):
-    super().__init__("즉시 운전하세요", alert_text_2,
+    super().__init__("즉시 핸들 잡으세요", alert_text_2,
                      AlertStatus.userPrompt, AlertSize.full,
                      Priority.MID, VisualAlert.steerRequired,
                      AudibleAlert.warningSoft, 2.),
@@ -176,7 +176,7 @@ class UserSoftDisableAlert(SoftDisableAlert):
 
 class ImmediateDisableAlert(Alert):
   def __init__(self, alert_text_2: str):
-    super().__init__("즉시 운전하세요", alert_text_2,
+    super().__init__("즉시 핸들 잡으세요", alert_text_2,
                      AlertStatus.critical, AlertSize.full,
                      Priority.HIGHEST, VisualAlert.steerRequired,
                      AudibleAlert.warningImmediate, 4.),
@@ -468,7 +468,7 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
 
   EventName.driverDistracted: {
     ET.WARNING: Alert(
-      "즉시 운전하세요",
+      "즉시 핸들 잡으세요",
       "운전자 주의 분산",
       AlertStatus.critical, AlertSize.full,
       Priority.HIGH, VisualAlert.steerRequired, AudibleAlert.warningImmediate, .1),
@@ -492,7 +492,7 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
 
   EventName.driverUnresponsive: {
     ET.WARNING: Alert(
-      "즉시 운전하세요",
+      "즉시 핸들 잡으세요",
       "운전자 반응 없음",
       AlertStatus.critical, AlertSize.full,
       Priority.HIGH, VisualAlert.steerRequired, AudibleAlert.warningImmediate, .1),
@@ -912,7 +912,7 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
 
   EventName.reverseGear: {
     ET.PERMANENT: Alert(
-      "후진\n기어",
+      "후진 기어",
       "",
       AlertStatus.normal, AlertSize.full,
       Priority.LOWEST, VisualAlert.none, AudibleAlert.none, .2, creation_delay=0.5),
@@ -992,7 +992,7 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
   },
   EventName.trafficSignChanged: {
     ET.WARNING: Alert(
-      "신호가바뀌었어요.",
+      "신호가 바뀌었어요",
       "",
       AlertStatus.normal, AlertSize.small,
       Priority.LOW, VisualAlert.none, AudibleAlert.trafficSignChanged, 3.),
