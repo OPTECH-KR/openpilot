@@ -196,6 +196,7 @@ protected:
   bool optech_show_dev = false;    // param OptechShowDeviceState
   bool optech_show_dm = false;     // param ShowDmInfo == 1 (driver monitoring icon)
   bool optech_long = false;        // openpilot longitudinal (gap / accel profile only mean something then)
+  bool optech_long_on = false;     // ... and its speed control on now (off while paused: optech-hkg cruise button rule)
   int optech_personality = 1;      // LongitudinalPersonality 0 aggressive .. 2 relaxed
   int optech_accel_profile = 0;    // dp_long_accel_profile 0 OP, 1 ECO, 2 NOR, 3 SPT
   QString optech_gear = "P";

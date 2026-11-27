@@ -307,7 +307,7 @@ class CarInterfaceBase(ABC):
     pass
 
   def create_common_events(self, cs_out, extra_gears=None, pcm_enable=True, allow_enable=True,
-                           enable_buttons=(ButtonType.accelCruise, ButtonType.decelCruise)):
+                           enable_buttons=(ButtonType.accelCruise, ButtonType.decelCruise), cancel_disables=True):
     events = Events()
 
     if cs_out.doorOpen:
@@ -346,7 +346,8 @@ class CarInterfaceBase(ABC):
       if not self.CP.pcmCruise and (b.type in enable_buttons and not b.pressed):
         events.add(EventName.buttonEnable)
       # Disable on rising and falling edge of cancel for both stock and OP long
-      if b.type == ButtonType.cancel:
+      # (optech: not on Hyundai / Kia, where a short CANCEL only pauses speed control, values.optech_cruise_rule)
+      if b.type == ButtonType.cancel and cancel_disables:
         events.add(EventName.buttonCancel)
 
     # Handle permanent and temporary steering faults

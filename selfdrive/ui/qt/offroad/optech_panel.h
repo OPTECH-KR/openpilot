@@ -75,6 +75,7 @@ private:
   QList<OptechValueControl *> values;
   OptechValueControl *lane_priority_speed = nullptr;
   QList<QWidget *> toyota_items, vag_items, bolt_items, hkg_items;
+  QList<QWidget *> non_hkg_items;  // shown unless the car is a Hyundai / Kia / Genesis (e.g. dp_alka '사용 방식')
   QList<QWidget *> ray_items, porter_items;  // cars without SCC with their own settings (optech-hkg)
   QLabel *non_scc_note = nullptr;            // the trims without SCC (… NO SCC)
   QList<QWidget *> cam_group;      // 과속카메라: shown while 카메라 감속 is on

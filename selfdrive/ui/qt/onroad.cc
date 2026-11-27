@@ -633,6 +633,10 @@ void AnnotatedCameraWidget::updateState(const UIState &s) {
   }
   optech_msg_box = cs.getAlertSize() != cereal::ControlsState::AlertSize::NONE || car_state.getBrakeHoldActive();
   optech_long = s.scene.longitudinal_control;
+  // Hyundai / Kia: a short CANCEL or the brake pauses speed control while openpilot keeps steering -> the set speed
+  // box is not blue then (gas override also has the long control off, but speed control is still on)
+  optech_long_on = optech_long && (cs.getLongControlState() != cereal::CarControl::Actuators::LongControlState::OFF ||
+                                   car_state.getGasPressed());
   switch (car_state.getGearShifter()) {
     case cereal::CarState::GearShifter::PARK: optech_gear = "P"; break;
     case cereal::CarState::GearShifter::DRIVE: optech_gear = "D"; break;
@@ -1173,7 +1177,7 @@ void AnnotatedCameraWidget::drawOptechHud(QPainter &p) {
       const bool over = speed > cam_disp + 2.0f;
       if (over) { fill = QColor(226, 75, 74, 240); line = white; draw = blink_on; }
       else { fill = QColor(59, 109, 17, 235); line = white; }
-    } else if (optech_enabled && optech_long) {
+    } else if (optech_enabled && optech_long_on) {
       fill = QColor(24, 95, 165, 235); line = white;
     } else if (optech_enabled) {
       fill = QColor(255, 255, 255, 64); line = white;
@@ -1183,7 +1187,7 @@ void AnnotatedCameraWidget::drawOptechHud(QPainter &p) {
     if (draw) optech_box(p, lx, col_y, w, h, fill, 18, 3, line);
     const QString set_s = is_cruise_set ? QString::number((int)std::nearbyint(setSpeed)) : "--";
     const float target = optech_cam_target * to_unit;
-    const bool slowing = optech_enabled && optech_long && target > 0 && target + 0.5f < setSpeed && speed >= 3.f;
+    const bool slowing = optech_enabled && optech_long_on && target > 0 && target + 0.5f < setSpeed && speed >= 3.f;
     const QString hold_s = QString::number((int)std::nearbyint(target));
     const float half = (w - 2 * pad - 32) / 2;  // 32: room for the dotted line
     const float c1 = lx + pad + half / 2, c2 = lx + w - pad - half / 2, dot_x = lx + w / 2;

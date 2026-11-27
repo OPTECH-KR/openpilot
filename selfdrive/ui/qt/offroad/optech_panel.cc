@@ -481,6 +481,23 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
     engage_mode_btn->setTitle(engage_name());
   });
   drive->addItem(engage_mode_btn);
+  non_hkg_items.append(engage_mode_btn);
+  // Hyundai / Kia / Genesis: optech-hkg's cruise button rule instead of '사용 방식' (selfdrive/car/hyundai/values.py
+  // optech_cruise_rule, interface.py cruise_rule_events, controlsd update_long_pause); the note says how the buttons work
+  QLabel *hkg_button_note = new QLabel(
+    "현대·기아·제네시스 버튼 사용법 (optech-hkg와 같은 규칙)\n"
+    "● 크루즈 버튼: 차의 순정 크루즈(SCC)를 쓰는 차는 누르면 조향이 켜지고, 다시 누르면 모두 꺼집니다. "
+    "openpilot 가감속을 쓰는 차는 크루즈 버튼으로 끄기만 하고, 켜는 것은 SET이나 RES로 합니다.\n"
+    "● SET(-) / RES(+): 가감속을 켭니다. SET은 지금 속도로, RES는 이전 설정 속도로 켜지고, 켜져 있을 때는 설정 속도를 바꿉니다. "
+    "openpilot 가감속을 쓰는 차는 조향도 같이 켜집니다. 순정 SCC 차는 차의 크루즈가 켜지고, 아래 '켤 때 지금 속도로 설정'이 켜져 있으면 RES로 켜도 지금 속도로 맞춥니다.\n"
+    "● CANCEL: 짧게 누르면 가감속만 꺼지고 조향은 남습니다 (SET / RES로 다시 켜기). 0.4초 넘게 누르면 모두 꺼집니다.\n"
+    "● 브레이크: 가감속만 꺼지고 조향은 남습니다. 다시 켤 때는 SET이나 RES를 누르세요.\n"
+    "comma 페달을 단 레이 EV·포터 II EV는 예전 그대로 SET / RES로 켜고, CANCEL이나 브레이크로 모두 꺼집니다.");
+  hkg_button_note->setWordWrap(true);
+  hkg_button_note->setStyleSheet("font-size: 36px; color: #E0E0E0; background-color: #333333; border-radius: 10px; "
+                                 "padding: 20px; margin: 10px 0px;");
+  drive->addItem(hkg_button_note);
+  hkg_items.append(hkg_button_note);
   // Hyundai / Kia / Genesis with the car's own cruise: selfdrive/car/hyundai/carcontroller.py set_speed_sync
   hkg_items.append(toggle(drive, "OptechCruiseSetCurrent", "켤 때 지금 속도로 설정",
     "달리는 중에 크루즈를 켜면, 차의 크루즈가 예전 설정 속도(예: 60)로 갑자기 빨라지지 않게 설정 속도를 지금 속도로 맞춥니다. "
@@ -973,6 +990,7 @@ void OptechPanel::updateBrandItems() {
   for (auto w : vag_items) w->setVisible(vag);
   // Hyundai / Kia / Genesis items also while the car is not known yet (as the 토글 page's LDWS 차량)
   for (auto w : hkg_items) w->setVisible(brand.isEmpty() || HKG_BRANDS.contains(brand));
+  for (auto w : non_hkg_items) w->setVisible(!HKG_BRANDS.contains(brand));
   const bool bolt_cc = QString::fromStdString(params.get("dp_car_assigned")).trimmed() == BOLT_CC_CAR;
   for (auto w : bolt_items) w->setVisible(bolt_cc);
   // cars without SCC: the chosen car, else the one detected at the last start (a trim without SCC is also switched to
