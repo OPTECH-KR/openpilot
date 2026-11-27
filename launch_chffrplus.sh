@@ -278,6 +278,15 @@ function launch {
   # Pull time from panda
   $DIR/selfdrive/boardd/set_time.py
 
+  # optech (optech-hkg 2026-11-27, like OPKR '부팅 시 Git Pull'): 소프트웨어 > '켤 때마다 자동 업데이트'. When a new
+  # version came in, start this script again from the top so the new launch script runs (once: OPTECH_BOOT_PULLED)
+  if [ "$(cat /data/params/d/OptechGitPullOnBoot 2>/dev/null)" = "1" ] && [ -z "$OPTECH_BOOT_PULLED" ]; then
+    export OPTECH_BOOT_PULLED=1
+    if /usr/bin/bash $DIR/selfdrive/assets/addon/sh/optech_git.sh bootpull; then
+      exec /usr/bin/bash $DIR/launch_chffrplus.sh
+    fi
+  fi
+
   # Check to see if there's a valid overlay-based update available. Conditions
   # are as follows:
   #
