@@ -1143,7 +1143,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     "(녹화 중에는 버튼이 빨개집니다), 다시 누르면 멈춥니다. 영상은 3분마다 나뉘어 기기 저장공간(videos 폴더)에 남습니다. "
     "주행 영상을 남기고 싶을 때만 켜세요. 끄면 버튼이 사라지고 하던 녹화도 멈춥니다.", SHELL_ICON, this));
   dispToggles->addItem(new ParamControl("OptechShowGpsSpeed", "GPS 속도",
-    "켜 두면(초록색) 주행 화면 설정 속도 칸 오른쪽 작은 칸에 GPS로 잰 속도(km/h)를 초록 숫자로 보여 줍니다. 계기판 속도는 실제보다 몇 % 높게 "
+    "켜 두면(초록색) 주행 화면 설정 속도 칸 아래 작은 칸에 GPS로 잰 속도(km/h)를 초록 숫자로 보여 줍니다. 계기판 속도는 실제보다 몇 % 높게 "
     "나오므로, 실제로 몇 km/h로 달리는지 볼 때 씁니다. GPS가 안 잡히면 숫자 대신 초록 가로 막대가 나옵니다. 끄면 칸이 사라집니다.", SHELL_ICON, this));
   // (no '시간 표시' (ShowDateTime): the optech 주행 화면 has no clock, user 2026-11-23)
   // optech (user 2026-11-26): the 0 / 1 items are on/off switches like 녹화 버튼 (ui.cc still reads them with atoi)
@@ -1178,7 +1178,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   dispToggles->addItem(new ParamControl("ShowConnInfo", "연결 상태 표시", "켜 두면(초록색) 주행 화면 왼쪽 위에 연결 상태를 보여 줍니다.\nTMAP: TmapNda가 NDA 방식으로 보내는 중\nCARROT: 당근 방식으로 들어옴 (당근내비, 당근 방식으로 설정한 TmapNda)\n초록은 정보가 들어오는 중, 회색은 연결됐지만 아직 정보가 없음\nHDA(보라): 차 순정 내비의 카메라 정보를 쓰는 중\nSCC2(빨강): SCC 버스2(롱컨) 차량\nRADAR(주황): 레이더 트랙 사용 중", SHELL_ICON, this));
   // '운전자 모니터링 아이콘' (ShowDmInfo 0 / 1); the mode itself is chosen on the 토글 page (optech_dm_mode)
   dmIcon = new ToggleControl("운전자 모니터링 아이콘",
-    "주행 화면 오른쪽 아래(녹화 버튼을 켜 두면 그 왼쪽)에 운전자 모니터링 아이콘(얼굴 모양)을 보여 줍니다. 얼굴을 잘 보고 있으면 선명하게, 아니면 흐리게 보입니다. 토글 화면의 운전자 모니터링이 '기본 사용'일 때만 쓸 수 있습니다.",
+    "주행 화면 왼쪽 아래에 운전자 모니터링 아이콘(얼굴 모양)을 보여 줍니다. 얼굴을 잘 보고 있으면 선명하게, 아니면 흐리게 보입니다. 토글 화면의 운전자 모니터링이 '기본 사용'일 때만 쓸 수 있습니다.",
     SHELL_ICON, std::atoi(Params().get("ShowDmInfo").c_str()) >= 1, this);
   QObject::connect(dmIcon, &ToggleControl::toggleFlipped, [=](bool on) {
     if (optech_dm_mode() == 0) Params().put("ShowDmInfo", on ? "1" : "0");
