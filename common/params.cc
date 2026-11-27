@@ -284,6 +284,7 @@ std::unordered_map<std::string, uint32_t> keys = {
     {"ShowRadarInfo", PERSISTENT},
     {"ShowConnInfo", PERSISTENT},
     {"OptechShowRecordBtn", PERSISTENT},
+    {"OptechWebServer", PERSISTENT},  // 고급 > 웹 접속 (selfdrive/optech_web/server.py, port 7000)
     {"PathOffset", PERSISTENT},
     {"NNFF", PERSISTENT},
     {"NNFFLite", PERSISTENT},

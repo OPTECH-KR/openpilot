@@ -96,4 +96,5 @@ private:
   void showTab(int index);
   void updateTabStyles();
   void updateToggles();
+  void exportWebMeta();  // optech web: the menu's items for selfdrive/optech_web (/data/optech_web/settings_meta.json)
 };

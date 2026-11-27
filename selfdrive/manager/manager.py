@@ -142,6 +142,7 @@ def manager_init() -> None:
     ("ShowRadarInfo", "1"),
     ("ShowConnInfo", "1"),
     ("OptechShowRecordBtn", "0"),
+    ("OptechWebServer", "1"),  # 고급 > 웹 접속 (selfdrive/optech_web/server.py, port 7000)
     ("PathOffset", "0"),
     ("NNFF", "0"),
     ("NNFFLite", "0"),
