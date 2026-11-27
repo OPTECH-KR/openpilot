@@ -229,7 +229,12 @@ protected:
   void drawOptechRight(QPainter &p);
   void drawOptechBsd(QPainter &p, bool right, bool danger);
   void drawOptechRadar(QPainter &p);
-  void drawOptechGps(QPainter &p, float x, float y);
+  // GPS box at (x, y), at least min_w wide (optech-hkg 2026-11-27: as wide as the battery box beside it); returns its width
+  float drawOptechGps(QPainter &p, float x, float y, float min_w);
+  // device battery (optech-hkg 2026-11-27 battery box): only on a device that has one (a phone used as the device;
+  // the comma two has none). Read from the kernel once a second; -1: no battery
+  int optech_batt = -1;
+  bool optech_batt_charging = false;
   // optech-hkg 2026-11-25/26 layout: speed bump sign (roadLimitSpeed), and whether an alert / the auto hold box is up
   // (the lead info box steps aside meanwhile)
   QPixmap bump_img;
