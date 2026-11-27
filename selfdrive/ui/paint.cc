@@ -827,18 +827,16 @@ static void carrot_round_box(const UIState* s, float x, float y, float w, float 
 // optech (user 2026-11-25): the navigation badge said APN / APM / NDA / HDA. Now it names the link by the port the data
 // came in on (roadLimitSpeed.naviSource): CARROT (7706: 당근내비, TmapNda in carrot mode), TMAP (843: TmapNda
 // in NDA mode); green while it delivers, grey while linked with nothing to show yet. (APM / Mappy is not received any
-// more; plain NAVI only if the source is unknown.) HDA (purple): the car's own navigation (Navi_HU) - car_navi_cam while
-// it reports a camera limit, car_navi when the car has one. roadLimitSpeed.active: 200+ Tmap data, 1-99 an NDA app
-// linked (its cameras come in the road_limit fields). Same order as the old images. nullptr: nothing to show.
-static const char* optech_nav_badge(int active, int source, bool car_navi_cam, bool car_navi, NVGcolor* fill) {
-    const NVGcolor app = nvgRGBA(0, 170, 0, 230), idle = nvgRGBA(110, 110, 110, 220), car = nvgRGBA(140, 80, 200, 220);
+// more; plain NAVI only if the source is unknown.) The purple HDA badge (the car's own navigation) is gone with the
+// car navigation itself (user 2026-11-27: testers took it for a phone link). roadLimitSpeed.active: 200+ Tmap data,
+// 1-99 an NDA app linked (its cameras come in the road_limit fields). nullptr: nothing to show.
+static const char* optech_nav_badge(int active, int source, NVGcolor* fill) {
+    const NVGcolor app = nvgRGBA(0, 170, 0, 230), idle = nvgRGBA(110, 110, 110, 220);
     // user 2026-11-25: the app names of the menu, short (NAVI CARROT / NAVI NDA were too long)
     const char* name = source == 1 ? "CARROT" : source == 2 ? "TMAP" : "NAVI";
     if (active >= 200) { *fill = app; return name; }
-    if (car_navi_cam) { *fill = car; return "HDA"; }
     if (active > 0 && active < 100) { *fill = app; return source == 0 || source == 2 ? "TMAP" : name; }
     if (active >= 100 || source > 0) { *fill = idle; return name; }
-    if (car_navi) { *fill = car; return "HDA"; }
     return nullptr;
 }
 
@@ -963,7 +961,7 @@ static void carrot_hud_lower(const UIState* s, int bx, int by, int my_driving_mo
     // the gap bars. The box is small here: no link name (source 0)
     const int nx = bx + 200, ny = by + 175;
     NVGcolor nav_fill;
-    const char* nav = optech_nav_badge(active_nda, 0, false, false, &nav_fill);
+    const char* nav = optech_nav_badge(active_nda, 0, &nav_fill);
     if (nav) {
         const float bw = 124;
         float fs = 36, tb[4];
@@ -1124,7 +1122,7 @@ static void drawOptechHud(const UIState* s) {
     const int camType = road.getCamType();
     const int xSignType = road.getXSignType();
     int limit_speed = 0, left_dist = 0;
-    bool section = false, from_hda = false;
+    bool section = false;
     if (road.getCamLimitSpeed() > 0 && road.getCamLimitSpeedLeftDist() > 0) {
         limit_speed = road.getCamLimitSpeed(); left_dist = road.getCamLimitSpeedLeftDist();
     } else if (road.getSectionLimitSpeed() > 0 && road.getSectionLeftDist() > 0) {
@@ -1134,15 +1132,9 @@ static void drawOptechHud(const UIState* s) {
         // user 2026-11-27: the built-in camera DB (road_speed_limiter) marks an average-speed section it is driving
         // through with camType 4 / xSignType 165 and sends the length left -> '구간' like a navigation section
         section = camType == 4 || xSignType == 165;
-    } else if (car_state.getSpeedLimit() > 0 && car_state.getSpeedLimitDistance() > 0) {
-        // user 2026-11-27: the car's own navigation (HDA: Navi_HU limit with the camera flag, carstate.py) - it
-        // already slows the car (road_speed_limiter), now the sign shows why. Its distance is an estimate that stays
-        // at 1 m inside a section or after the camera, so no distance box then
-        limit_speed = car_state.getSpeedLimit();
-        left_dist = car_state.getSpeedLimitDistance() > 1 ? (int)car_state.getSpeedLimitDistance() : 0;
-        from_hda = true;
     }
-    const bool bump = limit_speed > 0 && !from_hda && (xSignType == 124 || camType == 22);
+    // (the car's own navigation HDA is not used any more: user 2026-11-27, interface.py)
+    const bool bump = limit_speed > 0 && (xSignType == 124 || camType == 22);
     const int cam_limit = (limit_speed > 0 && !bump) ? limit_speed : 0;
     const int road_limit = (roadLimitSpeed > 0 && roadLimitSpeed < 200) ? roadLimitSpeed : 0;
 
@@ -1160,14 +1152,12 @@ static void drawOptechHud(const UIState* s) {
     // 1) badges, only the ones that are on, packed from the left (the SCC2 / RadarTracks pictures scaled to the row)
     if (s->show_conn_info) {
         const int sccBus = (int)car_params.getSccBus();
-        const int hda_limit = car_state.getSpeedLimit(), hda_dist = car_state.getSpeedLimitDistance();
-        const int naviCluster = (int)car_params.getNaviCluster();
         const bool radar_tracks = s->radar_tracks;
         // user 2026-11-25: every badge as a text box in the same font and shape (the SCC2 / RadarTracks pictures
         // had their own old lettering); RadarTracks shortened to RADAR
         if (sccBus == 2) bx += optech_badge(s, bx, ry, BH, "SCC2", nvgRGBA(200, 40, 40, 235)) + 14;
         NVGcolor nav_fill;
-        const char* nav = optech_nav_badge(activeNDA, road.getNaviSource(), hda_limit > 0 && hda_dist > 0, naviCluster > 0, &nav_fill);
+        const char* nav = optech_nav_badge(activeNDA, road.getNaviSource(), &nav_fill);
         if (nav) bx += optech_badge(s, bx, ry, BH, nav, nav_fill) + 14;
         if (radar_tracks) bx += optech_badge(s, bx, ry, BH, "RADAR", nvgRGBA(230, 130, 20, 235)) + 14;
     }
@@ -1648,6 +1638,19 @@ static void drawOptechHud(const UIState* s) {
             const float ts = 120, tcy = top + 100 + ts / 2;
             carrot_round_box(s, rcx - ts / 2, tcy - ts / 2, ts, ts, gfill, COLOR_WHITE, 16, 4);
             optech_text_vc(s, rcx, tcy, carrot_gear_text(gear), 96, COLOR_WHITE, NVG_ALIGN_CENTER);
+        }
+
+        // road name at the bottom centre, like spst (user 2026-11-27, with a picture of spst's '강남대로'): the name the
+        // navigation app sends (road_speed_limiter xRoadName: 당근내비 / TmapNda in carrot mode, szPosRoadName). The
+        // limiter adds its debug values after a ':' - only the part before it. Only while the app is linked.
+        {
+            std::string rn = road.getXRoadName().cStr();
+            const size_t colon = rn.find(':');
+            if (colon != std::string::npos) rn = rn.substr(0, colon);
+            while (!rn.empty() && rn.back() == ' ') rn.pop_back();
+            if (activeNDA > 0 && !rn.empty()) {
+                optech_text_vc(s, s->fb_w / 2.f, s->fb_h - 62, rn.c_str(), 58, nvgRGBA(255, 255, 255, 215), NVG_ALIGN_CENTER);
+            }
         }
 
         // path offset panel (opened by tapping the wheel): − / + move the path left / right, 1 cm a tap
@@ -2389,14 +2392,10 @@ void DrawApilot::drawLeadApilot(const UIState* s) {
         }
         if (s->show_conn_info) {
             //ui_draw_text(s, strlen(str) / 2 * 35 / 2 + 50,40, str, 35, COLOR_WHITE, BOLD);
-            int hda_speedLimit = car_state.getSpeedLimit(); 
-            int hda_speedLimitDistance = car_state.getSpeedLimitDistance();
-            int naviCluster = (int)car_params.getNaviCluster();
             if (sccBus) ui_draw_image(s, { 30, 20, 120, 54 }, "ic_scc2", 1.0f);
             // navigation badge as words (was the APN / HDA / APM / NDA images), then the radar badge after it
             NVGcolor nav_fill;
-            const char* nav = optech_nav_badge(activeNDA, road_limit_speed.getNaviSource(), hda_speedLimit > 0 && hda_speedLimitDistance > 0,
-                                               naviCluster > 0, &nav_fill);
+            const char* nav = optech_nav_badge(activeNDA, road_limit_speed.getNaviSource(), &nav_fill);
             const float nav_w = nav ? optech_badge(s, 30 + 135, 20, 54, nav, nav_fill) : 120;
             const int radar_x = 30 + 135 + (int)nav_w + 15;
             if (radar_tracks) ui_draw_image(s, { radar_x, 20, 240, 54 }, "ic_radartracks", 1.0f);
