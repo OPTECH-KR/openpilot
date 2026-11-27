@@ -808,15 +808,22 @@ static void optech_box(QPainter &p, float x, float y, float w, float h, const QC
 }
 
 // HUD font (user 2026-11-27: Korean labels such as '설정속도' / '감속목표' / '오토홀드' looked odd next to optech-hkg's):
-// ONE font for every OPTECH HUD text, Noto Sans CJK Bold from spst's assets. optech-hkg draws with KaiGen Gothic KR
-// Bold, which is built on the same Source Han Sans glyphs (Hangul, digits and Latin), so the letters now look like
-// optech-hkg's. Before, Inter drew the digits / Latin and Qt filled the Hangul in from another font.
+// ONE font for every OPTECH HUD text, the very file optech-hkg draws with: KaiGen Gothic KR Bold (copied from
+// optech-hkg selfdrive/assets/addon/font, user: "hkg에서 글꼴파일 가져올래"). If it cannot be read, Noto Sans CJK Bold
+// (spst's own, the same Source Han Sans glyphs). Before, Inter drew the digits / Latin and Qt filled the Hangul in
+// from another font.
 static QString optech_family() {
   static QString fam;
   if (fam.isEmpty()) {
-    const int id = QFontDatabase::addApplicationFont("../assets/fonts/NotoSansCJKtc-Bold.otf");
-    const QStringList f = id >= 0 ? QFontDatabase::applicationFontFamilies(id) : QStringList();
-    fam = f.isEmpty() ? QString("Inter") : f.first();
+    for (const char *file : {"../assets/fonts/KaiGenGothicKR-Bold.ttf", "../assets/fonts/NotoSansCJKtc-Bold.otf"}) {
+      const int id = QFontDatabase::addApplicationFont(file);
+      const QStringList f = id >= 0 ? QFontDatabase::applicationFontFamilies(id) : QStringList();
+      if (!f.isEmpty()) {
+        fam = f.first();
+        break;
+      }
+    }
+    if (fam.isEmpty()) fam = "Inter";
   }
   return fam;
 }
