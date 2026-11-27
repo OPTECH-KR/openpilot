@@ -649,6 +649,26 @@ void AnnotatedCameraWidget::updateState(const UIState &s) {
   }
   optech_msg_box = cs.getAlertSize() != cereal::ControlsState::AlertSize::NONE || car_state.getBrakeHoldActive();
   optech_long = s.scene.longitudinal_control;
+  // the top-left first box (optech-hkg 2026-11-28, names per car by the user): what kind of cruise this car has.
+  // No adaptive cruise: Hyundai / Kia NON_SCC (Ray EV, Porter II EV, NO SCC trims: HyundaiFlags.NON_SCC 2048), GM cars
+  // without ACC (fingerprint 'NO ACC', panda FLAG_GM_NO_ACC 4). A comma pedal: enableGasInterceptor.
+  if (sm.rcv_frame("carParams") > 0 && (sm.updated("carParams") || !optech_car_known)) {
+    const auto cp = sm["carParams"].getCarParams();
+    const std::string brand = cp.getCarName();
+    optech_car_known = !brand.empty() && brand != "mock";
+    optech_car_hkg = brand == "hyundai";
+    bool no_acc = false;
+    if (optech_car_hkg) {
+      no_acc = (cp.getFlags() & 2048) != 0;
+    } else if (brand == "gm") {
+      const auto sc = cp.getSafetyConfigs();
+      no_acc = std::string(cp.getCarFingerprint()).find("NO ACC") != std::string::npos ||
+               (sc.size() > 0 && (sc[0].getSafetyParam() & 4) != 0);
+    }
+    optech_car_acc = !no_acc;
+    optech_car_pedal = cp.getEnableGasInterceptor();
+  }
+  optech_e2e = sm.alive("longitudinalPlanExt") && sm["longitudinalPlanExt"].getLongitudinalPlanExt().getDpE2EIsBlended();
   // Hyundai / Kia: a short CANCEL or the brake pauses speed control while openpilot keeps steering -> the set speed
   // box is not blue then (gas override also has the long control off, but speed control is still on)
   optech_long_on = optech_long && (cs.getLongControlState() != cereal::CarControl::Actuators::LongControlState::OFF ||
@@ -1207,7 +1227,27 @@ void AnnotatedCameraWidget::drawOptechHud(QPainter &p) {
       optech_txt(p, bx + w / 2, ry + BH / 2, text, fs, white, 0, 1);
       bx += w + 14;
     };
-    if (optech_scc2) badge("SCC2", QColor(200, 40, 40, 235));
+    // first box = who does the speed (optech-hkg 2026-11-28; names per car, user 2026-11-28):
+    //   the car's own cruise: SCC (Hyundai / Kia / Genesis) / ACC (other brands) / 일반 (no adaptive cruise), navy
+    //   openpilot (롱컨): SCC2 / ACC2 (also any car with a comma pedal) / 롱컨 (no adaptive cruise, no pedal), red
+    //   E2E (teal): openpilot does the speed and the driving model decides right now (실험 모드, E2E 모드)
+    // It shows the car's way also while openpilot is off; every label fits the badge's minimum width, so nothing
+    // after it moves when the label changes
+    if (optech_car_known) {
+      const bool e2e_now = optech_long && optech_enabled && optech_long_on && optech_e2e;
+      QString lbl;
+      QColor lc(70, 90, 110, 235);
+      if (e2e_now) {
+        lbl = "E2E";
+        lc = QColor(0, 150, 140, 235);
+      } else if (optech_long) {
+        lbl = optech_car_pedal ? "ACC2" : !optech_car_acc ? "롱컨" : optech_car_hkg ? "SCC2" : "ACC2";
+        lc = QColor(200, 40, 40, 235);
+      } else {
+        lbl = !optech_car_acc ? "일반" : optech_car_hkg ? "SCC" : "ACC";
+      }
+      badge(lbl, lc);
+    }
     // navigation link by the port the data came in on (roadLimitSpeed.naviSource): CARROT (7706: 당근내비, TmapNda
     // in carrot mode), TMAP (843: TmapNda in NDA mode); green while it delivers, grey while linked with nothing yet
     {

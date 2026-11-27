@@ -227,6 +227,9 @@ protected:
   int optech_navi_active = 0, optech_navi_source = 0, optech_road_limit = 0, optech_turn = 0, optech_turn_dist = 0;
   bool optech_radar_tracks = false;
   bool optech_scc2 = false;
+  // the top-left first box (who does the speed, optech-hkg 2026-11-28 + spst names per car): read from carParams
+  bool optech_car_known = false, optech_car_hkg = false, optech_car_acc = true, optech_car_pedal = false;
+  bool optech_e2e = false;  // longitudinalPlanExt.dpE2EIsBlended: the driving model decides the speed right now
   void drawOptechRight(QPainter &p);
   void drawOptechBsd(QPainter &p, bool right, bool danger);
   void drawOptechRadar(QPainter &p);

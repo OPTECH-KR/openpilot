@@ -909,12 +909,19 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
     optech_web_choice(radar_btn, "ShowRadarInfo", radar_names, optech_index_values(radar_names.size()));
     disp->addItem(radar_btn);
   }
+  // the first box tells who does the speed (optech-hkg 2026-11-28 SCC / SCC2 / E2E; spst names it after the car,
+  // user 2026-11-28: SCC for Hyundai / Kia / Genesis, ACC for the other brands, 일반 / 롱컨 without adaptive cruise)
   toggle(disp, "ShowConnInfo", "연결 상태 표시",
          "주행 화면 왼쪽 위에 연결 상태를 보여 줍니다.\n"
+         "맨 앞 칸 = 누가 가감속을 하는지 (오픈파일럿이 꺼져 있을 때도 그 차가 쓰는 방식)\n"
+         "  SCC / ACC(남색): 차의 순정 크루즈가 가감속 (현대·기아·제네시스는 SCC, 다른 브랜드는 ACC)\n"
+         "  SCC2 / ACC2(빨강): 오픈파일럿이 가감속 (롱컨, comma 페달을 단 차도 ACC2)\n"
+         "  일반(남색): 어댑티브 크루즈가 없는 차, 오픈파일럿은 조향만\n"
+         "  롱컨(빨강): 어댑티브 크루즈가 없는 차에서 오픈파일럿이 가감속\n"
+         "  E2E(청록): 오픈파일럿이 가감속하는 차에서 지금 주행 모델이 판단하며 가감속 (실험 모드, E2E 모드)\n"
          "TMAP: TmapNda가 NDA 방식으로 보내는 중\n"
          "CARROT: 당근 방식으로 들어옴 (당근내비, 당근 방식으로 설정한 TmapNda)\n"
          "초록은 정보가 들어오는 중, 회색은 연결됐지만 아직 정보가 없음\n"
-         "SCC2(빨강): 크루즈(SCC)가 카메라 쪽에 있는 차\n"
          "RADAR(주황): 레이더가 여러 물체를 보내는 차");
   // '운전자 모니터링 아이콘' (ShowDmInfo 0 / 1); the mode itself is chosen on the 토글 page
   dm_icon = new ToggleControl("운전자 모니터링 아이콘",
