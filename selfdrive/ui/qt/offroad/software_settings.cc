@@ -5,7 +5,10 @@
 #include <string>
 
 #include <QDebug>
+#include <QFile>
 #include <QLabel>
+#include <QRegularExpression>
+#include <QTimer>
 
 #include "selfdrive/common/params.h"
 #include "selfdrive/common/util.h"
@@ -23,6 +26,21 @@ static bool optech_update_parked = false;
 static bool optech_parked(const UIState &s) {
   return !s.engaged() && s.sm->rcv_frame("carState") > s.scene.started_frame &&
          (*s.sm)["carState"].getCarState().getGearShifter() == cereal::CarState::GearShifter::PARK;
+}
+
+// '저장소 · 브랜치' (optech_git.sh). A job that ends in a reboot runs in the background; when it fails it leaves its
+// exit code in OPTECH_GIT_FAIL, which the menu watches for.
+static const char *OPTECH_GIT_SH = "/usr/bin/bash /data/openpilot/selfdrive/assets/addon/sh/optech_git.sh ";
+static const char *OPTECH_GIT_FAIL = "/tmp/optech_git_fail";
+
+static int optech_git_run(const QString &args) {
+  return std::system((OPTECH_GIT_SH + args).toStdString().c_str());
+}
+
+static void optech_git_background(const QString &args) {
+  QFile::remove(OPTECH_GIT_FAIL);
+  // 'a || b &' puts the whole list in the background
+  optech_git_run(args + " > /tmp/optech_git.log 2>&1 || echo $? > " + OPTECH_GIT_FAIL + " &");
 }
 
 void SoftwarePanel::checkForUpdates() {
@@ -83,6 +101,123 @@ SoftwarePanel::SoftwarePanel(QWidget* parent) : ListWidget(parent) {
   addItem(commitLbl);
   osLbl = new LabelControl("운영체제 버전", QString::fromStdString(Hardware::get_os_version()).trimmed());
   addItem(osLbl);
+
+  // ---- 저장소 · 브랜치 (2026-11-27: a tester sent OPKR's 'Git 리포지토리/브랜치' menu. The user's rule for the
+  //      branch choice: two choices, the other OPTECH branch (hkg <-> spst) installs by itself, '기타' asks for the
+  //      address the OPKR way: id, repository, branch) ----
+  QLabel *gitTitle = new QLabel("저장소 · 브랜치");
+  gitTitle->setStyleSheet("font-size: 42px; font-weight: 600; color: #33ab4c; padding-top: 25px; padding-left: 10px;");
+  addItem(gitTitle);
+
+  addItem(new ParamControl("OptechGitPullOnBoot", "켤 때마다 자동 업데이트",
+    "켜 두면(초록색) 기기를 켤 때 와이파이가 연결돼 있으면 새 버전을 확인하고, 있으면 받아서 바로 씁니다 "
+    "(받은 뒤 처음 켤 때 몇 분 빌드). 와이파이가 없으면 15초쯤 기다렸다가 그냥 켜집니다. 처음 값: 꺼짐", "", this));
+
+  // '이 메뉴가 쓰는 동안 자동차 상태' check, the same as '최신 업데이트'
+  auto parked_or_off = [=]() {
+    if (is_onroad && !optech_update_parked) {
+      ConfirmationDialog::alert("시동이 켜져 있을 때는 기어를 P에 놓고 오픈파일럿을 꺼야 할 수 있어요.", this);
+      return false;
+    }
+    return true;
+  };
+
+  // a background job that failed: tell the user and give the button back (a job that worked reboots the device)
+  auto watch_job = [=](ButtonControl *btn, const QString &idle, const QString &what) {
+    QTimer *t = new QTimer(this);
+    QObject::connect(t, &QTimer::timeout, [=]() {
+      if (!QFile::exists(OPTECH_GIT_FAIL)) return;
+      t->stop();
+      t->deleteLater();
+      btn->setValue(idle);
+      btn->setEnabled(true);
+      ConfirmationDialog::alert(what + " 하지 못했어요.\n와이파이 연결을 확인한 뒤 다시 해 주세요.", this);
+    });
+    t->start(1000);
+  };
+
+  auto branchBtn = new ButtonControl("브랜치 바꾸기", "선택",
+    "OPTECH 브랜치끼리 바꾸거나 (hkg: 현대·기아 전용 ↔ spst: 다른 차종 + 일반 CAN 현대·기아), 다른 저장소의 브랜치를 "
+    "받아 씁니다. 바꾸면 받은 뒤 자동으로 다시 켜지고, 처음 켤 때 몇 분 빌드합니다. 설정값은 그대로 남습니다. "
+    "원래대로 돌아가려면 아래 '이전 버전으로 되돌리기'를 누르세요.");
+  connect(branchBtn, &ButtonControl::clicked, [=]() {
+    if (!parked_or_off()) return;
+    const QString cur = QString::fromStdString(params.get("GitBranch"));
+    const QString other = cur.startsWith("optech-spst") ? "optech-hkg" : "optech-spst";
+    const QString etc = "기타 (주소 직접 입력)";
+    const QString sel = MultiOptionDialog::getSelection("브랜치 바꾸기", {other, etc}, "", this);
+    if (sel.isEmpty()) return;
+    QString url = "https://github.com/OPTECH-KR/openpilot.git", br = other;
+    if (sel == etc) {
+      const QString id = InputDialog::getText("1/3 GitHub 아이디를 입력하세요", this,
+                                              "github.com/[아이디]/[저장소].git -b [브랜치]", false, 1, "OPTECH-KR");
+      if (id.isEmpty()) return;
+      QString repo = InputDialog::getText("2/3 저장소 이름을 입력하세요", this,
+                                          "github.com/" + id + "/[저장소].git -b [브랜치]", false, 1, "openpilot");
+      if (repo.isEmpty()) return;
+      if (repo.endsWith(".git")) repo.chop(4);
+      br = InputDialog::getText("3/3 브랜치 이름을 입력하세요", this,
+                                "github.com/" + id + "/" + repo + ".git -b [브랜치]", false, 1, cur);
+      if (br.isEmpty()) return;
+      // only plain names: they go into a shell command
+      const QRegularExpression ok_name("^[A-Za-z0-9._-]+$"), ok_branch("^[A-Za-z0-9._/-]+$");
+      if (!ok_name.match(id).hasMatch() || !ok_name.match(repo).hasMatch() || !ok_branch.match(br).hasMatch()) {
+        ConfirmationDialog::alert("영문, 숫자와 . _ - 만 쓸 수 있어요 (브랜치는 / 도). 다시 입력해 주세요.", this);
+        return;
+      }
+      url = "https://github.com/" + id + "/" + repo + ".git";
+    }
+    branchBtn->setEnabled(false);
+    branchBtn->setValue("확인 중...");
+    const int found = optech_git_run("check '" + url + "' '" + br + "'");
+    branchBtn->setValue("선택");
+    branchBtn->setEnabled(true);
+    if (found != 0) {
+      ConfirmationDialog::alert("브랜치를 찾지 못했어요.\n" + url + " -b " + br + "\n주소와 와이파이 연결을 확인해 주세요.", this);
+      return;
+    }
+    if (ConfirmationDialog::confirm(br + " 브랜치로 바꿀까요?\n\n받은 뒤 자동으로 다시 켜지고, 처음 켤 때 몇 분 빌드해요.\n"
+                                    "설정값은 그대로 남아요.", "바꾸기", this)) {
+      branchBtn->setEnabled(false);
+      branchBtn->setValue("받는 중...");
+      optech_git_background("switch '" + url + "' '" + br + "'");
+      watch_job(branchBtn, "선택", "브랜치를 바꾸지");
+    }
+  });
+  addItem(branchBtn);
+
+  auto gitResetBtn = new ButtonControl("파일 원래대로 (Git 리셋)", "실행",
+    "기기에서 바뀐 프로그램 파일을 지금 버전의 원래 내용으로 되돌리고 다시 켭니다. 직접 고친 파일 때문에 업데이트가 "
+    "안 되거나 동작이 이상할 때 쓰세요. 설정값은 그대로입니다.");
+  connect(gitResetBtn, &ButtonControl::clicked, [=]() {
+    if (!parked_or_off()) return;
+    if (ConfirmationDialog::confirm("프로그램 파일을 지금 버전 그대로 되돌리고 다시 켤까요?\n설정값은 그대로예요.", "되돌리기", this)) {
+      gitResetBtn->setEnabled(false);
+      optech_git_background("reset");
+      watch_job(gitResetBtn, "실행", "파일을 되돌리지");
+    }
+  });
+  addItem(gitResetBtn);
+
+  auto restoreBtn = new ButtonControl("이전 버전으로 되돌리기", "실행",
+    "마지막 업데이트나 브랜치 바꾸기를 하기 전 버전으로 돌아가고 다시 켭니다. 새 버전이 이상할 때 쓰세요. "
+    "한 번 더 누르면 다시 지금 버전으로 돌아옵니다.");
+  connect(restoreBtn, &ButtonControl::clicked, [=]() {
+    if (!parked_or_off()) return;
+    // '브랜치 커밋 주소' (optech_git.sh save_prev, gitpull.sh)
+    const QStringList prev = QString::fromStdString(util::read_file("/data/optech_prev_commit")).trimmed().split(' ');
+    if (prev.size() < 2 || prev[0].isEmpty()) {
+      ConfirmationDialog::alert("되돌릴 이전 버전이 없어요.\n업데이트나 브랜치 바꾸기를 한 뒤에 쓸 수 있어요.", this);
+      return;
+    }
+    if (ConfirmationDialog::confirm(prev[0] + " (" + prev[1].left(7) + ") 버전으로 되돌릴까요?\n\n되돌린 뒤 자동으로 다시 켜지고, "
+                                    "처음 켤 때 몇 분 빌드해요.", "되돌리기", this)) {
+      restoreBtn->setEnabled(false);
+      optech_git_background("restore");
+      watch_job(restoreBtn, "실행", "이전 버전으로 되돌리지");
+    }
+  });
+  addItem(restoreBtn);
 
   // install update btn
   installBtn = new ButtonControl(tr("Install Update"), tr("INSTALL"));
