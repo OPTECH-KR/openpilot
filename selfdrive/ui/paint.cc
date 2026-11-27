@@ -1157,14 +1157,16 @@ static void drawOptechHud(const UIState* s) {
         // first box = who does the speed (user 2026-11-28): SCC (slate) = the car's own SCC, no 롱컨; SCC2 (red) =
         // 롱컨, openpilot does it; E2E (teal) = 롱컨 and the driving model is deciding right now (longitudinalPlan.mpcMode
         // 1 = 'blended': 실험 모드, or 'E2E 모드' (OptechAutoE2E) picking it), in the SCC2 place. Cars without SCC (Ray EV,
-        // Porter II EV, NON-SCC trims: HyundaiFlags.NON_SCC 65536) get no SCC / SCC2, only E2E when it is on.
-        // Same width for all three, so nothing after it moves.
+        // Porter II EV, NON-SCC trims: HyundaiFlags.NON_SCC 65536), without spst's 'ACC' words (user 2026-11-28:
+        // "우리는 acc라는 표현을 안쓰니까", then "scc없는차 + comma페달 사용시 scc2 페달사용 안하면 일반"): 일반 (navy, the
+        // car's plain cruise, no pedal) / SCC2 (red, openpilot does the speed with a comma pedal; HKG cars without SCC get
+        // openpilot long only with the pedal). Every label fits the badge's minimum width, so nothing after it moves.
         {
             const bool op_long = car_params.getOpenpilotLongitudinalControl();
             const bool has_scc = (car_params.getFlags() & 65536) == 0;
             const bool e2e_now = op_long && enabled && longActiveUser > 0 &&
                                  sm["longitudinalPlan"].getLongitudinalPlan().getMpcMode() == 1;
-            const char* lbl = e2e_now ? "E2E" : !has_scc ? nullptr : op_long ? "SCC2" : "SCC";
+            const char* lbl = e2e_now ? "E2E" : op_long ? "SCC2" : (has_scc ? "SCC" : "일반");
             const NVGcolor lc = e2e_now ? nvgRGBA(0, 150, 140, 235) : op_long ? nvgRGBA(200, 40, 40, 235) : nvgRGBA(70, 90, 110, 235);
             if (lbl) bx += optech_badge(s, bx, ry, BH, lbl, lc) + 14;
         }
