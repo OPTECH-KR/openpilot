@@ -1286,15 +1286,28 @@ static void drawOptechHud(const UIState* s) {
         nvgFill(s->vg);
         // the target keeps its yellow; with no slowdown a yellow bar instead of the number (user 2026-11-26)
         const NVGcolor hold_c = nvgRGBA(250, 199, 117, 255);
-        optech_text_vc(s, cx0, col_y + 44, "설정속도", lab_fs, txt, NVG_ALIGN_CENTER);
-        optech_text_vc(s, cx0, col_y + 109, set_s, fs_set, txt, NVG_ALIGN_CENTER);
-        optech_text_vc(s, cx0, col_y + h / 2 + 48, "감속목표", lab_fs, hold_c, NVG_ALIGN_CENTER);
+        // even gaps (user 2026-11-27 "설정속도 감속목표 정렬이 이상하네": the label sat 7 px over its number, the
+        // upper number 8 px over the dotted line, but 26 px were empty under it): in each half the label and the
+        // number with three equal gaps. Ink heights of this font: Hangul 0.91 size, digits 0.77 size. The nominal
+        // sizes are used so a shrunk 3-digit number does not move the labels.
+        auto place = [&](float top, float num_fs, float& lab_cy, float& num_cy) {
+            const float lab_ink = 0.91f * lab_fs, num_ink = 0.77f * num_fs;
+            const float gap = (h / 2 - lab_ink - num_ink) / 3;
+            lab_cy = top + gap + lab_ink / 2;
+            num_cy = top + 2 * gap + lab_ink + num_ink / 2;
+        };
+        float set_lab_y, set_y, hold_lab_y, hold_y;
+        place(col_y, 96, set_lab_y, set_y);
+        place(col_y + h / 2, 89, hold_lab_y, hold_y);
+        optech_text_vc(s, cx0, set_lab_y, "설정속도", lab_fs, txt, NVG_ALIGN_CENTER);
+        optech_text_vc(s, cx0, set_y, set_s, fs_set, txt, NVG_ALIGN_CENTER);
+        optech_text_vc(s, cx0, hold_lab_y, "감속목표", lab_fs, hold_c, NVG_ALIGN_CENTER);
         if (slowing) {
-            optech_text_vc(s, cx0, col_y + h - 44, hold_s, fs_hold, hold_c, NVG_ALIGN_CENTER);
+            optech_text_vc(s, cx0, hold_y, hold_s, fs_hold, hold_c, NVG_ALIGN_CENTER);
         } else {
             const float bar_w = 84, bar_h = 18;
             nvgBeginPath(s->vg);
-            nvgRoundedRect(s->vg, cx0 - bar_w / 2, col_y + h - 44 - bar_h / 2, bar_w, bar_h, bar_h / 2);
+            nvgRoundedRect(s->vg, cx0 - bar_w / 2, hold_y - bar_h / 2, bar_w, bar_h, bar_h / 2);
             nvgFillColor(s->vg, hold_c);
             nvgFill(s->vg);
         }
@@ -1605,19 +1618,34 @@ static void drawOptechHud(const UIState* s) {
             }
         }
 
-        // gear (testers 2026-11-27: the following distance steps are gone - the driver sets the gap once and does not
-        // need to watch it): a box the size of the other right boxes with the big gear tile (D green, R red, N amber,
-        // P grey). The gap button still works as before.
+        // following distance + gear (testers 2026-11-27 had the steps taken out; the user put them back the same
+        // evening: "차간거리도 다시 넣어줘", as spst keeps them): a 230 high box, white label, four outlined steps (lit
+        // ones bright green), the big gear tile under them (D green, R red, N amber, P grey)
         {
             top += prev_h + gap;
-            carrot_round_box(s, rx, top, colw, boxh, nvgRGBA(0, 0, 0, 140), COLOR_WHITE, 14, 3);
+            const float gh = 230;
+            carrot_round_box(s, rx, top, colw, gh, nvgRGBA(0, 0, 0, 140), COLOR_WHITE, 14, 3);
+            // stock SCC: the car's own gap setting (SCC11 TauGapSet); openpilot long: openpilot's gap
+            const int cgap = car_params.getOpenpilotLongitudinalControl() ? (int)controls_state.getLongCruiseGap()
+                                                                          : (int)car_state.getCruiseGap();
+            optech_text_vc(s, rcx, top + 28, "차간 거리", 34, COLOR_WHITE, NVG_ALIGN_CENTER);
+            const float gl = rx + 14, gr = rx + colw - 14, sgap = 6, segw = (gr - gl - 3 * sgap) / 4, segh = 30, segy = top + 54;
+            for (int i = 0; i < 4; i++) {
+                nvgBeginPath(s->vg);
+                nvgRoundedRect(s->vg, gl + i * (segw + sgap), segy, segw, segh, 6);
+                nvgFillColor(s->vg, i < cgap ? nvgRGBA(120, 220, 60, 255) : nvgRGBA(255, 255, 255, 30));
+                nvgFill(s->vg);
+                nvgStrokeColor(s->vg, i < cgap ? COLOR_WHITE : nvgRGBA(255, 255, 255, 110));
+                nvgStrokeWidth(s->vg, 2);
+                nvgStroke(s->vg);
+            }
             const auto gear = car_state.getGearShifter();
             NVGcolor gfill = nvgRGBA(110, 110, 105, 255);
             if (gear == cereal::CarState::GearShifter::DRIVE || gear == cereal::CarState::GearShifter::SPORT ||
                 gear == cereal::CarState::GearShifter::LOW || gear == cereal::CarState::GearShifter::ECO) gfill = nvgRGBA(40, 150, 20, 255);
             else if (gear == cereal::CarState::GearShifter::REVERSE) gfill = nvgRGBA(226, 60, 60, 255);
             else if (gear == cereal::CarState::GearShifter::NEUTRAL) gfill = nvgRGBA(220, 140, 20, 255);
-            const float ts = 120, tcy = top + boxh / 2;
+            const float ts = 120, tcy = top + 100 + ts / 2;
             carrot_round_box(s, rcx - ts / 2, tcy - ts / 2, ts, ts, gfill, COLOR_WHITE, 16, 4);
             optech_text_vc(s, rcx, tcy, carrot_gear_text(gear), 96, COLOR_WHITE, NVG_ALIGN_CENTER);
         }
