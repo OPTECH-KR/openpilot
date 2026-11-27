@@ -122,6 +122,10 @@ class VCruiseHelper:
     if CS.gasPressed and button_type in (ButtonType.decelCruise, ButtonType.setCruise):
       self.v_cruise_kph = max(self.v_cruise_kph, CS.vEgo * CV.MS_TO_KPH)
 
+    # optech: whole km/h. SET while pressing the gas took the current speed with its decimals (e.g. 52.5), and the
+    # screen rounds .5 to the even number, so + then showed 52 -> 52 -> 54 (Bolt EUV tester 2026-11-27)
+    if is_metric:
+      self.v_cruise_kph = math.floor(self.v_cruise_kph + 0.5)
     self.v_cruise_kph = clip(round(self.v_cruise_kph, 1), V_CRUISE_MIN, V_CRUISE_MAX)
 
   def update_button_timers(self, CS, enabled):
