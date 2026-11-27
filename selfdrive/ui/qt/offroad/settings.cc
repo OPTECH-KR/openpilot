@@ -1311,7 +1311,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     optech_web_choice(radar_btn, "ShowRadarInfo", radar_names, optech_index_values(radar_names.size()));
     dispToggles->addItem(radar_btn);
   }
-  dispToggles->addItem(new ParamControl("ShowConnInfo", "연결 상태 표시", "켜 두면(초록색) 주행 화면 왼쪽 위에 연결 상태를 보여 줍니다.\nTMAP: TmapNda가 NDA 방식으로 보내는 중\nCARROT: 당근 방식으로 들어옴 (당근내비, 당근 방식으로 설정한 TmapNda)\n초록은 정보가 들어오는 중, 회색은 연결됐지만 아직 정보가 없음\n맨 앞 칸 = 누가 가감속을 하는지\n  SCC(남색): 롱컨 안 한 차, 차의 순정 SCC가 가감속\n  SCC2(빨강): 롱컨 한 차, 오픈파일럿이 가감속\n  E2E(청록): 롱컨 차에서 지금 주행 모델이 판단하며 가감속 (실험 모드, 자동 E2E 전환)\nRADAR(주황): 레이더 트랙 사용 중", SHELL_ICON, this));
+  dispToggles->addItem(new ParamControl("ShowConnInfo", "연결 상태 표시", "켜 두면(초록색) 주행 화면 왼쪽 위에 연결 상태를 보여 줍니다.\nTMAP: TmapNda가 NDA 방식으로 보내는 중\nCARROT: 당근 방식으로 들어옴 (당근내비, 당근 방식으로 설정한 TmapNda)\n초록은 정보가 들어오는 중, 회색은 연결됐지만 아직 정보가 없음\n맨 앞 칸 = 누가 가감속을 하는지\n  SCC(남색): 롱컨 안 한 차, 차의 순정 SCC가 가감속\n  SCC2(빨강): 롱컨 한 차, 오픈파일럿이 가감속\n  E2E(청록): 롱컨 차에서 지금 주행 모델이 판단하며 가감속 (실험 모드, E2E 모드)\n  SCC 없는 차(레이 EV, 포터 EV, NO SCC 트림): 페달 없으면 일반(남색) = 차의 일반 크루즈, 코마 페달을 쓰면 SCC2(빨강) = 오픈파일럿이 가감속\nRADAR(주황): 레이더 트랙 사용 중", SHELL_ICON, this));
   // '운전자 모니터링 아이콘' (ShowDmInfo 0 / 1); the mode itself is chosen on the 토글 page (optech_dm_mode)
   dmIcon = new ToggleControl("운전자 모니터링 아이콘",
     "주행 화면 왼쪽 아래에 운전자 모니터링 아이콘(얼굴 모양)을 보여 줍니다. 얼굴을 잘 보고 있으면 선명하게, 아니면 흐리게 보입니다. 토글 화면의 운전자 모니터링이 '기본 사용'일 때만 쓸 수 있습니다.",
