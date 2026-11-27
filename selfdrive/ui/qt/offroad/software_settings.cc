@@ -116,7 +116,7 @@ SoftwarePanel::SoftwarePanel(QWidget* parent) : ListWidget(parent) {
   // '이 메뉴가 쓰는 동안 자동차 상태' check, the same as '최신 업데이트'
   auto parked_or_off = [=]() {
     if (is_onroad && !optech_update_parked) {
-      ConfirmationDialog::alert("시동이 켜져 있을 때는 기어를 P에 놓고 오픈파일럿을 꺼야 할 수 있어요.", this);
+      ConfirmationDialog::rich("시동이 켜져 있을 때는 기어를 P에 놓고 오픈파일럿을 꺼야 할 수 있어요.", this);
       return false;
     }
     return true;
@@ -131,7 +131,7 @@ SoftwarePanel::SoftwarePanel(QWidget* parent) : ListWidget(parent) {
       t->deleteLater();
       btn->setValue(idle);
       btn->setEnabled(true);
-      ConfirmationDialog::alert(what + " 하지 못했어요.\n와이파이 연결을 확인한 뒤 다시 해 주세요.", this);
+      ConfirmationDialog::rich(what + " 하지 못했어요.\n와이파이 연결을 확인한 뒤 다시 해 주세요.", this);
     });
     t->start(1000);
   };
@@ -162,7 +162,7 @@ SoftwarePanel::SoftwarePanel(QWidget* parent) : ListWidget(parent) {
       // only plain names: they go into a shell command
       const QRegularExpression ok_name("^[A-Za-z0-9._-]+$"), ok_branch("^[A-Za-z0-9._/-]+$");
       if (!ok_name.match(id).hasMatch() || !ok_name.match(repo).hasMatch() || !ok_branch.match(br).hasMatch()) {
-        ConfirmationDialog::alert("영문, 숫자와 . _ - 만 쓸 수 있어요 (브랜치는 / 도). 다시 입력해 주세요.", this);
+        ConfirmationDialog::rich("영문, 숫자와 . _ - 만 쓸 수 있어요 (브랜치는 / 도). 다시 입력해 주세요.", this);
         return;
       }
       url = "https://github.com/" + id + "/" + repo + ".git";
@@ -173,10 +173,10 @@ SoftwarePanel::SoftwarePanel(QWidget* parent) : ListWidget(parent) {
     branchBtn->setValue("선택");
     branchBtn->setEnabled(true);
     if (found != 0) {
-      ConfirmationDialog::alert("브랜치를 찾지 못했어요.\n" + url + " -b " + br + "\n주소와 와이파이 연결을 확인해 주세요.", this);
+      ConfirmationDialog::rich("브랜치를 찾지 못했어요.\n" + url + " -b " + br + "\n주소와 와이파이 연결을 확인해 주세요.", this);
       return;
     }
-    if (ConfirmationDialog::confirm(br + " 브랜치로 바꿀까요?\n\n받은 뒤 자동으로 다시 켜지고, 처음 켤 때 몇 분 빌드해요.\n"
+    if (ConfirmationDialog::richConfirm(br + " 브랜치로 바꿀까요?\n\n받은 뒤 자동으로 다시 켜지고, 처음 켤 때 몇 분 빌드해요.\n"
                                     "설정값은 그대로 남아요.", "바꾸기", this)) {
       branchBtn->setEnabled(false);
       branchBtn->setValue("받는 중...");
@@ -186,12 +186,15 @@ SoftwarePanel::SoftwarePanel(QWidget* parent) : ListWidget(parent) {
   });
   addItem(branchBtn);
 
-  auto gitResetBtn = new ButtonControl("파일 원래대로 (Git 리셋)", "실행",
-    "기기에서 바뀐 프로그램 파일을 지금 버전의 원래 내용으로 되돌리고 다시 켭니다. 직접 고친 파일 때문에 업데이트가 "
-    "안 되거나 동작이 이상할 때 쓰세요. 설정값은 그대로입니다.");
+  // user 2026-11-27: '파일 원래대로' did not say what it is -> clearer name and text
+  auto gitResetBtn = new ButtonControl("바뀐 파일 되돌리기 (Git 리셋)", "실행",
+    "기기 안의 프로그램 파일이 바뀌었을 때 씁니다. 예를 들어 누가 파일을 직접 고쳤거나 업데이트가 중간에 끊겨서 "
+    "'최신 업데이트'가 안 되거나 동작이 이상할 때입니다. 프로그램 파일만 지금 버전의 원래 내용으로 되돌리고 다시 켭니다. "
+    "버전은 그대로이고, 설정값과 주행 기록도 지워지지 않습니다.");
   connect(gitResetBtn, &ButtonControl::clicked, [=]() {
     if (!parked_or_off()) return;
-    if (ConfirmationDialog::confirm("프로그램 파일을 지금 버전 그대로 되돌리고 다시 켤까요?\n설정값은 그대로예요.", "되돌리기", this)) {
+    if (ConfirmationDialog::richConfirm("바뀐 프로그램 파일을 지금 버전의 원래 내용으로 되돌리고 다시 켤까요?\n\n"
+                                        "버전은 그대로이고, 설정값과 주행 기록도 그대로예요.", "되돌리기", this)) {
       gitResetBtn->setEnabled(false);
       optech_git_background("reset");
       watch_job(gitResetBtn, "실행", "파일을 되돌리지");
@@ -207,10 +210,10 @@ SoftwarePanel::SoftwarePanel(QWidget* parent) : ListWidget(parent) {
     // '브랜치 커밋 주소' (optech_git.sh save_prev, gitpull.sh)
     const QStringList prev = QString::fromStdString(util::read_file("/data/optech_prev_commit")).trimmed().split(' ');
     if (prev.size() < 2 || prev[0].isEmpty()) {
-      ConfirmationDialog::alert("되돌릴 이전 버전이 없어요.\n업데이트나 브랜치 바꾸기를 한 뒤에 쓸 수 있어요.", this);
+      ConfirmationDialog::rich("되돌릴 이전 버전이 없어요.\n업데이트나 브랜치 바꾸기를 한 뒤에 쓸 수 있어요.", this);
       return;
     }
-    if (ConfirmationDialog::confirm(prev[0] + " (" + prev[1].left(7) + ") 버전으로 되돌릴까요?\n\n되돌린 뒤 자동으로 다시 켜지고, "
+    if (ConfirmationDialog::richConfirm(prev[0] + " (" + prev[1].left(7) + ") 버전으로 되돌릴까요?\n\n되돌린 뒤 자동으로 다시 켜지고, "
                                     "처음 켤 때 몇 분 빌드해요.", "되돌리기", this)) {
       restoreBtn->setEnabled(false);
       optech_git_background("restore");
