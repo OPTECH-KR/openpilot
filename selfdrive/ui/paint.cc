@@ -1124,15 +1124,25 @@ static void drawOptechHud(const UIState* s) {
     const int camType = road.getCamType();
     const int xSignType = road.getXSignType();
     int limit_speed = 0, left_dist = 0;
-    bool section = false;
+    bool section = false, from_hda = false;
     if (road.getCamLimitSpeed() > 0 && road.getCamLimitSpeedLeftDist() > 0) {
         limit_speed = road.getCamLimitSpeed(); left_dist = road.getCamLimitSpeedLeftDist();
     } else if (road.getSectionLimitSpeed() > 0 && road.getSectionLeftDist() > 0) {
         limit_speed = road.getSectionLimitSpeed(); left_dist = road.getSectionLeftDist(); section = true;
     } else if (road.getXSpdLimit() > 0 && road.getXSpdDist() > 0) {
         limit_speed = road.getXSpdLimit(); left_dist = road.getXSpdDist();
+        // user 2026-11-27: the built-in camera DB (road_speed_limiter) marks an average-speed section it is driving
+        // through with camType 4 / xSignType 165 and sends the length left -> '구간' like a navigation section
+        section = camType == 4 || xSignType == 165;
+    } else if (car_state.getSpeedLimit() > 0 && car_state.getSpeedLimitDistance() > 0) {
+        // user 2026-11-27: the car's own navigation (HDA: Navi_HU limit with the camera flag, carstate.py) - it
+        // already slows the car (road_speed_limiter), now the sign shows why. Its distance is an estimate that stays
+        // at 1 m inside a section or after the camera, so no distance box then
+        limit_speed = car_state.getSpeedLimit();
+        left_dist = car_state.getSpeedLimitDistance() > 1 ? (int)car_state.getSpeedLimitDistance() : 0;
+        from_hda = true;
     }
-    const bool bump = limit_speed > 0 && (xSignType == 124 || camType == 22);
+    const bool bump = limit_speed > 0 && !from_hda && (xSignType == 124 || camType == 22);
     const int cam_limit = (limit_speed > 0 && !bump) ? limit_speed : 0;
     const int road_limit = (roadLimitSpeed > 0 && roadLimitSpeed < 200) ? roadLimitSpeed : 0;
 
@@ -1297,7 +1307,7 @@ static void drawOptechHud(const UIState* s) {
     //      every 1.2 s (chosen on the test phone out of 11 effects; the ring blinking white looked odd), a bump picture
     //      brightens and dims softly instead; box = the distance left (red within 200 m; '구간' / '방지턱' in front).
     //    - otherwise the road limit, steady, box '제한속도', while the navigation gives one.
-    //    It comes and goes with the data (navigation app or built-in camera DB).
+    //    It comes and goes with the data (navigation app, built-in camera DB or the car's own navigation HDA).
     {
         const float r = 82, ring = 18, bh2 = 53, gap2 = 13;
         const float t = (sm.frame % 24) / 24.f;  // the wave's 1.2 s cycle, 0 -> 1
