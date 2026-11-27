@@ -2893,6 +2893,10 @@ void ui_draw(UIState *s, int w, int h) {
   nvgEndFrame(s->vg);
   glDisable(GL_BLEND);
 }
+// auto hold / soft hold box and the auto hold / parking brake / soft hold alerts: one size for all of them
+// (K7 HEV tester 72 / 110 / 380 / 90, then user 2026-11-27 "30% bigger")
+static const float OPTECH_HOLD_FS = 94, OPTECH_HOLD_H = 143, OPTECH_HOLD_MINW = 494, OPTECH_HOLD_SIDE = 117;
+
 // optech HUD alert (user 2026-11-25: the bare yellow letters were hard to read, ran into the lead car info and did
 // not match the HUD): a rounded box low in the middle (3/4 of the screen height, like the picture the user sent; the
 // lead info box steps aside meanwhile; the box is drawn last, over everything). Normal: see-through dark box, light outline, green letters (like the AUTO HOLD box the user
@@ -2907,11 +2911,11 @@ static void optech_draw_alert(UIState* s) {
     const bool one_line = alert.text2.isEmpty() && !line3;
     // user 2026-11-25: all bigger again (one line 116/124 -> 132/144, two lines 92/104 -> 108/124, 2nd 58 -> 70,
     // 3rd 46 -> 54) and the box as wide as the space between the left and right columns allows
-    // user 2026-11-27: auto hold / parking brake / soft hold alerts as small as the hold box below (72, the size the
-    // K7 HEV tester asked for), not the big one-line size
+    // user 2026-11-27: auto hold / parking brake / soft hold alerts as big as the hold box below (OPTECH_HOLD_FS),
+    // not the big one-line size
     const bool compact = alert.type.startsWith("brakeHold/") || alert.type.startsWith("parkBrake/") || alert.type.startsWith("autoHold/");
-    float fs1 = compact ? 72 : one_line ? (full ? 144 : 132) : (full ? 124 : 108), fs2 = 70, fs3 = 54;
-    const float pad = compact ? 21 : 26;
+    float fs1 = compact ? OPTECH_HOLD_FS : one_line ? (full ? 144 : 132) : (full ? 124 : 108), fs2 = 70, fs3 = 54;
+    const float pad = compact ? (OPTECH_HOLD_H - OPTECH_HOLD_FS * 0.95f) / 2 : 26;
     // user 2026-11-27: long lines (openpilot Unavailable, Calibration in Progress: 40%) shrank too much in a 1060 wide
     // box -> up to 1420 wide (x 250..1670: the left column ends above the box, the right one starts at 1710)
     const float maxw = std::min(1420.f, s->fb_w - 2 * 250.f);
@@ -2923,7 +2927,7 @@ static void optech_draw_alert(UIState* s) {
     if (w2 > maxw - 60) { fs2 *= (maxw - 60) / w2; w2 = maxw - 60; }
     tw = std::max(w1, w2);
     const float l1 = fs1 * 0.95f, l2 = t2.empty() ? 0 : fs2 * 0.95f + 14, l3 = line3 ? fs3 * 0.95f + 12 : 0;
-    const float h = pad + l1 + l2 + l3 + pad, w = std::min(maxw, compact ? std::max(380.f, tw + 90) : std::max(640.f, tw + 100));
+    const float h = pad + l1 + l2 + l3 + pad, w = std::min(maxw, compact ? std::max(OPTECH_HOLD_MINW, tw + OPTECH_HOLD_SIDE) : std::max(640.f, tw + 100));
     const float cx = s->fb_w / 2.f, top = std::min(s->fb_h * 0.75f - h / 2, s->fb_h - 20.f - h), x = cx - w / 2;  // low, like the user's picture
     const bool blink_on = (s->sm->frame % 12) < 7;
     // normal (information, e.g. auto hold): like the other fork's AUTO HOLD box the user liked - see-through dark box,
@@ -2951,17 +2955,18 @@ static void optech_draw_hold(UIState* s) {
     if (!auto_hold && !soft_hold) return;
     // the same look as a normal alert: see-through dark box, light outline, green letters. In Korean, the wording the
     // alerts already use (user 2026-11-25: "not in English, Korean as before - only the place")
-    // K7 HEV tester 2026-11-27: '오토 홀드 작동 중' was too big -> '오토홀드', about half the size
+    // K7 HEV tester 2026-11-27: '오토 홀드 작동 중' was too big -> '오토홀드', about half the size (72);
+    // user 2026-11-27: then 30% bigger again (OPTECH_HOLD_FS 94)
     const char* txt = auto_hold ? "오토홀드" : "소프트 오토홀드";
-    float fs = 72;
-    const float h = 110, cx = s->fb_w / 2.f, top = s->fb_h * 0.75f - h / 2;
+    float fs = OPTECH_HOLD_FS;
+    const float h = OPTECH_HOLD_H, cx = s->fb_w / 2.f, top = s->fb_h * 0.75f - h / 2;
     const float maxw = std::min(1300.f, s->fb_w - 2 * 430.f);  // between the left and right columns
     float tb[4];
     nvgFontFace(s->vg, BOLD);
     nvgFontSize(s->vg, fs);
     nvgTextBounds(s->vg, 0, 0, txt, NULL, tb);
     if (tb[2] - tb[0] > maxw - 60) fs *= (maxw - 60) / (tb[2] - tb[0]);
-    const float w = std::min(maxw, std::max(380.f, tb[2] - tb[0] + 90));
+    const float w = std::min(maxw, std::max(OPTECH_HOLD_MINW, tb[2] - tb[0] + OPTECH_HOLD_SIDE));
     carrot_round_box(s, cx - w / 2, top, w, h, nvgRGBA(10, 10, 10, 215), nvgRGBA(235, 235, 235, 230), 22, 4);
     optech_text_vc(s, cx, top + h / 2, txt, fs, nvgRGBA(80, 230, 60, 255), NVG_ALIGN_CENTER);
 }
