@@ -1013,7 +1013,8 @@ void AnnotatedCameraWidget::drawOptechRadar(QPainter &p) {
   }
 }
 
-// right column (optech-hkg 2026-11-25/27): wheel, CPU ('기기 상태'), tyre and gear boxes of 160 x 160
+// right column (optech-hkg 2026-11-25/26): wheel, CPU ('기기 상태') and tyre boxes of 160 x 160, then the following
+// distance + gear box (230 high) under them
 void AnnotatedCameraWidget::drawOptechRight(QPainter &p) {
   const float colw = 160, boxh = 160, gap = 14, rx = width() - 30 - colw, rcx = rx + colw / 2;
   const QColor box_fill(0, 0, 0, 100), box_line(180, 178, 169), lab(211, 209, 199), white(255, 255, 255);
@@ -1054,17 +1055,27 @@ void AnnotatedCameraWidget::drawOptechRight(QPainter &p) {
     }
   }
 
-  // gear (optech-hkg 2026-11-27, testers: the following distance steps are gone - the driver sets the gap once and does
-  // not need to watch it): a box the size of the other right boxes with the big gear tile (D green, R red, N amber,
-  // P grey). The 주행 성향 button still works as before.
+  // following distance + gear: white label, outlined steps (lit ones bright green), a big gear tile (D green, R red,
+  // N amber, P grey). spst: the steps are openpilot's 주행 성향 (1-3) with openpilot speed control; the car's own gap
+  // setting is not read here, so with the car's cruise they stay dark. optech-hkg dropped the steps on 2026-11-27;
+  // the user keeps them in spst (2026-11-27: "spst는 다시 넣어 줘")
   {
     top += boxh + gap;
-    optech_box(p, rx, top, colw, boxh, QColor(0, 0, 0, 140), 14, 3, white);
+    const float gh = 230;
+    optech_box(p, rx, top, colw, gh, QColor(0, 0, 0, 140), 14, 3, white);
+    optech_txt(p, rcx, top + 28, "차간 거리", 34, white, 0, 1);
+    const int segs = 3, lit = optech_long ? std::clamp(optech_personality, 0, 2) + 1 : 0;
+    const float gl = rx + 14, gr = rx + colw - 14, sgap = 6, segw = (gr - gl - (segs - 1) * sgap) / segs, segh = 30, segy = top + 54;
+    for (int i = 0; i < segs; i++) {
+      p.setPen(QPen(i < lit ? white : QColor(255, 255, 255, 110), 2));
+      p.setBrush(i < lit ? QColor(120, 220, 60) : QColor(255, 255, 255, 30));
+      p.drawRoundedRect(QRectF(gl + i * (segw + sgap), segy, segw, segh), 6, 6);
+    }
     QColor gfill(110, 110, 105);
     if (optech_gear == "D" || optech_gear == "S" || optech_gear == "L" || optech_gear == "E") gfill = QColor(40, 150, 20);
     else if (optech_gear == "R") gfill = QColor(226, 60, 60);
     else if (optech_gear == "N") gfill = QColor(220, 140, 20);
-    const float ts = 120, tcy = top + boxh / 2;
+    const float ts = 120, tcy = top + 100 + ts / 2;
     optech_box(p, rcx - ts / 2, tcy - ts / 2, ts, ts, gfill, 16, 4, white);
     optech_txt(p, rcx, tcy, optech_gear, 96, white, 0, 1);
   }
@@ -1124,8 +1135,8 @@ void AnnotatedCameraWidget::drawOptechBsd(QPainter &p, bool right, bool danger) 
 //   round sign right of it (camera ahead / speed bump / road limit) and the distance left under the sign
 //   top centre: traffic light at the top, big speed (240) with km/h beside it on the same baseline, turn signal
 //   arrows beside the number, turn guidance under it
-//   right column: wheel, CPU, tyres, gear. Lead info under the lead (not while a message box is up), rear side
-//   warning beside the road. Alerts: OnroadAlerts (optech_paint_alert)
+//   right column: wheel, CPU, tyres, following distance + gear. Lead info under the lead (not while a message box is
+//   up), rear side warning beside the road. Alerts: OnroadAlerts (optech_paint_alert)
 void AnnotatedCameraWidget::drawOptechHud(QPainter &p) {
   p.save();
   p.setRenderHint(QPainter::Antialiasing);
