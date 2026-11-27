@@ -637,6 +637,11 @@ void AnnotatedCameraWidget::updateState(const UIState &s) {
     // speed bump ahead (the app sends it in the camera fields: sign 124 / camera type 22); speedcamd skips bumps
     optech_bump = road.getXSpdLimit() > 0 && road.getXSpdDist() > 0 && (road.getXSignType() == 124 || road.getCamType() == 22);
     optech_bump_dist = optech_bump ? road.getXSpdDist() : 0;
+    // road name at the bottom centre (optech-hkg 2026-11-27 f9fff8a52): when the map data (mapd) has none, the name
+    // the navigation app sends (road_speed_limiter xRoadName: 당근내비 / TmapNda in carrot mode, szPosRoadName). The
+    // limiter adds its debug values after a ':' - only the part before it. Only while the app is linked.
+    const QString navi_road = QString::fromStdString(road.getXRoadName()).section(':', 0, 0).trimmed();
+    if (roadName.isEmpty() && optech_navi_active > 0 && !navi_road.isEmpty()) setProperty("roadName", navi_road);
   } else {
     optech_navi_active = optech_navi_source = optech_road_limit = optech_turn = optech_turn_dist = 0;
     optech_bump = false;
