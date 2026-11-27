@@ -1151,23 +1151,27 @@ static void drawOptechHud(const UIState* s) {
     // (no time / date in this HUD: user 2026-11-23)
     // 1) badges, only the ones that are on, packed from the left (the SCC2 / RadarTracks pictures scaled to the row)
     if (s->show_conn_info) {
-        const int sccBus = (int)car_params.getSccBus();
         const bool radar_tracks = s->radar_tracks;
         // user 2026-11-25: every badge as a text box in the same font and shape (the SCC2 / RadarTracks pictures
         // had their own old lettering); RadarTracks shortened to RADAR
-        if (sccBus == 2) bx += optech_badge(s, bx, ry, BH, "SCC2", nvgRGBA(200, 40, 40, 235)) + 14;
+        // first box = who does the speed (user 2026-11-28): SCC (slate) = the car's own SCC, no 롱컨; SCC2 (red) =
+        // 롱컨, openpilot does it; E2E (teal) = 롱컨 and the driving model is deciding right now (longitudinalPlan.mpcMode
+        // 1 = 'blended': 실험 모드, or 자동 E2E / ACC 전환 picking it), in the SCC2 place. Cars without SCC (Ray EV,
+        // Porter II EV, NON-SCC trims: HyundaiFlags.NON_SCC 65536) get no SCC / SCC2, only E2E when it is on.
+        // Same width for all three, so nothing after it moves.
+        {
+            const bool op_long = car_params.getOpenpilotLongitudinalControl();
+            const bool has_scc = (car_params.getFlags() & 65536) == 0;
+            const bool e2e_now = op_long && enabled && longActiveUser > 0 &&
+                                 sm["longitudinalPlan"].getLongitudinalPlan().getMpcMode() == 1;
+            const char* lbl = e2e_now ? "E2E" : !has_scc ? nullptr : op_long ? "SCC2" : "SCC";
+            const NVGcolor lc = e2e_now ? nvgRGBA(0, 150, 140, 235) : op_long ? nvgRGBA(200, 40, 40, 235) : nvgRGBA(70, 90, 110, 235);
+            if (lbl) bx += optech_badge(s, bx, ry, BH, lbl, lc) + 14;
+        }
         NVGcolor nav_fill;
         const char* nav = optech_nav_badge(activeNDA, road.getNaviSource(), &nav_fill);
         if (nav) bx += optech_badge(s, bx, ry, BH, nav, nav_fill) + 14;
         if (radar_tracks) bx += optech_badge(s, bx, ry, BH, "RADAR", nvgRGBA(230, 130, 20, 235)) + 14;
-        // how openpilot does the speed right now (user 2026-11-27: "e2e모드를 켰는데 ... 상황따라서 바뀌나?"): while
-        // openpilot long is on, E2E (teal: the driving model decides, longitudinalPlan.mpcMode 1 = 'blended' -
-        // 실험 모드, or 자동 E2E / ACC 전환 picking it) or ACC (blue: follows the radar lead). Last in the row, so
-        // the other badges stay put when it comes and goes with engaging
-        if (car_params.getOpenpilotLongitudinalControl() && enabled && longActiveUser > 0) {
-            const bool e2e = sm["longitudinalPlan"].getLongitudinalPlan().getMpcMode() == 1;
-            bx += optech_badge(s, bx, ry, BH, e2e ? "E2E" : "ACC", e2e ? nvgRGBA(0, 150, 140, 235) : nvgRGBA(24, 95, 165, 235)) + 14;
-        }
     }
     // user 2026-11-25 (marked on a screenshot): the set speed + signs block starts lower, at y 180, whether the badge
     // row is shown or not
