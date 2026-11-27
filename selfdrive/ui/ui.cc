@@ -394,7 +394,10 @@ void UIState::update() {
     Params params;
     const std::string keep = params.get("OptechSettingsTimeout");
     settings_timeout_s = keep.empty() ? 180 : std::atoi(keep.c_str());
-    drive_dim = std::atoi(params.get("OptechDriveDim").c_str());
+    // optech-hkg 2026-11-27: a read that comes back empty keeps the last value ('주행 중 밝기' must not flip to 끔 for
+    // a second and light the screen up)
+    const std::string dim = params.get("OptechDriveDim");
+    if (!dim.empty()) drive_dim = std::atoi(dim.c_str());
   }
   emit uiUpdate(*this);
 }

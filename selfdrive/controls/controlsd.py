@@ -130,6 +130,15 @@ class Controls:
                                      'managerState', 'liveParameters', 'radarState', 'liveTorqueParameters', 'testJoystick'] + self.camera_packets,
                                     ignore_alive=ignore, ignore_avg_freq=['radarState', 'testJoystick'])
 
+    # optech (optech-hkg 2026-11-27, Soul EV SK3 tester): the services whose problems raise commIssue.
+    # liveTorqueParameters is left out: torqued marks its message invalid whenever one of its own inputs (carControl /
+    # carState / liveLocationKalman) is a little late - on a busy device that flashed '즉시 핸들 잡으세요 / 기기 내부 통신
+    # 문제' for 1-3 s. The torque params are only applied while that message passes its checks (see liveTorqueParameters
+    # below), so a late or invalid one just keeps the last learned values. Logged (cloudlog) instead.
+    self.comm_services = [s for s in self.sm.data.keys() if s != 'liveTorqueParameters']
+    self.logged_torque_issue = None
+    self.torque_issue_log_frame = -1000
+
     if CI is None:
       # wait for one pandaState and one CAN packet
       print("Waiting for CAN messages...")
@@ -459,10 +468,10 @@ class Controls:
     can_rcv_timeout = self.can_rcv_timeout_counter >= 5
     has_disable_events = self.events.contains(ET.NO_ENTRY) and (self.events.contains(ET.SOFT_DISABLE) or self.events.contains(ET.IMMEDIATE_DISABLE))
     no_system_errors = (not has_disable_events) or (len(self.events) == num_events)
-    if (not self.sm.all_checks() or can_rcv_timeout) and no_system_errors:
-      if not self.sm.all_alive():
+    if (not self.sm.all_checks(self.comm_services) or can_rcv_timeout) and no_system_errors:
+      if not self.sm.all_alive(self.comm_services):
         self.events.add(EventName.commIssue)
-      elif not self.sm.all_freq_ok():
+      elif not self.sm.all_freq_ok(self.comm_services):
         self.events.add(EventName.commIssueAvgFreq)
       else:  # invalid or can_rcv_timeout.
         self.events.add(EventName.commIssue)
@@ -478,6 +487,19 @@ class Controls:
         self.logged_comm_issue = logs
     else:
       self.logged_comm_issue = None
+
+    # liveTorqueParameters: no event (see comm_services), but keep it visible in the log (at most once per 10 s: the
+    # flags can flip at torqued's 4 Hz)
+    torque_issue = None
+    if self.initialized and not self.sm.all_checks(['liveTorqueParameters']):
+      torque_issue = (self.sm.valid['liveTorqueParameters'], self.sm.alive['liveTorqueParameters'],
+                      self.sm.freq_ok['liveTorqueParameters'])
+    if torque_issue != self.logged_torque_issue:
+      if torque_issue is not None and self.sm.frame - self.torque_issue_log_frame >= 1000:
+        cloudlog.event("optech liveTorqueParameters not ok (no warning, last learned values kept)",
+                       valid=torque_issue[0], alive=torque_issue[1], freq_ok=torque_issue[2])
+        self.torque_issue_log_frame = self.sm.frame
+      self.logged_torque_issue = torque_issue
 
     if not self.sm['liveParameters'].valid and not TESTING_CLOSET and (not SIMULATION or REPLAY):
       self.events.add(EventName.vehicleModelInvalid)
@@ -543,7 +565,7 @@ class Controls:
     self.sm.update(0)
 
     if not self.initialized:
-      all_valid = CS.canValid and self.sm.all_checks()
+      all_valid = CS.canValid and self.sm.all_checks(self.comm_services)
       timed_out = self.sm.frame * DT_CTRL > (6. if REPLAY else 3.5)
       if all_valid or timed_out or (SIMULATION and not REPLAY):
         available_streams = VisionIpcClient.available_streams("camerad", block=False)
