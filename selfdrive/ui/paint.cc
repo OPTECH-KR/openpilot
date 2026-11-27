@@ -1156,7 +1156,7 @@ static void drawOptechHud(const UIState* s) {
         // had their own old lettering); RadarTracks shortened to RADAR
         // first box = who does the speed (user 2026-11-28): SCC (slate) = the car's own SCC, no 롱컨; SCC2 (red) =
         // 롱컨, openpilot does it; E2E (teal) = 롱컨 and the driving model is deciding right now (longitudinalPlan.mpcMode
-        // 1 = 'blended': 실험 모드, or 자동 E2E / ACC 전환 picking it), in the SCC2 place. Cars without SCC (Ray EV,
+        // 1 = 'blended': 실험 모드, or 'E2E 모드' (OptechAutoE2E) picking it), in the SCC2 place. Cars without SCC (Ray EV,
         // Porter II EV, NON-SCC trims: HyundaiFlags.NON_SCC 65536) get no SCC / SCC2, only E2E when it is on.
         // Same width for all three, so nothing after it moves.
         {

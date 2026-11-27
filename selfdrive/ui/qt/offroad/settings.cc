@@ -1436,15 +1436,15 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     auto op_long = new ParamControl("ExperimentalLongitudinalEnabled", "openpilot 가감속 제어 (알파)", "CAN FD 현대·기아용 롱컨 스위치입니다. 일반 CAN 현대·기아는 이 스위치 대신 토글의 '롱컨'으로 롱컨을 켜지만, 실험 모드 스위치는 이 값이 켜져 있어야 동작합니다. 켜면 자동 긴급 제동(AEB)이 꺼질 수 있습니다.", SHELL_ICON, this);
     op_long->setConfirmation(true, false);
     advancedToggles->addItem(op_long);
-    auto e2e = new ParamControl("ExperimentalMode", "실험 모드", "가감속을 항상 E2E(주행 모델이 판단하는 가감속)로 고정합니다. 앞차가 없어도 빨간불·정지선 앞에서 서고 커브 앞에서 줄이지만, 앞차를 따라갈 때도 모델이 가감속을 정해서 레이더 방식(ACC)보다 덜 부드러울 수 있습니다. 상황에 따라 바꾸려면 아래 '자동 E2E / ACC 전환'을 쓰세요(켜 두면 그쪽이 먼저 적용됩니다). 롱컨(openpilot 가감속 제어)일 때만 적용됩니다. 알파 단계 기능이라 실수가 있을 수 있습니다.", SHELL_ICON, this);
+    auto e2e = new ParamControl("ExperimentalMode", "실험 모드", "가감속을 항상 E2E(주행 모델이 판단하는 가감속)로 고정합니다. 앞차가 없어도 빨간불·정지선 앞에서 서고 커브 앞에서 줄이지만, 앞차를 따라갈 때도 모델이 가감속을 정해서 레이더로 따라갈 때보다 덜 부드러울 수 있습니다. 상황에 따라 바꾸려면 아래 'E2E 모드'를 쓰세요(켜 두면 그쪽이 먼저 적용됩니다). 롱컨(openpilot 가감속 제어)일 때만 적용됩니다. 알파 단계 기능이라 실수가 있을 수 있습니다.", SHELL_ICON, this);
     e2e->setConfirmation(true, true);
     advancedToggles->addItem(e2e);
     // OptechAutoE2E (longitudinal_planner.update_auto_e2e, spst dp_long_de2e / dragonpilot dynamic e2e)
-    auto auto_e2e = new ParamControl("OptechAutoE2E", "자동 E2E / ACC 전환",
-      "상황에 따라 E2E(주행 모델이 판단하는 가감속)와 ACC(레이더로 앞차를 따라가는 가감속)를 자동으로 바꿉니다(optech-spst와 같은 기능).\n"
-      "앞차를 따라갈 때는 ACC로 부드럽게 따라가고, 앞차가 없을 때 주행 모델이 '앞에서 서야 한다'고 보면(빨간불·정지선·급한 커브), "
+    auto auto_e2e = new ParamControl("OptechAutoE2E", "E2E 모드",
+      "상황에 따라 E2E(주행 모델이 판단하는 가감속)와 앞차 따라가는 가감속(레이더)을 자동으로 바꿉니다(optech-spst와 같은 기능).\n"
+      "앞차를 따라갈 때는 레이더로 부드럽게 따라가고, 앞차가 없을 때 주행 모델이 '앞에서 서야 한다'고 보면(빨간불·정지선·급한 커브), "
       "정차 중일 때, 시속 75km 아래에서 방향지시등을 켰을 때, 앞차가 갑자기 가까워져 세게 서야 할 때는 E2E로 바꿉니다.\n"
-      "켜 두면 '실험 모드'보다 먼저 적용됩니다. 롱컨(openpilot 가감속 제어)일 때만 적용됩니다. 시험 기능이라 항상 주의하세요.",
+      "주행 화면 왼쪽 위 칸이 SCC2(앞차 따라감) / E2E로 바뀌어 지금 방식을 보여 줍니다. 켜 두면 '실험 모드'보다 먼저 적용됩니다. 롱컨(openpilot 가감속 제어)일 때만 적용됩니다. 시험 기능이라 항상 주의하세요.",
       SHELL_ICON, this);
     auto_e2e->setConfirmation(true, false);
     advancedToggles->addItem(auto_e2e);
