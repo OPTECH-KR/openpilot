@@ -87,12 +87,13 @@ struct Alert {
       } else if (controls_missing > CONTROLS_TIMEOUT && !Hardware::PC()) {
         // car is started, but controls is lagging or died
         if (cs.getEnabled() && (controls_missing - CONTROLS_TIMEOUT) < 10) {
-          alert = {"TAKE CONTROL IMMEDIATELY", "Controls Unresponsive",
+          // optech-hkg 2026-11-27 wording, both lines Korean (no Korean / English mix in one alert)
+          alert = {"즉시 핸들 잡으세요", "제어 프로그램 응답 없음",
                    "controlsUnresponsive", cereal::ControlsState::AlertSize::FULL,
                    cereal::ControlsState::AlertStatus::CRITICAL,
                    AudibleAlert::WARNING_IMMEDIATE};
         } else {
-          alert = {"Controls Unresponsive", "Reboot Device",
+          alert = {"제어 프로그램 응답 없음", "기기를 다시 켜세요",
                    "controlsUnresponsivePermanent", cereal::ControlsState::AlertSize::MID,
                    cereal::ControlsState::AlertStatus::NORMAL,
                    AudibleAlert::NONE};

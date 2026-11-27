@@ -217,6 +217,7 @@ protected:
   bool optech_enabled = false;
   int optech_status = 0;
   bool optech_show_tpms = true, optech_show_gps = true, optech_show_bsd = true, optech_show_conn = true;
+  bool optech_show_gps_speed = false;  // param OptechShowGpsSpeed: the GPS speed box under the set speed
   int optech_show_radar = 1;
   float optech_a_ego = 0, optech_steer_deg = 0, optech_v_ego = 0;
   bool optech_brake = false, optech_left_blinker = false, optech_right_blinker = false;

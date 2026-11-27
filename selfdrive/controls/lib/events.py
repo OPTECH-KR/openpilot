@@ -356,7 +356,7 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
 
   EventName.joystickDebug: {
     ET.WARNING: joystick_alert,
-    ET.PERMANENT: NormalPermanentAlert(_("Joystick Mode")),
+    ET.PERMANENT: NormalPermanentAlert("조이스틱 모드"),  # optech-hkg 2026-11-27 (one line, the auto hold size)
   },
 
   EventName.controlsInitializing: {
@@ -667,10 +667,12 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
 
   # optech 주행 > 신호등 > '초록불 알림' (controlsd + optech_signal.py; a free old event number)
   EventName.ipasOverrideDEPRECATED: {
+    # optech-hkg 2026-11-27 night: one line in the auto hold size ("글 너무 커 ... 오토홀드 그정도 사이즈로"); the
+    # second line '출발 전에 신호를 직접 확인하세요' made the box big again (the 주행 > 신호등 menu text keeps that warning)
     ET.WARNING: Alert(
       "초록불로 바뀌었어요",
-      "출발 전에 신호를 직접 확인하세요",
-      AlertStatus.normal, AlertSize.mid,
+      "",
+      AlertStatus.normal, AlertSize.small,
       Priority.LOW, VisualAlert.none, AudibleAlert.prompt, 3.),
   },
 
@@ -939,7 +941,7 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
 
   EventName.reverseGear: {
     ET.PERMANENT: Alert(
-      _("Reverse\nGear"),
+      "후진 기어",  # optech-hkg 2026-11-27: one line in Korean (was 'Reverse' / 'Gear' in English), the auto hold size
       "",
       AlertStatus.normal, AlertSize.full,
       Priority.LOWEST, VisualAlert.none, AudibleAlert.none, .2, creation_delay=0.5),

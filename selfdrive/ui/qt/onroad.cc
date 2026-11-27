@@ -592,6 +592,7 @@ void AnnotatedCameraWidget::updateState(const UIState &s) {
     optech_accel_profile = std::atoi(op_params.get("dp_long_accel_profile").c_str());
     optech_show_tpms = op_params.getBool("ShowTpms");
     optech_show_gps = op_params.getBool("ShowGpsInfo");
+    optech_show_gps_speed = op_params.getBool("OptechShowGpsSpeed");  // 화면 > GPS 속도 (optech-hkg 2026-11-27)
     optech_show_bsd = op_params.getBool("ShowBlindSpot");
     optech_show_conn = op_params.getBool("ShowConnInfo");
     optech_show_radar = std::atoi(op_params.get("ShowRadarInfo").c_str());
@@ -976,8 +977,13 @@ static void optech_paint_alert(QPainter &p, float W, float H, const Alert &alert
                       : alert.type.contains("softDisable") ? "오픈파일럿이 곧 꺼집니다" : "";
   const bool full = alert.size == cereal::ControlsState::AlertSize::FULL;
   const bool one_line = t2.isEmpty() && line3.isEmpty();
-  // auto hold / parking brake alerts as big as the auto hold box, not the big one-line size (optech-hkg 2026-11-27)
-  const bool compact = alert.type.startsWith("brakeHold/") || alert.type.startsWith("parkBrake/");
+  // auto hold / parking brake alerts as big as the auto hold box, not the big one-line size (optech-hkg 2026-11-27);
+  // that night also 초록불로 바뀌었어요 (spst: the free old event ipasOverrideDEPRECATED) / 후진 기어 / 조이스틱 모드
+  // ("글 너무 커 ... 오토홀드 그정도 사이즈로")
+  static const char *const compact_types[] = {"brakeHold/", "parkBrake/", "ipasOverrideDEPRECATED/",
+                                              "reverseGear/permanent", "joystickDebug/permanent"};
+  bool compact = false;
+  for (const char *ct : compact_types) compact = compact || alert.type.startsWith(ct);
   const int fs1 = optech_fit(p, t1, compact ? (int)OPTECH_HOLD_FS : one_line ? (full ? 144 : 132) : (full ? 124 : 108), maxw - 60);
   const int fs2 = optech_fit(p, t2, 70, maxw - 60), fs3 = 54;
   const float tw = std::max(optech_text_w(p, t1, fs1), t2.isEmpty() ? 0 : optech_text_w(p, t2, fs2));
@@ -1283,16 +1289,29 @@ void AnnotatedCameraWidget::drawOptechHud(QPainter &p) {
     p.setPen(Qt::NoPen);
     p.setBrush(QColor(255, 255, 255, 150));
     for (float dx = lx + 20; dx <= lx + w - 20; dx += 15) p.drawEllipse(QPointF(dx, col_y + h / 2), 3.1, 3.1);
-    optech_txt(p, cx0, col_y + 44, "설정속도", lab_fs, txt, 0, 1);
-    optech_txt(p, cx0, col_y + 109, set_s, fs_set, txt, 0, 1);
-    optech_txt(p, cx0, col_y + h / 2 + 48, "감속목표", lab_fs, amber, 0, 1);
+    // even gaps (optech-hkg 2026-11-27, user "설정속도 감속목표 정렬이 이상하네": the label sat close over its number and
+    // the space under the dotted line was empty): in each half the label and the number with three equal gaps. Ink
+    // heights of this font: Hangul 0.91 size, digits 0.77 size. The nominal number sizes are used so a shrunk 3-digit
+    // number does not move the labels.
+    auto place = [&](float top, float num_fs, float &lab_cy, float &num_cy) {
+      const float lab_ink = 0.91f * lab_fs, num_ink = 0.77f * num_fs;
+      const float gap = (h / 2 - lab_ink - num_ink) / 3;
+      lab_cy = top + gap + lab_ink / 2;
+      num_cy = top + 2 * gap + lab_ink + num_ink / 2;
+    };
+    float set_lab_y, set_y, hold_lab_y, hold_y;
+    place(col_y, 96, set_lab_y, set_y);
+    place(col_y + h / 2, 89, hold_lab_y, hold_y);
+    optech_txt(p, cx0, set_lab_y, "설정속도", lab_fs, txt, 0, 1);
+    optech_txt(p, cx0, set_y, set_s, fs_set, txt, 0, 1);
+    optech_txt(p, cx0, hold_lab_y, "감속목표", lab_fs, amber, 0, 1);
     if (slowing) {
-      optech_txt(p, cx0, col_y + h - 44, hold_s, fs_hold, amber, 0, 1);
+      optech_txt(p, cx0, hold_y, hold_s, fs_hold, amber, 0, 1);
     } else {
       const float bar_w = 84, bar_h = 18;
       p.setPen(Qt::NoPen);
       p.setBrush(amber);
-      p.drawRoundedRect(QRectF(cx0 - bar_w / 2, col_y + h - 44 - bar_h / 2, bar_w, bar_h), bar_h / 2, bar_h / 2);
+      p.drawRoundedRect(QRectF(cx0 - bar_w / 2, hold_y - bar_h / 2, bar_w, bar_h), bar_h / 2, bar_h / 2);
     }
     col_y += h + 16;
   }
@@ -1352,6 +1371,32 @@ void AnnotatedCameraWidget::drawOptechHud(QPainter &p) {
     } else if (road_disp > 0) {
       draw_sign(road_disp, false, false);
       draw_under("제한속도", dark_box);
+    }
+  }
+
+  // 5) GPS speed (화면 > 'GPS 속도', OptechShowGpsSpeed, optech-hkg 2026-11-27): the speed from the GPS - the dashboard
+  //    speed reads a few % high. Under the set speed box with a gap, as wide as it; '46 km/h' in the green of the GPS
+  //    box. No GPS fix -> a green bar.
+  if (optech_show_gps_speed) {
+    const float gw = SW, gh = 128, gx = lx, gy = 180 + SH + 24;  // 180: the set speed box's top
+    const QColor gps_c(151, 196, 89);
+    optech_box(p, gx, gy, gw, gh, QColor(20, 20, 20, 170), 18, 3, QColor(235, 235, 235, 200));
+    optech_txt_hb(p, gx + gw / 2, gy + 46, "GPS 속도", 34, white, 0);
+    const float gbase = gy + gh - 18;
+    const QString gunit = is_metric ? "km/h" : "mph";
+    const float uw = optech_text_w(p, gunit, 30);
+    if (optech_gps_alive && optech_gps_fix) {
+      // number + unit centred as one group, on one baseline
+      const QString gs = QString::number((int)std::nearbyint(optech_gps_speed));
+      const int gfs = optech_fit(p, gs, 74, gw - 24 - 8 - uw);
+      const float nw = optech_text_w(p, gs, gfs), gx0 = gx + gw / 2 - (nw + 8 + uw) / 2;
+      optech_txt_base(p, gx0, gbase, gs, gfs, gps_c, -1);
+      optech_txt_base(p, gx0 + nw + 8, gbase, gunit, 30, gps_c, -1);
+    } else {
+      const float gbw = 60, gbh = 14, gby = gbase - 0.36f * 74 - gbh / 2;
+      p.setPen(Qt::NoPen);
+      p.setBrush(gps_c);
+      p.drawRoundedRect(QRectF(gx + gw / 2 - gbw / 2, gby, gbw, gbh), gbh / 2, gbh / 2);
     }
   }
 
@@ -1459,10 +1504,17 @@ void AnnotatedCameraWidget::drawOptechHud(QPainter &p) {
     if (optech_right_bsd) drawOptechBsd(p, true, optech_right_blinker);
   }
 
-  // driver monitoring icon (OPTECH > 화면 > 운전자 모니터링 아이콘): lower left under the left column, left of the REC
-  // button and level with it (user 2026-11-26: the square sign tiles left that corner free)
+  // driver monitoring icon (OPTECH > 화면 > 운전자 모니터링 아이콘), as optech-hkg's (user 2026-11-27 "hkg처럼 똑같이"):
+  // 170 across, in the bottom left corner 20 from the edge, its centre 110 over the bottom (level with the REC
+  // button), the face 0.65 while the driver is watched, 0.2 otherwise. (optech-hkg also draws the face lines and gaze
+  // arcs; the NEOS devices spst runs on do not get that data, so the face picture only.)
   if (optech_show_dm && !hideBottomIcons) {
-    drawIcon(p, QPoint((int)(lx + btn_size / 2), height() - 40 - 70), dm_img, blackColor(70), dmActive ? 1.0 : 0.2);
+    const float k = 170.f / btn_size;
+    p.save();
+    p.translate(20 + 85, height() - 40 - 70);
+    p.scale(k, k);
+    drawIcon(p, QPoint(0, 0), dm_img, blackColor(70), dmActive ? 0.65 : 0.2);
+    p.restore();
   }
   p.restore();
 }

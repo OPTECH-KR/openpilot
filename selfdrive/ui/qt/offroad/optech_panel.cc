@@ -873,6 +873,10 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
     "켜 두면(초록색) 주행 화면 왼쪽 아래(운전자 아이콘 오른쪽)에 동그란 'REC' 녹화 버튼이 보입니다. 누르면 기기 화면을 동영상으로 녹화하고 "
     "(녹화 중에는 버튼이 빨갛게 깜빡입니다), 다시 누르면 멈춥니다. 영상은 3분마다 나뉘어 기기 저장공간(videos 폴더)에 남습니다. "
     "주행 영상을 남기고 싶을 때만 켜세요. 끄면 버튼이 사라지고 하던 녹화도 멈춥니다.");
+  // OptechShowGpsSpeed 'GPS 속도' (onroad.cc drawOptechHud, optech-hkg 2026-11-27: the box under the set speed)
+  toggle(disp, "OptechShowGpsSpeed", "GPS 속도",
+    "켜 두면(초록색) 주행 화면 설정 속도 칸 아래 작은 칸에 GPS로 잰 속도(km/h)를 초록 숫자로 보여 줍니다. 계기판 속도는 실제보다 몇 % 높게 "
+    "나오므로, 실제로 몇 km/h로 달리는지 볼 때 씁니다. GPS가 안 잡히면 숫자 대신 초록 가로 막대가 나옵니다. 끄면 칸이 사라집니다. 처음 값: 꺼짐");
   toggle(disp, "ShowTpms", "타이어 공기압",
          "주행 화면 오른쪽 칸(차간 거리 위)에 네 바퀴의 타이어 공기압(psi)을 보여 줍니다. 위 줄이 앞바퀴(왼쪽·오른쪽), 아래 줄이 뒷바퀴입니다. "
          "현대·기아·제네시스처럼 공기압을 보내는 차에서만 나옵니다.");
