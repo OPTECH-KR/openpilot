@@ -6,6 +6,7 @@
 #include <memory>
 
 #include <QDebug>
+#include <QFontDatabase>
 #include <QMouseEvent>
 #include <QPainterPath>
 #include <QTimer>
@@ -806,25 +807,58 @@ static void optech_box(QPainter &p, float x, float y, float w, float h, const QC
   p.drawRoundedRect(QRectF(x, y, w, h), radius, radius);
 }
 
-// text at (x, y): halign -1 left / 0 centre / 1 right; valign 0 = y is the bottom, 1 = y is the middle
-static void optech_txt(QPainter &p, float x, float y, const QString &text, int px, const QColor &color,
-                       int halign = 0, int valign = 0) {
-  p.setFont(InterFont(px, QFont::Bold));
-  const float w = 1400, h = px * 1.5f;
-  const float left = halign < 0 ? x : (halign > 0 ? x - w : x - w / 2);
-  const float top = valign == 0 ? y - h : y - h / 2;
-  const int flags = (halign < 0 ? Qt::AlignLeft : (halign > 0 ? Qt::AlignRight : Qt::AlignHCenter)) |
-                    (valign == 0 ? Qt::AlignBottom : Qt::AlignVCenter);
-  const QRectF r(left, top, w, h);
-  p.setPen(QColor(0, 0, 0, 160));
-  p.drawText(r.translated(2, 2), flags, text);
-  p.setPen(color);
-  p.drawText(r, flags, text);
+// HUD font (user 2026-11-27: Korean labels such as '설정속도' / '감속목표' / '오토홀드' looked odd next to optech-hkg's):
+// ONE font for every OPTECH HUD text, Noto Sans CJK Bold from spst's assets. optech-hkg draws with KaiGen Gothic KR
+// Bold, which is built on the same Source Han Sans glyphs (Hangul, digits and Latin), so the letters now look like
+// optech-hkg's. Before, Inter drew the digits / Latin and Qt filled the Hangul in from another font.
+static QString optech_family() {
+  static QString fam;
+  if (fam.isEmpty()) {
+    const int id = QFontDatabase::addApplicationFont("../assets/fonts/NotoSansCJKtc-Bold.otf");
+    const QStringList f = id >= 0 ? QFontDatabase::applicationFontFamilies(id) : QStringList();
+    fam = f.isEmpty() ? QString("Inter") : f.first();
+  }
+  return fam;
+}
+
+// no setWeight(Bold): the file IS the bold face, and Qt took it for a regular one and drew it bolder again (letters
+// much fatter than optech-hkg's, seen on the test phone 2026-11-27)
+static QFont optech_font(int px) {
+  QFont f(optech_family());
+  f.setPixelSize(px);
+  return f;
 }
 
 static int optech_text_w(QPainter &p, const QString &text, int px) {
-  p.setFont(InterFont(px, QFont::Bold));
+  p.setFont(optech_font(px));
   return p.fontMetrics().boundingRect(text).width();
+}
+
+// the letters as optech-hkg's ui_draw_text draws them: a thin black outline all round (8 black copies 2 px out), then
+// the colour on top. (spst used a dark copy 2 px down-right, which made Hangul look doubled.) outline false: dark / red
+// text on a light tile (an outline smudged it there, optech-hkg 2026-11-26)
+static void optech_draw(QPainter &p, float left, float base, const QString &text, const QColor &color, bool outline) {
+  if (outline) {
+    p.setPen(QColor(0, 0, 0));
+    for (int i = 0; i < 8; i++) {
+      const float a = i * (float)M_PI / 4.f;
+      p.drawText(QPointF(left + 2.f * std::cos(a), base + 2.f * std::sin(a)), text);
+    }
+  }
+  p.setPen(color);
+  p.drawText(QPointF(left, base), text);
+}
+
+// text at (x, y): halign -1 left / 0 centre / 1 right; valign 0 = y is the bottom, 1 = y is the middle of the letters
+// (optech-hkg optech_text_vc: digits and Hangul both reach about 0.72 size above the baseline -> baseline y + 0.36 size)
+static void optech_txt(QPainter &p, float x, float y, const QString &text, int px, const QColor &color,
+                       int halign = 0, int valign = 0) {
+  p.setFont(optech_font(px));
+  const QFontMetrics fm = p.fontMetrics();
+  const float w = fm.boundingRect(text).width();
+  const float left = halign < 0 ? x : (halign > 0 ? x - w : x - w / 2);
+  const float base = valign == 0 ? y - fm.descent() : y + 0.36f * px;
+  optech_draw(p, left, base, text, color, true);
 }
 
 static QString optech_dist(int m, const QString &suffix) {
@@ -883,19 +917,14 @@ static void optech_turn_arrow(QPainter &p, float x, float y, float S, int kind) 
 }
 
 // text standing on a baseline (the big speed and its unit share one): halign -1 left / 0 centre / 1 right
-// shadow: the dark copy under the letters that keeps them readable over the camera picture; false for dark / red text
-// on a light tile (it smudged it there, optech-hkg 2026-11-26)
+// shadow: the black outline that keeps the letters readable over the camera picture; false for dark / red text on a
+// light tile (it smudged it there, optech-hkg 2026-11-26)
 static void optech_txt_base(QPainter &p, float x, float base, const QString &text, int px, const QColor &color,
                             int halign = 0, bool shadow = true) {
-  p.setFont(InterFont(px, QFont::Bold));
+  p.setFont(optech_font(px));
   const float w = p.fontMetrics().boundingRect(text).width();
   const float left = halign < 0 ? x : (halign > 0 ? x - w : x - w / 2);
-  if (shadow) {
-    p.setPen(QColor(0, 0, 0, 160));
-    p.drawText(QPointF(left + 2, base + 2), text);
-  }
-  p.setPen(color);
-  p.drawText(QPointF(left, base), text);
+  optech_draw(p, left, base, text, color, shadow);
 }
 
 // text placed like optech-hkg's NVG_ALIGN_BOTTOM: y is just under the letters (Qt's AlignBottom puts the font's
