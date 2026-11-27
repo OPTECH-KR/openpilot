@@ -5,6 +5,7 @@
 
 #include <QMouseEvent>
 
+#include "selfdrive/common/util.h"
 #include "selfdrive/ui/qt/util.h"
 
 void Sidebar::drawMetric(QPainter &p, const QPair<QString, QString> &label, QColor c, int y) {
@@ -91,6 +92,14 @@ void Sidebar::updateState(const UIState &s) {
   setProperty("netStrength", strength > 0 ? strength + 1 : 0);
   setProperty("wifiAddr", deviceState.getWifiIpAddress().cStr());
 
+  // optech (user 2026-11-27): the phone battery under the IP, like the driving screen's battery box (paint.cc), only
+  // on a device that has one (C2 has none)
+  static int has_batt = -1;
+  if (has_batt < 0) has_batt = util::read_file("/sys/class/power_supply/battery/present").rfind("1", 0) == 0 ? 1 : 0;
+  const int batt = deviceState.getBatteryPercent();
+  setProperty("battPercent", has_batt == 1 && batt > 0 && batt <= 100 ? batt : 0);
+  setProperty("battCharging", deviceState.getBatteryCurrent() < 0);  // thermald: negative while charging
+
   // optech (user 2026-11-26, same as optech-spst f8cfca3): the car battery voltage instead of the comma server
   // connection (not used here). Resting 12 V battery: 12.4 V+ good, 12.0-12.4 V low (yellow), below 12.0 V very low
   // (red); engine running 13.5 V+. C2: boardd sends the panda's voltage_pkt (mV)
@@ -159,8 +168,41 @@ void Sidebar::paintEvent(QPaintEvent *event) {
   else
     p.drawText(r, Qt::AlignCenter, net_type);
 
+  // optech (user 2026-11-27): phone battery under the IP - a battery picture filled to the level (green, orange under
+  // 30 %, red under 15 %, a yellow bolt while charging) and the %; the metrics move 50 down to make room (they still
+  // end above the home button at 860)
+  int my = 0;
+  if (batt_percent > 0) {
+    my = 50;
+    const int bw = 62, bh = 30, nub = 6, by = 307, gap = 14;
+    configFont(p, "Inter", 33, "SemiBold");
+    const QString t = QString("%1%").arg(batt_percent);
+    const int tw = getTextRect(p, Qt::AlignLeft, t).width();
+    const int bx = (width() - (bw + nub + gap + tw)) / 2;
+    const QColor level = batt_percent < 15 ? QColor(226, 75, 74) : batt_percent < 30 ? QColor(245, 160, 50) : QColor(120, 220, 90);
+    p.setPen(QPen(Qt::white, 3));
+    p.setBrush(Qt::NoBrush);
+    p.drawRoundedRect(QRect(bx, by, bw, bh), 6, 6);
+    p.setPen(Qt::NoPen);
+    p.setBrush(Qt::white);
+    p.drawRect(QRect(bx + bw + 1, by + bh / 2 - 6, nub, 12));
+    p.setBrush(level);
+    p.drawRoundedRect(QRect(bx + 5, by + 5, std::max(2, (bw - 10) * batt_percent / 100), bh - 10), 3, 3);
+    if (batt_charging) {
+      const int cx = bx + bw / 2, cy = by + bh / 2;
+      const QPoint bolt[] = {{cx + 4, cy - 12}, {cx - 8, cy + 2}, {cx - 1, cy + 2}, {cx - 4, cy + 12},
+                             {cx + 8, cy - 2}, {cx + 1, cy - 2}};
+      p.setPen(QPen(QColor(40, 40, 40), 2));
+      p.setBrush(QColor(255, 214, 0));
+      p.drawPolygon(bolt, 6);
+      p.setPen(Qt::NoPen);
+    }
+    p.setPen(Qt::white);
+    p.drawText(QRect(bx + bw + nub + gap, by - 10, tw + 6, bh + 20), Qt::AlignLeft | Qt::AlignVCenter, t);
+  }
+
   // metrics
-  drawMetric(p, temp_status.first, temp_status.second, 338);
-  drawMetric(p, panda_status.first, panda_status.second, 496);
-  drawMetric(p, connect_status.first, connect_status.second, 654);
+  drawMetric(p, temp_status.first, temp_status.second, 338 + my);
+  drawMetric(p, panda_status.first, panda_status.second, 496 + my);
+  drawMetric(p, connect_status.first, connect_status.second, 654 + my);
 }
