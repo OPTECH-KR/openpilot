@@ -4,7 +4,7 @@ import math
 from cereal import car
 from opendbc.can.parser import CANParser
 from selfdrive.car.interfaces import RadarInterfaceBase
-from selfdrive.car.hyundai.values import DBC
+from selfdrive.car.hyundai.values import DBC, HyundaiFlags
 from common.params import Params
 from common.filter_simple import StreamingMovingAverage
 
@@ -58,6 +58,13 @@ class RadarInterface(RadarInterfaceBase):
     self.track_id = 0
 
     self.radar_off_can = CP.radarUnavailable
+    # optech 2026-11-29 (a Ray EV / Porter II EV comma pedal tester: '레이더 오류' from the start, openpilot could not be
+    # turned on): cars without SCC (Ray EV, Porter II EV, the NON-SCC trims) have no front radar at all. They waited
+    # for SCC11 (0x420) or, with the pedal (openpilot long, sccBus 0), radar track 0x51F that never comes -> update()
+    # always None -> radarState never sent -> radarFault. Like comma / carrot / StarPilot (radar_off_can), they get an
+    # empty radar list at the radar rate and radard runs on the camera lead. Only these cars: radarUnavailable (below,
+    # commented out) is set for every car without radar tracks on bus 1, whose lead comes from SCC11 / SCC12 here.
+    self.no_radar = bool(CP.flags & HyundaiFlags.NON_SCC.value)
     self.rcp = get_radar_can_parser(CP)
 
     self.dRelFilter = StreamingMovingAverage(2)
@@ -65,6 +72,8 @@ class RadarInterface(RadarInterfaceBase):
     self.valid_prev = False
 
   def update(self, can_strings):
+    if self.no_radar:
+      return super().update(None)
     # This one causes my radar points to not work
     # if self.radar_off_can or (self.rcp is None):
     #   return super().update(None)
