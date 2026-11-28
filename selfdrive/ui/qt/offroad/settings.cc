@@ -1128,7 +1128,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   speedToggles = new ListWidget(this);
   speedToggles->addItem(carrot_section("크루즈 속도"));
   speedToggles->addItem(new CValueControl("AutoSyncCruiseSpeedMax", "가속페달 속도 맞춤 상한", "크루즈(가감속)가 켜진 상태에서 악셀로 설정 속도보다 빨리 달리면, 설정 속도도 지금 속도로 따라 올라갑니다 (예: 설정 50km/h에서 악셀로 80km/h까지 가면 설정 속도 80km/h). 이 값(km/h)까지만 올립니다. 0:사용 안 함", ROAD_ICON, 0, 200, 10));
-  speedToggles->addItem(new CValueControl("AutoSpeedUptoRoadSpeedLimit", "제한속도까지 자동 올림", "앞차를 따라갈 때 도로 제한속도의 이 비율(%)까지 설정 속도를 자동으로 올립니다. 0:사용 안 함, 100:제한속도까지", ROAD_ICON, 0, 200, 10));
+  speedToggles->addItem(new CValueControl("AutoSpeedUptoRoadSpeedLimit", "제한속도까지 자동 올림", "앞차가 내 설정 속도보다 빨리 갈 때, 앞차를 따라 도로 제한속도의 이 비율(%)까지 설정 속도를 자동으로 올립니다. 앞차가 없으면 올리지 않습니다. 크루즈 −로 설정 속도를 낮추면, +를 누르거나 크루즈가 꺼졌다 켜질 때까지는 자동으로 올리지 않습니다. 0:사용 안 함, 100:제한속도까지", ROAD_ICON, 0, 200, 10));
   speedToggles->addItem(carrot_section("출발·정지 (출발이 굼뜨거나 정지가 거칠 때)"));
   speedToggles->addItem(new CValueControl("JerkStartLimit", "재출발 가속", "멈췄다가 다시 출발할 때 얼마나 빨리 속도를 붙일지 정합니다(0.1 단위). 높이면 빠르게, 낮추면 부드럽게 출발합니다. 출발 전에 기다리는 시간과는 상관없습니다.", ROAD_ICON, 1, 50, 1));
   speedToggles->addItem(new CValueControl("StartAccelApply", "출발 가속", "정차 후 출발할 때 처음 가속을 몇 % 더 줄지 정합니다. 출발이 굼뜨면 올려 보세요. 0:사용 안 함", ROAD_ICON, 0, 100, 10));
