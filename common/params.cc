@@ -284,6 +284,9 @@ std::unordered_map<std::string, uint32_t> keys = {
     {"ShowRadarInfo", PERSISTENT},
     {"ShowConnInfo", PERSISTENT},
     {"OptechShowRecordBtn", PERSISTENT},
+    {"OptechWebServer", PERSISTENT},  // 고급 > 웹 접속 (selfdrive/optech_web/server.py, port 7000)
+    {"OptechShowGpsSpeed", PERSISTENT},  // 화면 > GPS 속도 (the box under the set speed, optech-hkg)
+    {"OptechGitPullOnBoot", PERSISTENT},  // 소프트웨어 > 켤 때마다 자동 업데이트 (launch_chffrplus.sh, optech_git.sh bootpull)
     {"PathOffset", PERSISTENT},
     {"NNFF", PERSISTENT},
     {"NNFFLite", PERSISTENT},

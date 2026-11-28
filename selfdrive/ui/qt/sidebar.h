@@ -17,6 +17,8 @@ class Sidebar : public QFrame {
   Q_PROPERTY(ItemStatus tempStatus MEMBER temp_status NOTIFY valueChanged);
   Q_PROPERTY(QString netType MEMBER net_type NOTIFY valueChanged);
   Q_PROPERTY(int netStrength MEMBER net_strength NOTIFY valueChanged);
+  Q_PROPERTY(int battPercent MEMBER batt_percent NOTIFY valueChanged);
+  Q_PROPERTY(bool battCharging MEMBER batt_charging NOTIFY valueChanged);
 
 public:
   explicit Sidebar(QWidget* parent = 0);
@@ -56,6 +58,8 @@ protected:
   ItemStatus connect_status, panda_status, temp_status;
   QString net_type;
   int net_strength = 0;
+  int batt_percent = 0;        // optech-hkg 2026-11-27: phone battery under the network type, 0 = no battery (C2)
+  bool batt_charging = false;
 
 private:
   std::unique_ptr<PubMaster> pm;

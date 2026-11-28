@@ -8,6 +8,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QImage>
 #include <QNetworkInterface>
 #include <QScroller>
@@ -24,6 +26,7 @@
 static QLabel *optech_section(const QString &title) {
   QLabel *label = new QLabel(title);
   label->setStyleSheet("font-size: 42px; font-weight: 600; color: #33ab4c; padding-top: 25px; padding-left: 10px;");
+  label->setProperty("optechSection", true);  // optech web: a section title in the settings list
   return label;
 }
 
@@ -31,19 +34,105 @@ static QLabel *optech_note(const QString &text) {
   QLabel *label = new QLabel(text);
   label->setWordWrap(true);
   label->setStyleSheet("font-size: 36px; color: #9A9A9A; padding: 10px 10px;");
+  label->setProperty("optechNote", true);  // optech web: an explanation box
   return label;
 }
 
+// ---- optech web (2026-11-27, optech-hkg selfdrive/optech_web): the menu writes its own item list (tab, section,
+// param, title, description, kind, range / choices) to OPTECH_WEB_META, so the web page shows the same items with
+// the same Korean text and never drifts from the menu. Items carry what the web needs as Qt properties:
+// optechKey / optechType (toggle, number, choice), optechMin / Max / Step / Labels for numbers, optechNames /
+// optechValues for choices, optechShowIf for items the menu shows only under a condition ("KEY>0", "KEY=N",
+// "KEY==text"), optechSpecial for a choice whose menu callback writes one more param (server.py does the same) ----
+static const char *OPTECH_WEB_META = "/data/optech_web/settings_meta.json";
+
+static void optech_web_choice(QWidget *w, const QString &key, const QStringList &names, const QStringList &values,
+                              bool reboot = false, const QString &special = "") {
+  w->setProperty("optechKey", key);
+  w->setProperty("optechType", "choice");
+  w->setProperty("optechNames", names);
+  w->setProperty("optechValues", values);
+  if (reboot) w->setProperty("optechReboot", true);
+  if (!special.isEmpty()) w->setProperty("optechSpecial", special);
+}
+
+static QStringList optech_index_values(int n) {
+  QStringList v;
+  for (int i = 0; i < n; i++) v << QString::number(i);
+  return v;
+}
+
+static QStringList optech_int_values(const QList<int> &l) {
+  QStringList v;
+  for (int i : l) v << QString::number(i);
+  return v;
+}
+
+static void optech_web_walk(QLayout *layout, const QString &tab, QString &section, QJsonArray &items) {
+  for (int i = 0; i < layout->count(); i++) {
+    QLayoutItem *it = layout->itemAt(i);
+    if (it->layout()) {
+      optech_web_walk(it->layout(), tab, section, items);
+      continue;
+    }
+    QWidget *w = it->widget();
+    if (!w) continue;
+    const QString show_if = w->property("optechShowIf").toString();
+    // hidden without a known condition: not meant for this car (brand items), leave it out
+    const bool hidden = w->isHidden() && show_if.isEmpty();
+    if (w->property("optechSection").toBool()) {
+      if (!hidden) section = qobject_cast<QLabel *>(w)->text();
+      continue;
+    }
+    if (hidden) continue;
+    QJsonObject o;
+    o["tab"] = tab;
+    o["section"] = section;
+    if (!show_if.isEmpty()) o["showIf"] = show_if;
+    if (w->property("optechNote").toBool()) {
+      o["type"] = "note";
+      o["key"] = "";
+      o["title"] = "";
+      o["desc"] = qobject_cast<QLabel *>(w)->text();
+      items.append(o);
+      continue;
+    }
+    const QString key = w->property("optechKey").toString();
+    AbstractControl *c = qobject_cast<AbstractControl *>(w);
+    if (key.isEmpty() || !c) continue;  // buttons that open a page or run something (car select, logs, reset)
+    const QString type = w->property("optechType").toString();
+    o["key"] = key;
+    o["type"] = type;
+    o["title"] = type == "choice" ? c->getTitle().section(": ", 0, 0) : c->getTitle();
+    o["desc"] = c->getDescription();
+    if (type == "number") {
+      o["min"] = w->property("optechMin").toInt();
+      o["max"] = w->property("optechMax").toInt();
+      o["step"] = w->property("optechStep").toInt();
+      const QStringList labels = w->property("optechLabels").toStringList();
+      if (!labels.isEmpty()) o["labels"] = QJsonArray::fromStringList(labels);
+    } else if (type == "choice") {
+      o["names"] = QJsonArray::fromStringList(w->property("optechNames").toStringList());
+      o["values"] = QJsonArray::fromStringList(w->property("optechValues").toStringList());
+    }
+    if (w->property("optechReboot").toBool()) o["reboot"] = true;
+    const QString special = w->property("optechSpecial").toString();
+    if (!special.isEmpty()) o["special"] = special;
+    items.append(o);
+  }
+}
+
 // '주행 기록 내려받기' (optech-hkg): the device's addresses a phone on the same Wi-Fi / hotspot can open
-// (selfdrive/optech/logserver.py, port 8088); the device's own hotspot first
-static QStringList optech_log_page_urls() {
+// (selfdrive/optech/logserver.py, port 8088; the OPTECH web page selfdrive/optech_web, port 7000); the device's own
+// hotspot first
+static QStringList optech_log_page_urls(int port = 8088) {
   QStringList urls, others;
   for (const QNetworkInterface &nif : QNetworkInterface::allInterfaces()) {
     if (!(nif.flags() & QNetworkInterface::IsUp) || (nif.flags() & QNetworkInterface::IsLoopBack)) continue;
     if (nif.name().startsWith("rmnet")) continue;  // mobile data: a phone can't reach it
     for (const QNetworkAddressEntry &e : nif.addressEntries()) {
       if (e.ip().protocol() != QAbstractSocket::IPv4Protocol) continue;
-      const QString url = QString("http://%1:8088").arg(e.ip().toString());
+      const QString url = QString("http://%1:%2").arg(e.ip().toString()).arg(port);
       (e.ip().toString().startsWith("192.168.43.") ? urls : others) << url;
     }
   }
@@ -53,7 +142,7 @@ static QStringList optech_log_page_urls() {
 // QR code + how to use it, for the phone to open the log page (optech-hkg LogQrDialog)
 class OptechLogQrDialog : public QDialogBase {
 public:
-  OptechLogQrDialog(QWidget *parent, const QStringList &urls) : QDialogBase(parent) {
+  OptechLogQrDialog(QWidget *parent, const QStringList &urls, const QString &how = "") : QDialogBase(parent) {
     QHBoxLayout *main = new QHBoxLayout(this);
     main->setContentsMargins(60, 50, 60, 50);
     main->setSpacing(60);
@@ -79,9 +168,9 @@ public:
     title->setWordWrap(true);
     right->addWidget(title);
     QLabel *desc = new QLabel(
-      "열린 화면에서 '전체 기록 한 번에 받기'를 누르고, 받은 파일을 카카오톡으로 보내 주세요.\n\n"
-      "폰이 이 기기와 같은 와이파이나 핫스팟에 연결돼 있어야 열립니다. 15분 뒤 자동으로 닫힙니다.\n\n"
-      "주소: " + urls.join("  /  "));
+      (how.isEmpty() ? QString("열린 화면에서 '전체 기록 한 번에 받기'를 누르고, 받은 파일을 카카오톡으로 보내 주세요.\n\n"
+                               "폰이 이 기기와 같은 와이파이나 핫스팟에 연결돼 있어야 열립니다. 15분 뒤 자동으로 닫힙니다.")
+                     : how) + "\n\n주소: " + urls.join("  /  "));
     desc->setStyleSheet("font-size: 40px; color: #CCCCCC;");
     desc->setWordWrap(true);
     right->addWidget(desc);
@@ -300,6 +389,8 @@ void OptechCarSelect::showCars(const QString &brand) {
 ParamControl *OptechPanel::toggle(ListWidget *list, const QString &param, const QString &title, const QString &desc) {
   ParamControl *t = new ParamControl(param, title, desc, "", this);
   t->setEnabled(!params.getBool((param + "Lock").toStdString()));
+  t->setProperty("optechKey", param);  // optech web
+  t->setProperty("optechType", "toggle");
   list->addItem(t);
   return t;
 }
@@ -307,6 +398,17 @@ ParamControl *OptechPanel::toggle(ListWidget *list, const QString &param, const 
 OptechValueControl *OptechPanel::value(ListWidget *list, const QString &param, const QString &title, const QString &desc,
                                        int min_value, int max_value, int step, std::function<QString(int)> format) {
   OptechValueControl *v = new OptechValueControl(param, title, desc, min_value, max_value, step, format);
+  // optech web: a number with -/+, and the text the menu shows for each value (0 -> '끄기', 25 -> '0.25')
+  v->setProperty("optechKey", param);
+  v->setProperty("optechType", "number");
+  v->setProperty("optechMin", min_value);
+  v->setProperty("optechMax", max_value);
+  v->setProperty("optechStep", step);
+  if (step > 0 && (max_value - min_value) / step <= 400) {
+    QStringList labels;
+    for (int x = min_value; x <= max_value; x += step) labels << format(x);
+    v->setProperty("optechLabels", labels);
+  }
   list->addItem(v);
   values.append(v);
   return v;
@@ -325,6 +427,7 @@ ButtonControl *OptechPanel::choice(ListWidget *list, const QString &param, const
     refresh();
   });
   refresh();
+  optech_web_choice(btn, param, names, optech_index_values(names.size()));
   list->addItem(btn);
   choice_refresh.append(refresh);
   return btn;
@@ -480,7 +583,26 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
     params.putBool("dp_alka", sel == engage_names[1]);
     engage_mode_btn->setTitle(engage_name());
   });
+  optech_web_choice(engage_mode_btn, "dp_alka", engage_names, {"0", "1"}, true);
   drive->addItem(engage_mode_btn);
+  non_hkg_items.append(engage_mode_btn);
+  // Hyundai / Kia / Genesis: optech-hkg's cruise button rule instead of '사용 방식' (selfdrive/car/hyundai/values.py
+  // optech_cruise_rule, interface.py cruise_rule_events, controlsd update_long_pause); the note says how the buttons work
+  QLabel *hkg_button_note = new QLabel(
+    "현대·기아·제네시스 버튼 사용법 (optech-hkg와 같은 규칙)\n"
+    "● 크루즈 버튼: 차의 순정 크루즈(SCC)를 쓰는 차는 누르면 조향이 켜지고, 다시 누르면 모두 꺼집니다. "
+    "openpilot 가감속을 쓰는 차는 크루즈 버튼으로 끄기만 하고, 켜는 것은 SET이나 RES로 합니다.\n"
+    "● SET(-) / RES(+): 가감속을 켭니다. SET은 지금 속도로, RES는 이전 설정 속도로 켜지고, 켜져 있을 때는 설정 속도를 바꿉니다. "
+    "openpilot 가감속을 쓰는 차는 조향도 같이 켜집니다. 순정 SCC 차는 차의 크루즈가 켜지고, 아래 '켤 때 지금 속도로 설정'이 켜져 있으면 RES로 켜도 지금 속도로 맞춥니다.\n"
+    "● CANCEL: 짧게 누르면 가감속만 꺼지고 조향은 남습니다 (SET / RES로 다시 켜기). 0.4초 넘게 누르면 모두 꺼집니다.\n"
+    "● 브레이크: 가감속만 꺼지고 조향은 남습니다. 다시 켤 때는 SET이나 RES를 누르세요.\n"
+    "comma 페달을 단 레이 EV·포터 II EV는 예전 그대로 SET / RES로 켜고, CANCEL이나 브레이크로 모두 꺼집니다.");
+  hkg_button_note->setWordWrap(true);
+  hkg_button_note->setStyleSheet("font-size: 36px; color: #E0E0E0; background-color: #333333; border-radius: 10px; "
+                                 "padding: 20px; margin: 10px 0px;");
+  hkg_button_note->setProperty("optechNote", true);
+  drive->addItem(hkg_button_note);
+  hkg_items.append(hkg_button_note);
   // Hyundai / Kia / Genesis with the car's own cruise: selfdrive/car/hyundai/carcontroller.py set_speed_sync
   hkg_items.append(toggle(drive, "OptechCruiseSetCurrent", "켤 때 지금 속도로 설정",
     "달리는 중에 크루즈를 켜면, 차의 크루즈가 예전 설정 속도(예: 60)로 갑자기 빨라지지 않게 설정 속도를 지금 속도로 맞춥니다. "
@@ -545,6 +667,7 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
          "시동을 다시 걸면 적용됩니다."));
   // visibility only after addItem (a widget without a parent would open as its own window and crash the C2 UI)
   for (auto w : cam_group) w->setVisible(params.getBool("OptechSpeedCamDecel"));
+  for (auto w : cam_group) w->setProperty("optechShowIf", "OptechSpeedCamDecel=1");  // optech web: as here
   QObject::connect(cam_decel, &ToggleControl::toggleFlipped, [=](bool on) { for (auto w : cam_group) w->setVisible(on); });
 
   // 신호등 (selfdrive/controls/lib/optech_signal.py, StarPilot's stop light detector): HUD light + green light alert
@@ -559,6 +682,7 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
     "신호등을 직접 보는 것이 아니라, 주행 모델이 멈출지 출발할지 예측한 것으로 판단합니다. "
     "앞차가 출발할 때도 울릴 수 있고, 늦거나 빠를 수 있으니 출발 전에는 꼭 신호를 직접 확인하세요.");
   green_alert->setVisible(params.getBool("OptechSignalEnable"));
+  green_alert->setProperty("optechShowIf", "OptechSignalEnable=1");  // optech web: as here
   QObject::connect(signal_on, &ToggleControl::toggleFlipped, [=](bool on) { green_alert->setVisible(on); });
 
   // ======== 속도 ========
@@ -613,6 +737,7 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
       "핸들이 흔들리거나 덜 꺾이면 아래 값을 조금씩 바꾸거나 기본으로 돌아가세요.";
     auto lm_mode = [=]() { return std::clamp(QString::fromStdString(params.get("OptechLatMethod")).toInt(), 0, 3); };
     ButtonControl *lm_btn = new ButtonControl("", "선택", lm_desc);
+    optech_web_choice(lm_btn, "OptechLatMethod", lm_names, optech_index_values(lm_names.size()), true, "latMethod");
     steer->addItem(lm_btn);
     QList<QPair<int, QWidget *>> *lm_vals = new QList<QPair<int, QWidget *>>{
       {1, value(steer, "OptechPidKp", "PID 비례 (Kp, 0.01 단위)", "핸들 각도 차이에 바로 반응하는 세기입니다. 높이면 빨리 꺾고, 너무 높으면 흔들립니다. 처음 값 25.", 5, 100, 1, [](int v) { return QString::number(v); })},
@@ -643,6 +768,8 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
       ConfirmationDialog::alert("기기를 다시 켜야 적용됩니다.", this);
     });
     lm_refresh();
+    // optech web: each method's values only while that method is chosen (as lm_refresh does here)
+    for (auto &v : *lm_vals) v.second->setProperty("optechShowIf", "OptechLatMethod=" + QString::number(v.first));
   }
   value(steer, "PathOffset", "경로 좌우 보정 (쏠릴 때)",
         "차가 차로 안에서 한쪽으로 치우쳐 달리면 보정합니다. -값:왼쪽으로, +값:오른쪽으로 옮깁니다(cm). 주행 중에도 몇 초 안에 적용됩니다.",
@@ -664,6 +791,7 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
   lane_priority_speed = value(steer, "dp_lat_lane_priority_mode_speed_based", "차선 우선: 이 속도 이상에서만",
         "모든 속도: 차선이 보이면 항상 차선을 따릅니다. 숫자: 그 속도보다 빠를 때만 차선을 따릅니다.",
         0, 120, 5, [](int v) { return v == 0 ? QString("모든 속도") : QString("%1 km/h").arg(v); });
+  lane_priority_speed->setProperty("optechShowIf", "dp_lat_lane_priority_mode=1");  // optech web: as updateToggles
   steer->addItem(optech_section("커브"));
   toggle(steer, "dp_mapd_vision_turn_control", "커브 자동 감속",
          "카메라로 앞 도로의 굽은 정도를 보고 커브에 맞는 속도로 미리 줄입니다. openpilot이 가감속을 맡는 차량만 해당됩니다.");
@@ -691,6 +819,7 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
         "'토크 사용자 설정'이 켜져 있을 때만 적용됩니다.",
         0, 1000, 10, [](int v) { return QString::number(v / 1000.0, 'f', 2); }));
   QObject::connect(torque_custom, &ToggleControl::toggleFlipped, [=]() { updateToggles(); });
+  for (auto w : torque_values) w->setProperty("optechShowIf", "LateralTorqueCustom>0");  // optech web: as updateToggles
 
   // ======== 화면 ========
   // OptechSettingsTimeout '화면 유지 시간' (ui.cc Device::resetInteractiveTimeout)
@@ -715,6 +844,7 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
       params.put("OptechSettingsTimeout", std::to_string(keep_secs[keep_names.indexOf(sel)]));
       keep_btn->setTitle(keep_name());
     });
+    optech_web_choice(keep_btn, "OptechSettingsTimeout", keep_names, optech_int_values(keep_secs));
     disp->addItem(keep_btn);
   }
   // OptechDriveDim '주행 중 밝기' (ui.cc Device::updateBrightness)
@@ -736,18 +866,23 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
       params.put("OptechDriveDim", std::to_string(dim_pcts[dim_names.indexOf(sel)]));
       dim_btn->setTitle(dim_name());
     });
+    optech_web_choice(dim_btn, "OptechDriveDim", dim_names, optech_int_values(dim_pcts));
     disp->addItem(dim_btn);
   }
   toggle(disp, "OptechShowRecordBtn", "녹화 버튼",
     "켜 두면(초록색) 주행 화면 왼쪽 아래(운전자 아이콘 오른쪽)에 동그란 'REC' 녹화 버튼이 보입니다. 누르면 기기 화면을 동영상으로 녹화하고 "
     "(녹화 중에는 버튼이 빨갛게 깜빡입니다), 다시 누르면 멈춥니다. 영상은 3분마다 나뉘어 기기 저장공간(videos 폴더)에 남습니다. "
     "주행 영상을 남기고 싶을 때만 켜세요. 끄면 버튼이 사라지고 하던 녹화도 멈춥니다.");
+  // OptechShowGpsSpeed 'GPS 속도' (onroad.cc drawOptechHud, optech-hkg 2026-11-27: the box under the set speed)
+  toggle(disp, "OptechShowGpsSpeed", "GPS 속도",
+    "켜 두면(초록색) 주행 화면 설정 속도 칸 아래 작은 칸에 GPS로 잰 속도(km/h)를 초록 숫자로 보여 줍니다. 계기판 속도는 실제보다 몇 % 높게 "
+    "나오므로, 실제로 몇 km/h로 달리는지 볼 때 씁니다. GPS가 안 잡히면 숫자 대신 초록 가로 막대가 나옵니다. 끄면 칸이 사라집니다. 처음 값: 꺼짐");
   toggle(disp, "ShowTpms", "타이어 공기압",
          "주행 화면 오른쪽 칸(차간 거리 위)에 네 바퀴의 타이어 공기압(psi)을 보여 줍니다. 위 줄이 앞바퀴(왼쪽·오른쪽), 아래 줄이 뒷바퀴입니다. "
          "현대·기아·제네시스처럼 공기압을 보내는 차에서만 나옵니다.");
   toggle(disp, "ShowGpsInfo", "GPS 상태",
-         "주행 화면 왼쪽 위(연결 표시 아래)에 GPS가 잡혔는지와 신호 세기(막대 4칸)를 보여 줍니다. 초록: 잘 잡힘, 주황: 찾는 중·약함. "
-         "GPS는 시동이 켜져 있을 때만 동작합니다.");
+         "주행 화면 왼쪽 위(연결 표시 아래)에 'GPS'와 신호 세기(막대 4칸)를 보여 줍니다. 초록: 잡힘, 빨강: 안 잡힘(막대도 모두 꺼짐). "
+         "폰을 기기로 쓰면 그 왼쪽에 같은 크기의 배터리 칸이 함께 나옵니다. GPS는 시동이 켜져 있을 때만 동작합니다.");
   toggle(disp, "OptechShowDeviceState", "기기 상태",
          "주행 화면 오른쪽 가운데 칸에 기기의 CPU 온도와 CPU 사용률을 보여 줍니다. 80°C를 넘거나 사용률이 90%를 넘으면 빨갛게 깜빡입니다.");
   toggle(disp, "ShowBlindSpot", "후측방(BSD) 경고",
@@ -771,14 +906,22 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
       params.put("ShowRadarInfo", std::to_string(radar_names.indexOf(sel)));
       radar_btn->setTitle(radar_name());
     });
+    optech_web_choice(radar_btn, "ShowRadarInfo", radar_names, optech_index_values(radar_names.size()));
     disp->addItem(radar_btn);
   }
+  // the first box tells who does the speed (optech-hkg 2026-11-28 SCC / SCC2 / E2E; spst names it after the car,
+  // user 2026-11-28: SCC for Hyundai / Kia / Genesis, ACC for the other brands, 일반 / 롱컨 without adaptive cruise)
   toggle(disp, "ShowConnInfo", "연결 상태 표시",
          "주행 화면 왼쪽 위에 연결 상태를 보여 줍니다.\n"
+         "맨 앞 칸 = 누가 가감속을 하는지 (오픈파일럿이 꺼져 있을 때도 그 차가 쓰는 방식)\n"
+         "  SCC / ACC(남색): 차의 순정 크루즈가 가감속 (현대·기아·제네시스는 SCC, 다른 브랜드는 ACC)\n"
+         "  SCC2 / ACC2(빨강): 오픈파일럿이 가감속 (롱컨, comma 페달을 단 차도 ACC2)\n"
+         "  일반(남색): 어댑티브 크루즈가 없는 차, 오픈파일럿은 조향만\n"
+         "  롱컨(빨강): 어댑티브 크루즈가 없는 차에서 오픈파일럿이 가감속\n"
+         "  E2E(청록): 오픈파일럿이 가감속하는 차에서 지금 주행 모델이 판단하며 가감속 (실험 모드, E2E 모드)\n"
          "TMAP: TmapNda가 NDA 방식으로 보내는 중\n"
          "CARROT: 당근 방식으로 들어옴 (당근내비, 당근 방식으로 설정한 TmapNda)\n"
          "초록은 정보가 들어오는 중, 회색은 연결됐지만 아직 정보가 없음\n"
-         "SCC2(빨강): 크루즈(SCC)가 카메라 쪽에 있는 차\n"
          "RADAR(주황): 레이더가 여러 물체를 보내는 차");
   // '운전자 모니터링 아이콘' (ShowDmInfo 0 / 1); the mode itself is chosen on the 토글 page
   dm_icon = new ToggleControl("운전자 모니터링 아이콘",
@@ -787,6 +930,9 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
   QObject::connect(dm_icon, &ToggleControl::toggleFlipped, [=](bool on) {
     if (QString::fromStdString(params.get("OptechDmMode")).toInt() == 0) params.put("ShowDmInfo", on ? "1" : "0");
   });
+  dm_icon->setProperty("optechKey", "ShowDmInfo");  // optech web: only with 운전자 모니터링 '기본 사용'
+  dm_icon->setProperty("optechType", "toggle");
+  dm_icon->setProperty("optechShowIf", "OptechDmMode=0");
   disp->addItem(dm_icon);
   disp->addItem(optech_section("화면 버튼"));
   // the drive screen buttons keep dragonpilot's English letters: name them as they look (user 2026-11-26)
@@ -824,10 +970,35 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
       params.putBool("dp_device_auto_shutdown", false);  // the dragonpilot switch this replaces
       off_btn->setTitle(off_name());
     });
+    optech_web_choice(off_btn, "OptechOffShutdown", off_names, optech_int_values(off_secs), false, "offShutdown");
     adv->addItem(off_btn);
   }
   toggle(adv, "OpkrHotspotOnBoot", "부팅 시 핫스팟 켜기",
          "켜 두면 기기가 켜질 때 핫스팟(테더링)이 자동으로 켜집니다. 재부팅해야 적용됩니다.");
+  // OptechWebServer '웹 접속' (selfdrive/optech_web/server.py, port 7000; optech-hkg 2026-11-27, like carrot's page)
+  toggle(adv, "OptechWebServer", "웹 접속 (같은 와이파이)",
+    "켜 두면(초록색) 같은 와이파이(또는 이 기기의 핫스팟)에 연결된 휴대폰·PC의 인터넷 창(브라우저)에서 "
+    "http://[기기 IP]:7000 으로 들어와 기기 상태와 지금 화면을 보고, 주행 기록·녹화 영상을 받고, OPTECH 설정을 바꾸고, "
+    "업데이트·다시 켜기를 할 수 있습니다. 주소는 아래 '웹 접속 주소'에서 QR 코드로 볼 수 있습니다. "
+    "같은 와이파이의 누구나 들어올 수 있으니 공용 와이파이에서는 끄세요. 바꾼 뒤 기기를 다시 켜야 적용됩니다. 처음 값: 켜짐");
+  ButtonControl *web_qr_btn = new ButtonControl("웹 접속 주소", "QR 보기",
+    "휴대폰 카메라로 QR 코드를 찍으면 OPTECH 웹 페이지가 열립니다. 휴대폰이 이 기기와 같은 와이파이나 핫스팟에 연결돼 "
+    "있어야 하고, 위 '웹 접속'이 켜져 있어야 합니다.");
+  QObject::connect(web_qr_btn, &ButtonControl::clicked, [=]() {
+    if (!params.getBool("OptechWebServer")) {
+      ConfirmationDialog::alert("위 '웹 접속'을 켜고 기기를 다시 켠 뒤에 쓸 수 있어요.", this);
+      return;
+    }
+    const QStringList urls = optech_log_page_urls(7000);
+    if (urls.isEmpty()) {
+      ConfirmationDialog::alert("와이파이나 핫스팟에 연결돼 있지 않아요. 이 기기를 와이파이에 연결하거나, '부팅 시 핫스팟 켜기'로 "
+                                "이 기기의 핫스팟을 켠 뒤 휴대폰을 연결하고 다시 눌러 주세요.", this);
+      return;
+    }
+    OptechLogQrDialog(this, urls, "열린 페이지에서 기기 상태와 지금 화면을 보고, 주행 기록·녹화 영상을 받고, 설정을 바꿀 수 있어요.\n\n"
+                                  "휴대폰이 이 기기와 같은 와이파이나 핫스팟에 연결돼 있어야 열립니다.").exec();
+  });
+  adv->addItem(web_qr_btn);
   choice(adv, "dp_device_audible_alert_mode", "알림 소리",
          "기본: 원래대로 소리를 냅니다.\n경고만: 경고일 때만 소리를 냅니다.\n끄기: 소리를 내지 않습니다.",
          {"기본", "경고만", "끄기"});
@@ -973,6 +1144,7 @@ void OptechPanel::updateBrandItems() {
   for (auto w : vag_items) w->setVisible(vag);
   // Hyundai / Kia / Genesis items also while the car is not known yet (as the 토글 page's LDWS 차량)
   for (auto w : hkg_items) w->setVisible(brand.isEmpty() || HKG_BRANDS.contains(brand));
+  for (auto w : non_hkg_items) w->setVisible(!HKG_BRANDS.contains(brand));
   const bool bolt_cc = QString::fromStdString(params.get("dp_car_assigned")).trimmed() == BOLT_CC_CAR;
   for (auto w : bolt_items) w->setVisible(bolt_cc);
   // cars without SCC: the chosen car, else the one detected at the last start (a trim without SCC is also switched to
@@ -990,6 +1162,26 @@ void OptechPanel::updateBrandItems() {
   for (auto w : porter_items) w->setVisible(car == PORTER_EV_CAR);
   if (non_scc_note) non_scc_note->setVisible(car.endsWith("NON-SCC"));
   brand_note->setVisible(brand.isEmpty());  // brand known but nothing special: no note
+  exportWebMeta();  // optech web: the list follows the brand items shown now
+}
+
+// optech web: write the menu's items for the web page (see optech_web_walk); a temp file then a rename, so the
+// server never reads a half-written list
+void OptechPanel::exportWebMeta() {
+  static const QStringList tab_names = {"시작", "주행", "속도", "조향", "화면", "고급"};
+  QJsonArray items;
+  for (int i = 0; i < tab_lists.size() && i < tab_names.size(); i++) {
+    QString section;
+    optech_web_walk(tab_lists[i]->itemLayout(), tab_names[i], section, items);
+  }
+  QDir().mkpath(QFileInfo(OPTECH_WEB_META).absolutePath());
+  QFile f(QString(OPTECH_WEB_META) + ".tmp");
+  if (f.open(QIODevice::WriteOnly)) {
+    f.write(QJsonDocument(items).toJson(QJsonDocument::Compact));
+    f.close();
+    QFile::remove(OPTECH_WEB_META);
+    f.rename(OPTECH_WEB_META);
+  }
 }
 
 void OptechPanel::showTab(int index) {

@@ -196,6 +196,7 @@ protected:
   bool optech_show_dev = false;    // param OptechShowDeviceState
   bool optech_show_dm = false;     // param ShowDmInfo == 1 (driver monitoring icon)
   bool optech_long = false;        // openpilot longitudinal (gap / accel profile only mean something then)
+  bool optech_long_on = false;     // ... and its speed control on now (off while paused: optech-hkg cruise button rule)
   int optech_personality = 1;      // LongitudinalPersonality 0 aggressive .. 2 relaxed
   int optech_accel_profile = 0;    // dp_long_accel_profile 0 OP, 1 ECO, 2 NOR, 3 SPT
   QString optech_gear = "P";
@@ -216,6 +217,7 @@ protected:
   bool optech_enabled = false;
   int optech_status = 0;
   bool optech_show_tpms = true, optech_show_gps = true, optech_show_bsd = true, optech_show_conn = true;
+  bool optech_show_gps_speed = false;  // param OptechShowGpsSpeed: the GPS speed box under the set speed
   int optech_show_radar = 1;
   float optech_a_ego = 0, optech_steer_deg = 0, optech_v_ego = 0;
   bool optech_brake = false, optech_left_blinker = false, optech_right_blinker = false;
@@ -225,10 +227,18 @@ protected:
   int optech_navi_active = 0, optech_navi_source = 0, optech_road_limit = 0, optech_turn = 0, optech_turn_dist = 0;
   bool optech_radar_tracks = false;
   bool optech_scc2 = false;
+  // the top-left first box (who does the speed, optech-hkg 2026-11-28 + spst names per car): read from carParams
+  bool optech_car_known = false, optech_car_hkg = false, optech_car_acc = true, optech_car_pedal = false;
+  bool optech_e2e = false;  // longitudinalPlanExt.dpE2EIsBlended: the driving model decides the speed right now
   void drawOptechRight(QPainter &p);
   void drawOptechBsd(QPainter &p, bool right, bool danger);
   void drawOptechRadar(QPainter &p);
-  void drawOptechGps(QPainter &p, float x, float y);
+  // GPS box at (x, y), at least min_w wide (optech-hkg 2026-11-27: as wide as the battery box beside it); returns its width
+  float drawOptechGps(QPainter &p, float x, float y, float min_w);
+  // device battery (optech-hkg 2026-11-27 battery box): only on a device that has one (a phone used as the device;
+  // the comma two has none). Read from the kernel once a second; -1: no battery
+  int optech_batt = -1;
+  bool optech_batt_charging = false;
   // optech-hkg 2026-11-25/26 layout: speed bump sign (roadLimitSpeed), and whether an alert / the auto hold box is up
   // (the lead info box steps aside meanwhile)
   QPixmap bump_img;

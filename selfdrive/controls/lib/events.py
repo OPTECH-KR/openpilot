@@ -156,6 +156,15 @@ class NoEntryAlert(Alert):
                      AudibleAlert.refuse, 3.)
 
 
+class NoEntryOneLineAlert(Alert):
+  # optech 2026-11-27 (as optech-hkg): the reason alone in one line, without 'openpilot Unavailable' (same sound and
+  # time as NoEntryAlert)
+  def __init__(self, alert_text_1: str):
+    super().__init__(alert_text_1, "", AlertStatus.normal,
+                     AlertSize.small, Priority.LOW, VisualAlert.none,
+                     AudibleAlert.refuse, 3.)
+
+
 class SoftDisableAlert(Alert):
   def __init__(self, alert_text_2: str):
     super().__init__(_("TAKE CONTROL IMMEDIATELY"), alert_text_2,
@@ -247,10 +256,11 @@ def below_steer_speed_alert(CP: car.CarParams, CS: car.CarState, sm: messaging.S
 
 
 def calibration_incomplete_alert(CP: car.CarParams, CS: car.CarState, sm: messaging.SubMaster, metric: bool, soft_disable_time: int) -> Alert:
-  first_word = _('Recalibration') if sm['liveCalibration'].calStatus == log.LiveCalibrationData.Status.recalibrating else _('Calibration')
+  # optech 2026-11-27 (as optech-hkg): original English on both lines (the translation mixed '카메라 보정' in)
+  first_word = 'Recalibration' if sm['liveCalibration'].calStatus == log.LiveCalibrationData.Status.recalibrating else 'Calibration'
   return Alert(
-    _("{word} in Progress: {perc}%").format(word=first_word, perc=sm['liveCalibration'].calPerc),
-    _("Drive Above {speed}").format(speed=get_display_speed(MIN_SPEED_FILTER, metric)),
+    "{word} in Progress: {perc}%".format(word=first_word, perc=sm['liveCalibration'].calPerc),
+    "Drive Above {speed}".format(speed=get_display_speed(MIN_SPEED_FILTER, metric)),
     AlertStatus.normal, AlertSize.mid,
     Priority.LOWEST, VisualAlert.none, AudibleAlert.none, .2)
 
@@ -291,15 +301,15 @@ def comm_issue_alert(CP: car.CarParams, CS: car.CarState, sm: messaging.SubMaste
 def camera_malfunction_alert(CP: car.CarParams, CS: car.CarState, sm: messaging.SubMaster, metric: bool, soft_disable_time: int) -> Alert:
   all_cams = ('roadCameraState', 'driverCameraState', 'wideRoadCameraState')
   bad_cams = [s.replace('State', '') for s in all_cams if s in sm.data.keys() and not sm.all_checks([s, ])]
-  return NormalPermanentAlert(_("Camera Malfunction"), ', '.join(bad_cams))
+  return NormalPermanentAlert("Camera Malfunction", ', '.join(bad_cams))
 
 
 def calibration_invalid_alert(CP: car.CarParams, CS: car.CarState, sm: messaging.SubMaster, metric: bool, soft_disable_time: int) -> Alert:
   rpy = sm['liveCalibration'].rpyCalib
   yaw = math.degrees(rpy[2] if len(rpy) == 3 else math.nan)
   pitch = math.degrees(rpy[1] if len(rpy) == 3 else math.nan)
-  angles = _("Remount Device (Pitch: {pitch:.1f}°, Yaw: {yaw:.1f}°)").format(pitch=pitch, yaw=yaw)
-  return NormalPermanentAlert(_("Calibration Invalid"), angles)
+  angles = f"위아래 {pitch:.1f}도, 좌우 {yaw:.1f}도"
+  return NormalPermanentAlert("캘리브레이션 실패", angles)
 
 
 def overheat_alert(CP: car.CarParams, CS: car.CarState, sm: messaging.SubMaster, metric: bool, soft_disable_time: int) -> Alert:
@@ -346,7 +356,7 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
 
   EventName.joystickDebug: {
     ET.WARNING: joystick_alert,
-    ET.PERMANENT: NormalPermanentAlert(_("Joystick Mode")),
+    ET.PERMANENT: NormalPermanentAlert("조이스틱 모드"),  # optech-hkg 2026-11-27 (one line, the auto hold size)
   },
 
   EventName.controlsInitializing: {
@@ -363,13 +373,13 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
 
   # Car is recognized, but marked as dashcam only
   EventName.startupNoControl: {
-    ET.PERMANENT: StartupAlert(_("Dashcam mode")),
-    ET.NO_ENTRY: NoEntryAlert(_("Dashcam mode")),
+    ET.PERMANENT: StartupAlert("Dashcam mode", "Always keep hands on wheel and eyes on road"),
+    ET.NO_ENTRY: NoEntryAlert("Dashcam mode", alert_text_1="openpilot Unavailable"),
   },
 
   # Car is not recognized
   EventName.startupNoCar: {
-    ET.PERMANENT: StartupAlert(_("Dashcam mode for unsupported car")),
+    ET.PERMANENT: StartupAlert("Dashcam mode for unsupported car", "Always keep hands on wheel and eyes on road"),
   },
 
   EventName.startupNoFw: {
@@ -379,7 +389,7 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
   },
 
   EventName.dashcamMode: {
-    ET.PERMANENT: NormalPermanentAlert(_("Dashcam Mode"),
+    ET.PERMANENT: NormalPermanentAlert("Dashcam Mode",
                                        priority=Priority.LOWEST),
   },
 
@@ -396,8 +406,8 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
   # read-only mode. This can be solved by adding your fingerprint.
   # See https://github.com/commaai/openpilot/wiki/Fingerprinting for more information
   EventName.carUnrecognized: {
-    ET.PERMANENT: NormalPermanentAlert(_("Dashcam Mode"),
-                                       _("Car Unrecognized"),
+    ET.PERMANENT: NormalPermanentAlert("Dashcam Mode",
+                                       "Car Unrecognized",
                                        priority=Priority.LOWEST),
   },
 
@@ -565,14 +575,14 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
   # Camera is not outputting frames
   EventName.cameraMalfunction: {
     ET.PERMANENT: camera_malfunction_alert,
-    ET.SOFT_DISABLE: soft_disable_alert(_("Camera Malfunction")),
-    ET.NO_ENTRY: NoEntryAlert(_("Camera Malfunction: Reboot Your Device")),
+    ET.SOFT_DISABLE: soft_disable_alert("Camera Malfunction"),
+    ET.NO_ENTRY: NoEntryAlert("Camera Malfunction: Reboot Your Device", alert_text_1="openpilot Unavailable"),
   },
   # Camera framerate too low
   EventName.cameraFrameRate: {
-    ET.PERMANENT: NormalPermanentAlert(_("Camera Frame Rate Low"), _("Reboot your Device")),
-    ET.SOFT_DISABLE: soft_disable_alert(_("Camera Frame Rate Low")),
-    ET.NO_ENTRY: NoEntryAlert(_("Camera Frame Rate Low: Reboot Your Device")),
+    ET.PERMANENT: NormalPermanentAlert("Camera Frame Rate Low", "Reboot your Device"),
+    ET.SOFT_DISABLE: soft_disable_alert("Camera Frame Rate Low"),
+    ET.NO_ENTRY: NoEntryAlert("Camera Frame Rate Low: Reboot Your Device", alert_text_1="openpilot Unavailable"),
   },
 
   # Unused
@@ -608,12 +618,12 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
 
   EventName.brakeHold: {
     ET.USER_DISABLE: EngagementAlert(AudibleAlert.disengage),
-    ET.NO_ENTRY: NoEntryAlert(_("Brake Hold Active")),
+    ET.NO_ENTRY: NoEntryOneLineAlert("오토 홀드"),
   },
 
   EventName.parkBrake: {
     ET.USER_DISABLE: EngagementAlert(AudibleAlert.disengage),
-    ET.NO_ENTRY: NoEntryAlert(_("Parking Brake Engaged")),
+    ET.NO_ENTRY: NoEntryOneLineAlert("주차 브레이크"),
   },
 
   EventName.pedalPressed: {
@@ -657,10 +667,12 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
 
   # optech 주행 > 신호등 > '초록불 알림' (controlsd + optech_signal.py; a free old event number)
   EventName.ipasOverrideDEPRECATED: {
+    # optech-hkg 2026-11-27 night: one line in the auto hold size ("글 너무 커 ... 오토홀드 그정도 사이즈로"); the
+    # second line '출발 전에 신호를 직접 확인하세요' made the box big again (the 주행 > 신호등 menu text keeps that warning)
     ET.WARNING: Alert(
       "초록불로 바뀌었어요",
-      "출발 전에 신호를 직접 확인하세요",
-      AlertStatus.normal, AlertSize.mid,
+      "",
+      AlertStatus.normal, AlertSize.small,
       Priority.LOW, VisualAlert.none, AudibleAlert.prompt, 3.),
   },
 
@@ -757,20 +769,20 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
   # See https://comma.ai/setup for more information
   EventName.calibrationInvalid: {
     ET.PERMANENT: calibration_invalid_alert,
-    ET.SOFT_DISABLE: soft_disable_alert(_("Calibration Invalid: Remount Device & Recalibrate")),
-    ET.NO_ENTRY: NoEntryAlert(_("Calibration Invalid: Remount Device & Recalibrate")),
+    ET.SOFT_DISABLE: soft_disable_alert("캘리브레이션 오류: 기기를 다시 달아 주세요"),
+    ET.NO_ENTRY: NoEntryAlert("캘리브레이션 오류: 기기를 다시 달아 주세요"),
   },
 
   EventName.calibrationIncomplete: {
     ET.PERMANENT: calibration_incomplete_alert,
-    ET.SOFT_DISABLE: soft_disable_alert(_("Calibration Incomplete")),
-    ET.NO_ENTRY: NoEntryAlert(_("Calibration in Progress")),
+    ET.SOFT_DISABLE: soft_disable_alert("Calibration in Progress"),
+    ET.NO_ENTRY: NoEntryAlert("Calibration in Progress", alert_text_1="openpilot Unavailable"),
   },
 
   EventName.calibrationRecalibrating: {
     ET.PERMANENT: calibration_incomplete_alert,
-    ET.SOFT_DISABLE: soft_disable_alert(_("Device Remount Detected: Recalibrating")),
-    ET.NO_ENTRY: NoEntryAlert(_("Remount Detected: Recalibrating")),
+    ET.SOFT_DISABLE: soft_disable_alert("Device Remount Detected: Recalibrating"),
+    ET.NO_ENTRY: NoEntryAlert("Remount Detected: Recalibrating", alert_text_1="openpilot Unavailable"),
   },
 
   EventName.doorOpen: {
@@ -784,8 +796,8 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
   },
 
   EventName.espDisabled: {
-    ET.SOFT_DISABLE: soft_disable_alert(_("Electronic Stability Control Disabled")),
-    ET.NO_ENTRY: NoEntryAlert(_("Electronic Stability Control Disabled")),
+    ET.SOFT_DISABLE: soft_disable_alert("Electronic Stability Control Disabled"),
+    ET.NO_ENTRY: NoEntryAlert("Electronic Stability Control Disabled", alert_text_1="openpilot Unavailable"),
   },
 
   EventName.lowBattery: {
@@ -929,7 +941,7 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
 
   EventName.reverseGear: {
     ET.PERMANENT: Alert(
-      _("Reverse\nGear"),
+      "후진 기어",  # optech-hkg 2026-11-27: one line in Korean (was 'Reverse' / 'Gear' in English), the auto hold size
       "",
       AlertStatus.normal, AlertSize.full,
       Priority.LOWEST, VisualAlert.none, AudibleAlert.none, .2, creation_delay=0.5),
@@ -956,9 +968,9 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
   # are received on the car side this usually means the relay hasn't opened correctly
   # and this alert is thrown.
   EventName.relayMalfunction: {
-    ET.IMMEDIATE_DISABLE: ImmediateDisableAlert(_("Harness Relay Malfunction")),
-    ET.PERMANENT: NormalPermanentAlert(_("Harness Relay Malfunction"), _("Check Hardware")),
-    ET.NO_ENTRY: NoEntryAlert(_("Harness Relay Malfunction")),
+    ET.IMMEDIATE_DISABLE: ImmediateDisableAlert("Harness Relay Malfunction"),
+    ET.PERMANENT: NormalPermanentAlert("Harness Relay Malfunction", "Check Hardware"),
+    ET.NO_ENTRY: NoEntryAlert("Harness Relay Malfunction", alert_text_1="openpilot Unavailable"),
   },
 
   EventName.speedTooLow: {

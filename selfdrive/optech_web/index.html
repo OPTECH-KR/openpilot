@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OPTECH</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; background: #111; color: #e8e8e8; }
+  header { position: sticky; top: 0; background: #1b1b1b; padding: 10px 12px 0; border-bottom: 1px solid #333; z-index: 5; }
+  header h1 { margin: 0 0 8px; font-size: 20px; color: #33ab4c; }
+  header h1 span { color: #999; font-size: 14px; font-weight: normal; margin-left: 8px; }
+  nav { display: flex; gap: 6px; overflow-x: auto; }
+  nav button { flex: 1; min-width: 64px; background: #2a2a2a; color: #ddd; border: 0; border-radius: 10px 10px 0 0; padding: 10px 6px; font-size: 16px; }
+  nav button.on { background: #33ab4c; color: #fff; }
+  main { padding: 12px; max-width: 900px; margin: 0 auto; }
+  .card { background: #1f1f1f; border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
+  .card h2 { margin: 0 0 8px; font-size: 17px; color: #33ab4c; }
+  .row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #2c2c2c; font-size: 15px; }
+  .row:last-child { border-bottom: 0; }
+  .row b { font-weight: 600; color: #fff; text-align: right; }
+  .good { color: #7ddc5a !important; } .warn { color: #f5a032 !important; } .bad { color: #e24b4a !important; }
+  .btn { display: inline-block; background: #465bea; color: #fff; border: 0; border-radius: 10px; padding: 11px 16px; font-size: 15px; margin: 4px 6px 4px 0; text-decoration: none; cursor: pointer; }
+  .btn.grey { background: #3a3a3a; } .btn.red { background: #b73d3d; } .btn:disabled { opacity: .4; }
+  .note { background: #3a2f12; color: #f5d68a; border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; font-size: 14px; }
+  .small { color: #999; font-size: 13px; }
+  #screen img { width: 100%; border-radius: 10px; background: #000; min-height: 120px; }
+  .file { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #2c2c2c; font-size: 14px; gap: 8px; }
+  .file a { color: #8fa4ff; }
+  .subtabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .subtabs button { background: #2a2a2a; color: #ddd; border: 0; border-radius: 8px; padding: 8px 12px; font-size: 15px; }
+  .subtabs button.on { background: #33ab4c; color: #fff; }
+  .sec { color: #33ab4c; font-weight: 600; font-size: 16px; margin: 14px 2px 6px; }
+  .item { background: #1f1f1f; border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; }
+  .item .top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .item .t { font-size: 16px; }
+  .item .d { color: #9a9a9a; font-size: 13px; margin-top: 6px; white-space: pre-line; display: none; }
+  .item.open .d { display: block; }
+  .item .more { color: #777; font-size: 12px; margin-left: 4px; }
+  .item.d-note { background: #2b2b2b; color: #d8d8d8; font-size: 13px; white-space: pre-line; line-height: 1.5; }
+  .num { display: flex; align-items: center; gap: 6px; }
+  .num button { width: 38px; height: 38px; border-radius: 19px; border: 0; background: #3a3a3a; color: #fff; font-size: 20px; }
+  .num input { width: 72px; text-align: center; background: #111; color: #e0e879; border: 1px solid #444; border-radius: 8px; padding: 7px 4px; font-size: 16px; }
+  select { background: #111; color: #e0e879; border: 1px solid #444; border-radius: 8px; padding: 8px; font-size: 15px; max-width: 220px; }
+  .sw { position: relative; width: 56px; height: 32px; flex: none; }
+  .sw input { display: none; }
+  .sw span { position: absolute; inset: 0; background: #444; border-radius: 16px; transition: .2s; }
+  .sw span:before { content: ""; position: absolute; width: 26px; height: 26px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .2s; }
+  .sw input:checked + span { background: #33ab4c; }
+  .sw input:checked + span:before { transform: translateX(24px); }
+  .sw input:disabled + span { opacity: .4; }
+  input[type=text] { width: 100%; background: #111; color: #eee; border: 1px solid #444; border-radius: 8px; padding: 9px; font-size: 15px; margin: 4px 0 8px; }
+  pre { white-space: pre-wrap; font-size: 13px; color: #ccc; background: #151515; padding: 8px; border-radius: 8px; }
+  #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #333; color: #fff; padding: 12px 18px; border-radius: 12px; font-size: 15px; display: none; max-width: 90%; z-index: 9; }
+  label.opt { display: block; padding: 6px 0; font-size: 15px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>OPTECH<span id="hdr"></span></h1>
+  <nav>
+    <button data-tab="status" class="on">상태</button>
+    <button data-tab="screen">화면</button>
+    <button data-tab="files">기록</button>
+    <button data-tab="settings">설정</button>
+    <button data-tab="tools">도구</button>
+  </nav>
+</header>
+<main>
+  <section id="status"></section>
+  <section id="screen" hidden>
+    <div class="card">
+      <h2>지금 기기 화면</h2>
+      <img id="shot" alt="기기 화면">
+      <div style="margin-top:8px">
+        <button class="btn" onclick="loadShot()">새로 고침</button>
+        <label class="small"><input type="checkbox" id="auto"> 3초마다 자동</label>
+      </div>
+      <div class="small">화면을 사진으로 찍어 보여 줍니다 (누르기는 안 됩니다).</div>
+    </div>
+  </section>
+  <section id="files" hidden></section>
+  <section id="settings" hidden></section>
+  <section id="tools" hidden></section>
+</main>
+<div id="toast"></div>
+<script>
+const $ = (id) => document.getElementById(id);
+let cur = 'status', st = {}, timer = null, setTab = '시작', setItems = [], canChange = true;
+
+function toast(msg, ms) {
+  const t = $('toast'); t.textContent = msg; t.style.display = 'block';
+  clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', ms || 3500);
+}
+async function api(path, body) {
+  const opt = body === undefined ? {} : { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) };
+  const r = await fetch(path, opt);
+  return r.json();
+}
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+function row(k, v, cls) { const r = el('div', 'row'); r.append(el('span', '', k)); const b = el('b', cls || '', v); r.append(b); return r; }
+function size(n) { return n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB'; }
+function when(t) { const d = new Date(t * 1000); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
+const GEARS = {park: 'P', drive: 'D', reverse: 'R', neutral: 'N'};
+
+// ---------------- 상태 ----------------
+async function loadStatus() {
+  try { st = await api('/api/status'); } catch (e) { $('status').innerHTML = '<div class="note">기기에 연결하지 못했어요. 같은 와이파이인지 확인해 주세요.</div>'; return; }
+  canChange = st.can_change;
+  $('hdr').textContent = st.ip ? st.ip : '';
+  const s = $('status'); s.innerHTML = '';
+  if (!st.can_change) s.append(el('div', 'note', '시동이 켜져 있어요. 설정 바꾸기와 도구는 기어를 P에 놓고 오픈파일럿을 끄면 쓸 수 있어요.'));
+  const v = el('div', 'card'); v.append(el('h2', '', '버전'));
+  v.append(row('브랜치', st.branch || '-'));
+  v.append(row('만든 때', st.commit_date || st.commit || '-'));
+  v.append(row('업데이트', !st.remote ? '도구 탭에서 확인' : (st.update ? '새 버전 있음 (' + st.remote + ')' : '최신 버전'), st.update ? 'warn' : ''));
+  s.append(v);
+  const d = el('div', 'card'); d.append(el('h2', '', '기기'));
+  if (!st.device_alive) d.append(row('상태', '정보를 기다리는 중', 'warn'));
+  d.append(row('온도', st.temp + '°C', st.temp >= 80 ? 'bad' : st.temp >= 70 ? 'warn' : 'good'));
+  if (st.battery > 0) d.append(row('배터리', st.battery + '%' + (st.charging ? ' (충전 중)' : ''), st.battery < 15 ? 'bad' : st.battery < 30 ? 'warn' : 'good'));
+  d.append(row('남은 저장 공간', st.free + '%', st.free < 10 ? 'bad' : ''));
+  d.append(row('켜진 지', Math.floor(st.uptime / 3600) + '시간 ' + Math.floor(st.uptime % 3600 / 60) + '분'));
+  s.append(d);
+  const c = el('div', 'card'); c.append(el('h2', '', '차'));
+  c.append(row('판다(차 연결 장치)', st.panda ? '연결됨' : '연결 안 됨', st.panda ? 'good' : 'bad'));
+  c.append(row('차종', st.car || '-'));
+  c.append(row('시동', st.started ? '켜짐' : '꺼짐'));
+  if (st.started) {
+    c.append(row('기어', GEARS[st.gear] || st.gear || '-'));
+    c.append(row('속도', st.speed + ' km/h'));
+    c.append(row('오픈파일럿', st.engaged ? '켜짐' : '꺼짐', st.engaged ? 'good' : ''));
+  }
+  s.append(c);
+}
+
+// ---------------- 화면 ----------------
+function loadShot() { $('shot').src = '/api/screen?t=' + Date.now(); }
+
+// ---------------- 기록 ----------------
+async function loadFiles() {
+  const f = await api('/api/files'), s = $('files'); s.innerHTML = '';
+  const a = el('div', 'card'); a.append(el('h2', '', '주행 기록 (' + f.drivelog.length + ')'));
+  a.append(el('div', 'small', '주행할 때마다 자동으로 남는 기록입니다. 문제가 있으면 이 파일을 보내 주세요.'));
+  if (f.drivelog.length) { const z = el('a', 'btn', '모두 받기 (zip)'); z.href = '/files/drivelog.zip'; a.append(z); }
+  for (const x of f.drivelog) {
+    const r = el('div', 'file'); r.append(el('span', '', when(x.mtime) + '  ·  ' + size(x.size)));
+    const l = el('a', '', '받기'); l.href = '/files/drivelog/' + encodeURIComponent(x.name); r.append(l); a.append(r);
+  }
+  if (!f.drivelog.length) a.append(el('div', 'small', '아직 기록이 없어요.'));
+  s.append(a);
+  const b = el('div', 'card'); b.append(el('h2', '', '화면 녹화 영상 (' + f.videos.length + ')'));
+  b.append(el('div', 'small', '주행 화면의 REC 버튼으로 녹화한 영상입니다 (화면 > 녹화 버튼).'));
+  for (const x of f.videos) {
+    const r = el('div', 'file'); r.append(el('span', '', when(x.mtime) + '  ·  ' + size(x.size)));
+    const w = el('span');
+    const p = el('a', '', '보기'); p.href = '/files/videos/' + encodeURIComponent(x.name); p.target = '_blank';
+    const l = el('a', '', '받기'); l.href = '/files/videos/' + encodeURIComponent(x.name) + '?dl=1'; l.style.marginLeft = '14px';
+    w.append(p, l); r.append(w); b.append(r);
+  }
+  if (!f.videos.length) b.append(el('div', 'small', '녹화한 영상이 없어요.'));
+  s.append(b);
+}
+
+// ---------------- 설정 ----------------
+// the menu's own rule for items it shows only sometimes: "KEY>0", "KEY=N" (number), "KEY==text"
+function shown(it, vals) {
+  if (!it.showIf) return true;
+  const m = it.showIf.match(/^([A-Za-z0-9_]+)(==|=|>)(.*)$/);
+  if (!m) return true;
+  const v = vals[m[1]] === undefined ? '' : vals[m[1]];
+  if (m[2] === '==') return v === m[3];
+  const n = parseInt(v) || 0;
+  return m[2] === '>' ? n > parseInt(m[3]) : n === parseInt(m[3]);
+}
+async function loadSettings() {
+  const r = await api('/api/settings'), s = $('settings'), y = window.scrollY; s.innerHTML = '';
+  if (!r.ok) { s.append(el('div', 'note', r.msg)); return; }
+  canChange = r.can_change;
+  setItems = r.items.filter(it => shown(it, r.vals || {}));
+  if (!canChange) s.append(el('div', 'note', '시동이 켜져 있어요. 기어를 P에 놓고 오픈파일럿을 끄면 바꿀 수 있어요.'));
+  s.append(el('div', 'small', '항목 이름을 누르면 설명이 나옵니다. 바꾸면 바로 저장되고, 기기 화면의 메뉴는 다시 열 때 바뀐 값이 보입니다.'));
+  const tabs = [...new Set(setItems.filter(i => i.type !== 'note').map(i => i.tab))];
+  if (!tabs.includes(setTab)) setTab = tabs[0];
+  const tb = el('div', 'subtabs');
+  for (const t of tabs) { const b = el('button', t === setTab ? 'on' : '', t); b.onclick = () => { setTab = t; loadSettings(); }; tb.append(b); }
+  s.append(tb);
+  let sec = null;
+  for (const it of setItems.filter(i => i.tab === setTab)) {
+    if (it.section !== sec) { sec = it.section; if (sec) s.append(el('div', 'sec', sec)); }
+    s.append(it.type === 'note' ? el('div', 'item d-note', it.desc) : itemView(it));
+  }
+  window.scrollTo(0, y);
+}
+function itemView(it) {
+  const box = el('div', 'item'), top = el('div', 'top'), t = el('div', 't', it.title);
+  if (it.desc) { t.append(el('span', 'more', '▾')); t.style.cursor = 'pointer'; t.onclick = () => box.classList.toggle('open'); }
+  top.append(t);
+  const save = async (v) => {
+    const r = await api('/api/settings', {key: it.key, value: String(v)});
+    if (r.ok) { toast(r.reboot ? '저장했어요. 기기를 다시 켜야 적용돼요.' : '저장했어요.'); }
+    else toast(r.msg || '저장하지 못했어요.');
+    loadSettings();  // items that depend on this one appear / disappear like in the menu
+  };
+  if (it.type === 'toggle') {
+    // on = any value above 0 ('카메라 감속' stores 1-3)
+    const l = el('label', 'sw'), i = el('input'); i.type = 'checkbox'; i.checked = (parseInt(it.value) || 0) > 0; i.disabled = !canChange;
+    i.onchange = () => save(i.checked ? 1 : 0); l.append(i, el('span')); top.append(l);
+  } else if (it.type === 'number') {
+    const w = el('div', 'num'), m = el('button', '', '−'), p = el('button', '', '+'), i = el('input');
+    i.type = 'number'; i.min = it.min; i.max = it.max; i.step = it.step;
+    i.value = it.value === '' ? '' : it.value;
+    // spst: the text the menu shows for the stored number (e.g. 0 -> '끄기', 25 -> '0.25'), optech_panel.cc labels
+    const lab = el('span', 'small');
+    const showLab = () => {
+      const k = Math.round(((parseInt(i.value) || 0) - it.min) / it.step);
+      lab.textContent = it.labels && k >= 0 && k < it.labels.length && it.labels[k] !== String(i.value) ? it.labels[k] : '';
+    };
+    const set = (v) => { v = Math.max(it.min, Math.min(it.max, v)); i.value = v; showLab(); save(v); };
+    m.onclick = () => set((parseInt(i.value) || 0) - it.step); p.onclick = () => set((parseInt(i.value) || 0) + it.step);
+    i.onchange = () => set(parseInt(i.value) || 0);
+    for (const x of [m, i, p]) x.disabled = !canChange;
+    showLab();
+    w.append(lab, m, i, p); top.append(w);
+  } else if (it.type === 'choice') {
+    const sel = el('select'); sel.disabled = !canChange;
+    it.names.forEach((n, k) => { const o = el('option', '', n); o.value = it.values[k]; sel.append(o); });
+    sel.value = it.values.includes(it.value) ? it.value : '';
+    sel.onchange = () => save(sel.value); top.append(sel);
+  }
+  box.append(top);
+  if (it.desc) box.append(el('div', 'd', it.desc + (it.type === 'number' ? `\n(${it.min} ~ ${it.max}, ${it.step}씩)` : '')));
+  return box;
+}
+
+// ---------------- 도구 ----------------
+async function tool(name, body, confirmText) {
+  if (confirmText && !confirm(confirmText)) return null;
+  const r = await api('/api/tool/' + name, body || {});
+  if (r.msg) toast(r.msg, 6000);
+  return r;
+}
+async function loadTools() {
+  const s = $('tools'); s.innerHTML = '';
+  if (!st.branch) { try { st = await api('/api/status'); } catch (e) {} }
+  if (!st.can_change) s.append(el('div', 'note', '시동이 켜져 있어요. 업데이트 확인 말고는 기어를 P에 놓고 오픈파일럿을 꺼야 쓸 수 있어요.'));
+  const u = el('div', 'card'); u.append(el('h2', '', '업데이트'));
+  const out = el('div'); const ck = el('button', 'btn', '새 버전 확인');
+  ck.onclick = async () => {
+    ck.disabled = true; ck.textContent = '확인 중...'; out.innerHTML = '';
+    const r = await api('/api/tool/check', {}); ck.disabled = false; ck.textContent = '새 버전 확인';
+    if (!r.ok) { out.append(el('div', 'note', r.msg)); return; }
+    if (!r.update) { out.append(el('div', 'small', '이미 최신 버전이에요 (' + r.local + ').')); return; }
+    out.append(el('div', '', '새 버전이 있어요: ' + r.local + ' → ' + r.remote));
+    if (r.changes) out.append(el('pre', '', r.changes));
+    const go = el('button', 'btn', '업데이트 받기'); go.disabled = !st.can_change;
+    go.onclick = () => tool('update', {}, '업데이트를 받을까요? 받은 뒤 기기가 자동으로 다시 켜지고, 켤 때 몇 분 빌드해요.');
+    out.append(go);
+  };
+  u.append(ck, out); s.append(u);
+
+  const p = el('div', 'card'); p.append(el('h2', '', '다시 켜기'));
+  const rb = el('button', 'btn', '기기 다시 켜기'); rb.onclick = () => tool('reboot', {}, '기기를 다시 켤까요?');
+  rb.disabled = !st.can_change;
+  p.append(rb); s.append(p);
+
+  const b = el('div', 'card'); b.append(el('h2', '', '브랜치 바꾸기'));
+  b.append(el('div', 'small', '지금: ' + (st.branch || '-') + '. 바꾸면 받은 뒤 자동으로 다시 켜지고, 켤 때 몇 분 빌드해요. 설정값은 그대로 남아요.'));
+  const o1 = el('label', 'opt'), r1 = el('input'); r1.type = 'radio'; r1.name = 'br'; r1.checked = true; o1.append(r1, document.createTextNode(' ' + st.other_branch));
+  const o2 = el('label', 'opt'), r2 = el('input'); r2.type = 'radio'; r2.name = 'br'; o2.append(r2, document.createTextNode(' 기타 (주소 직접 입력)'));
+  const f = el('div'); f.hidden = true;
+  const gid = el('input'); gid.type = 'text'; gid.value = 'OPTECH-KR'; gid.placeholder = 'GitHub 아이디';
+  const repo = el('input'); repo.type = 'text'; repo.value = 'openpilot'; repo.placeholder = '저장소 이름';
+  const br = el('input'); br.type = 'text'; br.value = st.branch || ''; br.placeholder = '브랜치 이름';
+  f.append(el('div', 'small', 'github.com/[아이디]/[저장소].git -b [브랜치]'), gid, repo, br);
+  r1.onchange = r2.onchange = () => f.hidden = !r2.checked;
+  const go = el('button', 'btn', '바꾸기'); go.disabled = !st.can_change;
+  go.onclick = async () => {
+    const body = r1.checked ? {choice: 'other'} : {choice: 'custom', id: gid.value, repo: repo.value, branch: br.value};
+    const name = r1.checked ? st.other_branch : br.value;
+    if (!confirm(name + ' 브랜치로 바꿀까요?')) return;
+    go.disabled = true; go.textContent = '확인 중...';
+    const r = await tool('branch', body); go.disabled = false; go.textContent = '바꾸기';
+  };
+  b.append(o1, o2, f, go); s.append(b);
+
+  const g = el('div', 'card'); g.append(el('h2', '', '되돌리기'));
+  g.append(el('div', 'small', '이전 버전: ' + (st.prev || '없음') + '. 마지막 업데이트나 브랜치 바꾸기 전으로 돌아갑니다.'));
+  const rs = el('button', 'btn', '이전 버전으로 되돌리기'); rs.disabled = !st.can_change || !st.prev;
+  rs.onclick = () => tool('restore', {}, (st.prev || '') + ' 버전으로 되돌릴까요? 되돌린 뒤 자동으로 다시 켜져요.');
+  const rt = el('button', 'btn grey', '바뀐 파일 되돌리기 (Git 리셋)'); rt.disabled = !st.can_change;
+  rt.onclick = () => tool('reset', {}, '바뀐 프로그램 파일을 지금 버전의 원래 내용으로 되돌리고 다시 켤까요? 설정값과 주행 기록은 그대로예요.');
+  g.append(rs, rt);
+  g.append(el('div', 'small', '바뀐 파일 되돌리기: 누가 파일을 직접 고쳤거나 업데이트가 끊겨서 이상할 때 씁니다.'));
+  s.append(g);
+}
+
+// ---------------- 탭 ----------------
+function show(tab) {
+  cur = tab;
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  document.querySelectorAll('main section').forEach(s => s.hidden = s.id !== tab);
+  if (tab === 'status') loadStatus();
+  if (tab === 'screen') loadShot();
+  if (tab === 'files') loadFiles();
+  if (tab === 'settings') loadSettings();
+  if (tab === 'tools') loadTools();
+}
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => show(b.dataset.tab));
+setInterval(() => {
+  if (document.hidden) return;
+  if (cur === 'status') loadStatus();
+  if (cur === 'screen' && $('auto').checked) loadShot();
+}, 3000);
+show('status');
+</script>
+</body>
+</html>

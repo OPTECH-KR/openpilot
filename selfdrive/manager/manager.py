@@ -142,6 +142,9 @@ def manager_init() -> None:
     ("ShowRadarInfo", "1"),
     ("ShowConnInfo", "1"),
     ("OptechShowRecordBtn", "0"),
+    ("OptechWebServer", "1"),  # 고급 > 웹 접속 (selfdrive/optech_web/server.py, port 7000)
+    ("OptechShowGpsSpeed", "0"),  # 화면 > GPS 속도 (설정 속도 칸 아래, optech-hkg: 처음 값 꺼짐)
+    ("OptechGitPullOnBoot", "0"),  # 소프트웨어 > 켤 때마다 자동 업데이트 (launch_chffrplus.sh, optech_git.sh bootpull)
     ("PathOffset", "0"),
     ("NNFF", "0"),
     ("NNFFLite", "0"),

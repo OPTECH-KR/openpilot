@@ -19,12 +19,12 @@ msgstr ""
 
 #: ../selfdrive/controls/lib/events.py:152
 msgid "openpilot Unavailable"
-msgstr "오픈파일럿 사용불가"
+msgstr "오픈파일럿 사용 불가"
 
 #: ../selfdrive/controls/lib/events.py:161
 #: ../selfdrive/controls/lib/events.py:176
 msgid "TAKE CONTROL IMMEDIATELY"
-msgstr "핸들을 잡아주세요"
+msgstr "즉시 핸들 잡으세요"
 
 #: ../selfdrive/controls/lib/events.py:171
 #, fuzzy
@@ -264,7 +264,7 @@ msgstr "운전자 전방주시 불안"
 #: ../selfdrive/controls/lib/events.py:473
 #: ../selfdrive/controls/lib/events.py:497
 msgid "DISENGAGE IMMEDIATELY"
-msgstr "경고: 조향제어가 즉시 해제됩니다"
+msgstr "즉시 핸들 잡으세요"
 
 #: ../selfdrive/controls/lib/events.py:481
 #, fuzzy

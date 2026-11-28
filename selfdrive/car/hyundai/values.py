@@ -609,6 +609,15 @@ CAMERA_SCC_PARAM = "OptechHkgCameraScc"
 def is_camera_scc(CP):
   return CP.carFingerprint in CAMERA_SCC_CAR or bool(CP.flags & HyundaiFlags.CAMERA_SCC)
 
+
+def optech_cruise_rule(CP):
+  """optech-hkg's cruise button rule (carrot's, 2026-11-27): steering and speed control turn on and off apart.
+  Cruise button: stock SCC turns steering on, pressed again all off; openpilot long only turns all off.
+  SET / RES: speed control on (openpilot long: steering too). Short CANCEL or the brake: speed control off, steering
+  stays. CANCEL held 0.4 s: all off. Hyundai / Kia / Genesis, not the comma pedal cars (their own panda mode).
+  selfdrive/car/hyundai/interface.py turns it into events, controlsd keeps steering on while speed control is off."""
+  return CP.carName == "hyundai" and not (CP.flags & HyundaiFlags.NON_SCC_PEDAL)
+
 # these cars use a different gas signal
 HYBRID_CAR = {CAR.IONIQ_PHEV, CAR.ELANTRA_HEV_2021, CAR.KIA_NIRO_PHEV, CAR.KIA_NIRO_HEV_2021, CAR.SONATA_HYBRID, CAR.KONA_HEV, CAR.IONIQ,
               CAR.IONIQ_HEV_2022, CAR.SANTA_FE_HEV_2022, CAR.SANTA_FE_PHEV_2022, CAR.IONIQ_PHEV_2019, CAR.TUCSON_HYBRID_4TH_GEN,

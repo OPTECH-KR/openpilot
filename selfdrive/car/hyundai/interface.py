@@ -5,8 +5,9 @@ from openpilot.selfdrive.car.hyundai.hyundaicanfd import CanBus
 from openpilot.selfdrive.car.hyundai.values import HyundaiFlags, CAR, DBC, CANFD_CAR, CAMERA_SCC_CAR, CANFD_RADAR_SCC_CAR, \
                                          CANFD_UNSUPPORTED_LONGITUDINAL_CAR, EV_CAR, HYBRID_CAR, LEGACY_SAFETY_MODE_CAR, \
                                          UNSUPPORTED_LONGITUDINAL_CAR, Buttons, NON_SCC_CAR, NON_SCC_VARIANT
-from openpilot.selfdrive.car.hyundai.values import is_camera_scc, CAMERA_SCC_PARAM
+from openpilot.selfdrive.car.hyundai.values import is_camera_scc, CAMERA_SCC_PARAM, optech_cruise_rule
 from openpilot.selfdrive.car.hyundai.radar_interface import RADAR_START_ADDR
+from openpilot.common.realtime import DT_CTRL
 from openpilot.selfdrive.car import create_button_events, get_safety_config
 from openpilot.selfdrive.car.interfaces import CarInterfaceBase
 from openpilot.selfdrive.car.disable_ecu import disable_ecu
@@ -20,6 +21,8 @@ EventName = car.CarEvent.EventName
 ENABLE_BUTTONS = (Buttons.RES_ACCEL, Buttons.SET_DECEL, Buttons.CANCEL)
 BUTTONS_DICT = {Buttons.RES_ACCEL: ButtonType.accelCruise, Buttons.SET_DECEL: ButtonType.decelCruise,
                 Buttons.GAP_DIST: ButtonType.gapAdjustCruise, Buttons.CANCEL: ButtonType.cancel}
+CANCEL_ALL_OFF_TIME = 0.4  # optech-hkg: CANCEL held this long turns everything off (shorter: speed control only)
+MAIN_STEER_ON_TIME = 1.0   # the cruise standby coming on this soon after the cruise button -> the driver turned it on
 
 
 def set_safety_config_hyundai(candidate, CAN, can_fd=False):
@@ -34,6 +37,13 @@ def set_safety_config_hyundai(candidate, CAN, can_fd=False):
 
 
 class CarInterface(CarInterfaceBase):
+  def __init__(self, CP, CarController, CarState):
+    super().__init__(CP, CarController, CarState)
+    self.cruise_rule = optech_cruise_rule(CP)  # optech-hkg cruise button rule (values.optech_cruise_rule)
+    self.cancel_frames = 0        # frames the CANCEL button has been held
+    self.main_frames_since = 1000  # frames since the cruise (main) button was last seen pressed
+    self.main_pressed_prev = False
+
   @staticmethod
   def _get_params(ret, candidate, fingerprint, car_fw, experimental_long, docs):
     # optech (optech-hkg): a model with SCC that shows no SCC11 (1056) on either bus at the start is its trim without SCC
@@ -482,7 +492,10 @@ class CarInterface(CarInterfaceBase):
     # To avoid re-engaging when openpilot cancels, check user engagement intention via buttons
     # Main button also can trigger an engagement on these cars
     allow_enable = any(btn in ENABLE_BUTTONS for btn in self.CS.cruise_buttons) or any(self.CS.main_buttons)
-    events = self.create_common_events(ret, pcm_enable=self.CS.CP.pcmCruise, allow_enable=allow_enable)
+    events = self.create_common_events(ret, pcm_enable=self.CS.CP.pcmCruise and not self.cruise_rule,
+                                       allow_enable=allow_enable, cancel_disables=not self.cruise_rule)
+    if self.cruise_rule:
+      self.cruise_rule_events(ret, c, events, allow_enable)
     if self.CS.scc_bus_changed:  # optech: SCC found on the other bus; saved, applies from the next start
       events.add(EventName.dataNeededDEPRECATED)
 
@@ -497,6 +510,33 @@ class CarInterface(CarInterfaceBase):
     ret.events = events.to_msg()
 
     return ret
+
+  def cruise_rule_events(self, ret, c, events, allow_enable):
+    """optech-hkg's cruise button rule (values.optech_cruise_rule): the on / off events from the buttons. Speed control
+    pausing on a short CANCEL or the brake (openpilot long) is in controlsd; on stock SCC the car's SCC does that itself
+    and openpilot keeps steering (no pcmDisable when it goes off)."""
+    # CANCEL held 0.4 s -> all off (every frame while it stays held, so it also keeps openpilot from coming on)
+    self.cancel_frames = self.cancel_frames + 1 if self.CS.cruise_buttons[-1] == Buttons.CANCEL else 0
+    if self.cancel_frames >= int(CANCEL_ALL_OFF_TIME / DT_CTRL):
+      events.add(EventName.buttonCancel)
+
+    # the cruise (main) button pressed while openpilot is on -> all off (stock SCC: the standby goes off as well)
+    main_pressed = any(self.CS.main_buttons)
+    self.main_frames_since = 0 if main_pressed else self.main_frames_since + 1
+    if main_pressed and not self.main_pressed_prev and c.enabled:
+      events.add(EventName.buttonCancel)
+    self.main_pressed_prev = main_pressed
+
+    if self.CP.pcmCruise:
+      if ret.cruiseState.enabled and not self.CS.out.cruiseState.enabled and allow_enable:
+        # the driver's SET / RES turned the car's SCC on -> openpilot on as well (steering + the car's speed control)
+        events.add(EventName.pcmEnable)
+      elif ret.cruiseState.available and not self.CS.out.cruiseState.available and \
+           self.main_frames_since < int(MAIN_STEER_ON_TIME / DT_CTRL):
+        # the driver turned the cruise standby on with the cruise button -> steering only (SET / RES for the speed).
+        # A standby that comes on by itself at the start stays off. CAN FD: the standby is not seen (always on), so
+        # there openpilot comes on with SET / RES only, as in optech-hkg-fd
+        events.add(EventName.pcmEnable)
 
   def apply(self, c, now_nanos):
     return self.CC.update(c, self.CS, now_nanos)

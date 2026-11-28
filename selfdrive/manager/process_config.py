@@ -115,6 +115,8 @@ procs = [
   PythonProcess("road_speed_limiter", "selfdrive.optech.road_speed_limiter", onroad=False, callback=optech_road_speed_limiter),
   PythonProcess("drivelog", "selfdrive.optech.drivelog"),  # optech 고급 > 주행 기록: small text log while onroad
   PythonProcess("logserver", "selfdrive.optech.logserver", offroad=True),  # 주행 기록 내려받기 (QR page, 15 min)
+  # OPTECH web page on the same wifi, http://<device IP>:7000 (고급 > 웹 접속, optech-hkg 2026-11-27)
+  PythonProcess("optech_web", "selfdrive.optech_web.server", offroad=True),
   # gpxd
   # PythonProcess("gpxd", "selfdrive.dragonpilot.gpxd"),
   # PythonProcess("gpx_uploader", "selfdrive.dragonpilot.gpx_uploader", offroad=True),

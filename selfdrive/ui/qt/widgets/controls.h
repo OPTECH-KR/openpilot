@@ -59,6 +59,11 @@ public:
     return description->text();
   }
 
+  // optech web (optech_panel.cc exportWebMeta): the item's title as the menu shows it
+  const QString getTitle() {
+    return title_label->text();
+  }
+
   QLabel *icon_label;
   QPixmap icon_pixmap;
 
@@ -288,6 +293,7 @@ class ListWidget : public QWidget {
   inline void addItem(QWidget *w) { inner_layout.addWidget(w); }
   inline void addItem(QLayout *layout) { inner_layout.addLayout(layout); }
   inline void setSpacing(int spacing) { inner_layout.setSpacing(spacing); }
+  inline QLayout *itemLayout() { return &inner_layout; }  // optech web: walk the items in order
 
 private:
   void paintEvent(QPaintEvent *) override {

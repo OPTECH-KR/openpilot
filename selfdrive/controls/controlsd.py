@@ -17,6 +17,7 @@ from openpilot.system.swaglog import cloudlog
 from openpilot.system.version import is_release_branch, get_short_branch
 from openpilot.selfdrive.boardd.boardd import can_list_to_can_capnp
 from openpilot.selfdrive.car.car_helpers import get_car, get_startup_event, get_one_can
+from openpilot.selfdrive.car.hyundai.values import optech_cruise_rule
 from openpilot.selfdrive.controls.lib.lateral_planner import CAMERA_OFFSET
 from openpilot.selfdrive.controls.lib.drive_helpers import VCruiseHelper, get_lag_adjusted_curvature
 from openpilot.selfdrive.controls.lib.latcontrol import LatControl, MIN_LATERAL_CONTROL_SPEED
@@ -129,6 +130,15 @@ class Controls:
                                      'managerState', 'liveParameters', 'radarState', 'liveTorqueParameters', 'testJoystick'] + self.camera_packets,
                                     ignore_alive=ignore, ignore_avg_freq=['radarState', 'testJoystick'])
 
+    # optech (optech-hkg 2026-11-27, Soul EV SK3 tester): the services whose problems raise commIssue.
+    # liveTorqueParameters is left out: torqued marks its message invalid whenever one of its own inputs (carControl /
+    # carState / liveLocationKalman) is a little late - on a busy device that flashed '즉시 핸들 잡으세요 / 기기 내부 통신
+    # 문제' for 1-3 s. The torque params are only applied while that message passes its checks (see liveTorqueParameters
+    # below), so a late or invalid one just keeps the last learned values. Logged (cloudlog) instead.
+    self.comm_services = [s for s in self.sm.data.keys() if s != 'liveTorqueParameters']
+    self.logged_torque_issue = None
+    self.torque_issue_log_frame = -1000
+
     if CI is None:
       # wait for one pandaState and one CAN packet
       print("Waiting for CAN messages...")
@@ -147,6 +157,16 @@ class Controls:
     self.CP.alternativeExperience = 0
     if not self.disengage_on_accelerator:
       self.CP.alternativeExperience |= ALTERNATIVE_EXPERIENCE.DISABLE_DISENGAGE_ON_GAS
+
+    # optech-hkg cruise button rule on Hyundai / Kia / Genesis (values.optech_cruise_rule): openpilot stays on for steering
+    # while speed control is off (short CANCEL, the brake, the car's SCC off). The panda then has no controls_allowed, so
+    # steering goes through its ALKA allowance (as dragonpilot's ALKA). dragonpilot's own ALKA (dp_alka, '사용 방식')
+    # is not used on these cars.
+    self.cruise_rule = optech_cruise_rule(self.CP)
+    self.long_paused = False  # openpilot long: steering on, speed control paused (SET / RES bring it back)
+    if self.cruise_rule:
+      self._dp_alka = False
+      self.CP.alternativeExperience |= ALTERNATIVE_EXPERIENCE.ALKA
 
     if self._dp_alka:
       self.CP.alternativeExperience |= ALTERNATIVE_EXPERIENCE.ALKA
@@ -310,9 +330,12 @@ class Controls:
       self.events.add(EventName.resumeBlocked)
 
     # Disable on rising edge of accelerator or brake. Also disable on brake when speed > 0
+    # (optech-hkg cruise button rule: while on, the brake only pauses speed control, update_long_pause. Off, it still
+    # keeps openpilot from coming on)
+    brake_disable = (CS.brakePressed and (not self.CS_prev.brakePressed or not CS.standstill)) or \
+                    (CS.regenBraking and (not self.CS_prev.regenBraking or not CS.standstill))
     if (CS.gasPressed and not self.CS_prev.gasPressed and self.disengage_on_accelerator) or \
-      (CS.brakePressed and (not self.CS_prev.brakePressed or not CS.standstill)) or \
-      (CS.regenBraking and (not self.CS_prev.regenBraking or not CS.standstill)):
+      (brake_disable and not (self.cruise_rule and self.enabled)):
       self.events.add(EventName.pedalPressed)
 
     if CS.brakePressed and CS.standstill:
@@ -445,10 +468,10 @@ class Controls:
     can_rcv_timeout = self.can_rcv_timeout_counter >= 5
     has_disable_events = self.events.contains(ET.NO_ENTRY) and (self.events.contains(ET.SOFT_DISABLE) or self.events.contains(ET.IMMEDIATE_DISABLE))
     no_system_errors = (not has_disable_events) or (len(self.events) == num_events)
-    if (not self.sm.all_checks() or can_rcv_timeout) and no_system_errors:
-      if not self.sm.all_alive():
+    if (not self.sm.all_checks(self.comm_services) or can_rcv_timeout) and no_system_errors:
+      if not self.sm.all_alive(self.comm_services):
         self.events.add(EventName.commIssue)
-      elif not self.sm.all_freq_ok():
+      elif not self.sm.all_freq_ok(self.comm_services):
         self.events.add(EventName.commIssueAvgFreq)
       else:  # invalid or can_rcv_timeout.
         self.events.add(EventName.commIssue)
@@ -464,6 +487,19 @@ class Controls:
         self.logged_comm_issue = logs
     else:
       self.logged_comm_issue = None
+
+    # liveTorqueParameters: no event (see comm_services), but keep it visible in the log (at most once per 10 s: the
+    # flags can flip at torqued's 4 Hz)
+    torque_issue = None
+    if self.initialized and not self.sm.all_checks(['liveTorqueParameters']):
+      torque_issue = (self.sm.valid['liveTorqueParameters'], self.sm.alive['liveTorqueParameters'],
+                      self.sm.freq_ok['liveTorqueParameters'])
+    if torque_issue != self.logged_torque_issue:
+      if torque_issue is not None and self.sm.frame - self.torque_issue_log_frame >= 1000:
+        cloudlog.event("optech liveTorqueParameters not ok (no warning, last learned values kept)",
+                       valid=torque_issue[0], alive=torque_issue[1], freq_ok=torque_issue[2])
+        self.torque_issue_log_frame = self.sm.frame
+      self.logged_torque_issue = torque_issue
 
     if not self.sm['liveParameters'].valid and not TESTING_CLOSET and (not SIMULATION or REPLAY):
       self.events.add(EventName.vehicleModelInvalid)
@@ -529,7 +565,7 @@ class Controls:
     self.sm.update(0)
 
     if not self.initialized:
-      all_valid = CS.canValid and self.sm.all_checks()
+      all_valid = CS.canValid and self.sm.all_checks(self.comm_services)
       timed_out = self.sm.frame * DT_CTRL > (6. if REPLAY else 3.5)
       if all_valid or timed_out or (SIMULATION and not REPLAY):
         available_streams = VisionIpcClient.available_streams("camerad", block=False)
@@ -556,11 +592,15 @@ class Controls:
     # we want to disengage openpilot. However the status from the panda goes through
     # another socket other than the CAN messages and one can arrive earlier than the other.
     # Therefore we allow a mismatch for two samples, then we trigger the disengagement.
-    if not self.enabled:
+    # optech-hkg cruise button rule: with speed control off (paused, or the car's SCC off) openpilot only steers and the
+    # panda has no controls_allowed (steering goes through ALKA), so only check while speed control is on
+    long_on = not self.cruise_rule or \
+              (not self.long_paused if self.CP.openpilotLongitudinalControl else CS.cruiseState.enabled)
+    if not self.enabled or not long_on:
       self.mismatch_counter = 0
 
     # All pandas not in silent mode must have controlsAllowed when openpilot is enabled
-    if self.enabled and any(not ps.controlsAllowed for ps in self.sm['pandaStates']
+    if self.enabled and long_on and any(not ps.controlsAllowed for ps in self.sm['pandaStates']
            if ps.safetyModel not in IGNORED_SAFETY_MODES):
       self.mismatch_counter += 1
 
@@ -571,7 +611,9 @@ class Controls:
   def state_transition(self, CS):
     """Compute conditional state transitions and execute actions on state transitions"""
 
-    self.v_cruise_helper.update_v_cruise(CS, self.enabled, self.is_metric)
+    # optech-hkg cruise button rule: +/- do not change the set speed while speed control is paused (they bring it back)
+    self.v_cruise_helper.update_v_cruise(CS, self.enabled and not self.long_paused, self.is_metric)
+    was_enabled = self.enabled
 
     # decrement the soft disable timer at every step, as it's reset on
     # entrance in SOFT_DISABLING state
@@ -651,8 +693,39 @@ class Controls:
     # Check if openpilot is engaged and actuators are enabled
     self.enabled = self.state in ENABLED_STATES
     self.active = self.state in ACTIVE_STATES
+    self.update_long_pause(CS, was_enabled)
     if self.active or (self._dp_alka and self._dp_alka_active):
       self.current_alert_types.append(ET.WARNING)
+
+  def update_long_pause(self, CS, was_enabled):
+    """optech-hkg cruise button rule, openpilot long (values.optech_cruise_rule): a short CANCEL or the brake pauses
+    speed control and openpilot keeps steering (the panda also stops speed control there: CANCEL, brake). The release
+    of SET brings it back at the current speed, of RES at the set speed from before the pause (the panda allows speed
+    control again on that same release). Each time openpilot comes on, speed control is on."""
+    if not (self.cruise_rule and self.CP.openpilotLongitudinalControl) or not self.enabled or not was_enabled:
+      self.long_paused = False
+      return
+
+    if not self.long_paused:
+      cancel = any(be.type == ButtonType.cancel and be.pressed for be in CS.buttonEvents)
+      brake = (CS.brakePressed and (not self.CS_prev.brakePressed or not CS.standstill)) or \
+              (CS.regenBraking and (not self.CS_prev.regenBraking or not CS.standstill))
+      if cancel or brake:
+        self.long_paused = True
+        cloudlog.info(f"optech cruise: speed control paused ({'CANCEL' if cancel else 'brake'}), steering stays")
+      return
+
+    released = [be.type for be in CS.buttonEvents
+                if be.type in (ButtonType.accelCruise, ButtonType.decelCruise) and not be.pressed]
+    if released and not CS.brakePressed:
+      if self.events.contains(ET.NO_ENTRY):
+        self.current_alert_types.append(ET.NO_ENTRY)
+      else:
+        self.long_paused = False
+        self.v_cruise_helper.initialize_v_cruise(CS, self.experimental_mode)  # SET: current speed, RES: the last one
+        self.current_alert_types.append(ET.ENABLE)  # engage sound (buttonEnable on this release)
+        cloudlog.info(f"optech cruise: {'RES' if released[0] == ButtonType.accelCruise else 'SET'} -> speed control on "
+                      f"at {self.v_cruise_helper.v_cruise_kph:.0f} km/h")
 
   def read_optech_steer_params(self):
     def num(key, default):
@@ -706,7 +779,8 @@ class Controls:
     standstill = CS.vEgo <= max(self.CP.minSteerSpeed, MIN_LATERAL_CONTROL_SPEED) or CS.standstill
     CC.latActive = self.active and not CS.steerFaultTemporary and not CS.steerFaultPermanent and \
                    (not standstill or self.joystick_mode)
-    CC.longActive = self.enabled and not self.events.contains(ET.OVERRIDE_LONGITUDINAL) and self.CP.openpilotLongitudinalControl
+    CC.longActive = self.enabled and not self.events.contains(ET.OVERRIDE_LONGITUDINAL) and self.CP.openpilotLongitudinalControl \
+                    and not self.long_paused  # optech-hkg cruise button rule: steering only while paused
 
     # rick - alka
     if (self._dp_alka and self._dp_alka_active) and not standstill and CS.cruiseState.available:
@@ -864,7 +938,9 @@ class Controls:
     if len(angular_rate_value) > 2:
       CC.angularVelocity = angular_rate_value
 
-    CC.cruiseControl.override = self.enabled and not CC.longActive and self.CP.openpilotLongitudinalControl
+    # (optech: no override while speed control is paused, so the car's SCC shows off: hyundai carcontroller)
+    CC.cruiseControl.override = self.enabled and not CC.longActive and self.CP.openpilotLongitudinalControl and \
+                                not self.long_paused
     CC.cruiseControl.cancel = CS.cruiseState.enabled and (not self.enabled or not self.CP.pcmCruise)
     if self.joystick_mode and self.sm.rcv_frame['testJoystick'] > 0 and self.sm['testJoystick'].buttons[0]:
       CC.cruiseControl.cancel = True

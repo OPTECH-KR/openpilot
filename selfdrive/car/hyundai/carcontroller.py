@@ -127,6 +127,11 @@ class CarController:
 
     can_sends = []
 
+    # optech-hkg cruise button rule (values.optech_cruise_rule): openpilot on for steering with speed control paused
+    # (short CANCEL / brake) -> the SCC messages say off, so the cluster shows the cruise as off, not as an override.
+    # Otherwise the same as CC.enabled (gas override: longActive off, override on)
+    acc_on = CC.enabled and (CC.longActive or CC.cruiseControl.override)
+
     # *** common hyundai stuff ***
 
     # tester present - w/ no response (keeps relevant ECU disabled)
@@ -166,7 +171,7 @@ class CarController:
         if hda2:
           can_sends.extend(hyundaicanfd.create_adrv_messages(self.packer, self.CAN, self.frame))
         if self.frame % 2 == 0:
-          can_sends.append(hyundaicanfd.create_acc_control(self.packer, self.CAN, CC.enabled, self.accel_last, accel, stopping, CC.cruiseControl.override,
+          can_sends.append(hyundaicanfd.create_acc_control(self.packer, self.CAN, acc_on, self.accel_last, accel, stopping, CC.cruiseControl.override,
                                                            set_speed_in_units))
           self.accel_last = accel
       else:
@@ -216,7 +221,7 @@ class CarController:
         else:
           jerk = 1.0
         use_fca = self.CP.flags & HyundaiFlags.USE_FCA.value
-        can_sends.extend(hyundaican.create_acc_commands(self.packer, CC.enabled, accel, jerk, int(self.frame / 2),
+        can_sends.extend(hyundaican.create_acc_commands(self.packer, acc_on, accel, jerk, int(self.frame / 2),
                                                         hud_control.leadVisible, set_speed_in_units, stopping,
                                                         CC.cruiseControl.override, use_fca))
 
