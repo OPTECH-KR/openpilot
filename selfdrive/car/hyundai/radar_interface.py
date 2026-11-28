@@ -4,7 +4,7 @@ import math
 from cereal import car
 from opendbc.can.parser import CANParser
 from selfdrive.car.interfaces import RadarInterfaceBase
-from selfdrive.car.hyundai.values import DBC, HyundaiFlags
+from selfdrive.car.hyundai.values import DBC, HyundaiFlags, CAMERA_SCC_CAR
 from common.params import Params
 from common.filter_simple import StreamingMovingAverage
 
@@ -46,7 +46,9 @@ def get_radar_can_parser(CP):
       ("SCC11", 50),
     ]
     print("RadarInterface: SCCRadar...")
-    return CANParser(DBC[CP.carFingerprint]['pt'], signals, checks, CP.sccBus)
+    # the camera-SCC cars send SCC11 from the camera (bus 2) also without '롱컨' (optech 2026-11-29, carstate cam parser)
+    bus = 2 if CP.carFingerprint in CAMERA_SCC_CAR else CP.sccBus
+    return CANParser(DBC[CP.carFingerprint]['pt'], signals, checks, bus)
 
 
 class RadarInterface(RadarInterfaceBase):
