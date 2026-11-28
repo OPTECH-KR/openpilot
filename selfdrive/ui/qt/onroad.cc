@@ -600,8 +600,10 @@ void AnnotatedCameraWidget::updateState(const UIState &s) {
     // device battery (optech-hkg 2026-11-27): the kernel's own files, as spst's thermald leaves batteryPercent empty.
     // current_now is negative while charging (as optech-hkg's thermald reads it)
     static const bool has_batt = util::read_file("/sys/class/power_supply/battery/present").rfind("1", 0) == 0;
+    // '배터리리스 사용' (OpkrBattLess, optech-hkg 2026-11-28 Soul EV tester): a C2 with its battery taken out still
+    // reports one -> no battery box, the GPS box moves to the left end
     optech_batt = -1;
-    if (has_batt) {
+    if (has_batt && !op_params.getBool("OpkrBattLess")) {
       const std::string cap = util::read_file("/sys/class/power_supply/battery/capacity");
       if (!cap.empty()) optech_batt = std::atoi(cap.c_str());
       optech_batt_charging = std::atoi(util::read_file("/sys/class/power_supply/battery/current_now").c_str()) < 0;

@@ -144,6 +144,7 @@ def manager_init() -> None:
     ("OptechShowRecordBtn", "0"),
     ("OptechWebServer", "1"),  # 고급 > 웹 접속 (selfdrive/optech_web/server.py, port 7000)
     ("OptechShowGpsSpeed", "0"),  # 화면 > GPS 속도 (설정 속도 칸 아래, optech-hkg: 처음 값 꺼짐)
+    ("OpkrBattLess", "0"),  # 화면 > 배터리리스 사용 (optech-hkg 2026-11-28; OPKR same name: a value left from OPKR carries over)
     ("OptechGitPullOnBoot", "0"),  # 소프트웨어 > 켤 때마다 자동 업데이트 (launch_chffrplus.sh, optech_git.sh bootpull)
     ("PathOffset", "0"),
     ("NNFF", "0"),
