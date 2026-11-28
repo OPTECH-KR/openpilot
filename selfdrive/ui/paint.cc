@@ -1047,7 +1047,7 @@ static void optech_dist_text(char* str, size_t n, int dist_m, const char* suffix
 }
 
 // big white turn arrow drawn with lines (the old turn images are mostly empty space and looked tiny, user 2026-11-23)
-// kind: 1 left turn, 2 right turn, 3 left lane, 4 right lane, 5 U-turn. (x, y) top left of an S x S square.
+// kind: 1 left turn, 2 right turn, 3 left lane, 4 right lane, 5 U-turn, 6 straight. (x, y) top left of an S x S square.
 static void optech_turn_arrow(const UIState* s, float x, float y, float S, int kind) {
     const bool mirror = kind == 2 || kind == 4;
     auto X = [&](float u) { return x + (mirror ? 1.f - u : u) * S; };
@@ -1076,6 +1076,12 @@ static void optech_turn_arrow(const UIState* s, float x, float y, float S, int k
         nvgStroke(vg);
         nvgBeginPath(vg);
         nvgMoveTo(vg, X(0.34f), Y(0.0f)); nvgLineTo(vg, X(0.62f), Y(0.34f)); nvgLineTo(vg, X(0.06f), Y(0.34f));
+    } else if (kind == 6) {  // straight on: a shaft up the middle and the head on top
+        nvgMoveTo(vg, X(0.50f), Y(1.0f));
+        nvgLineTo(vg, X(0.50f), Y(0.34f));
+        nvgStroke(vg);
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, X(0.50f), Y(0.0f)); nvgLineTo(vg, X(0.80f), Y(0.38f)); nvgLineTo(vg, X(0.20f), Y(0.38f));
     } else {  // U-turn (to the left, as in Korea)
         nvgMoveTo(vg, X(0.74f), Y(1.0f));
         nvgLineTo(vg, X(0.74f), Y(0.42f));
@@ -1534,6 +1540,7 @@ static void drawOptechHud(const UIState* s) {
             case 3: arrow = 3; label = "왼쪽 차로"; break;
             case 4: arrow = 4; label = "오른쪽 차로"; break;
             case 5: arrow = 5; label = "U턴"; break;
+            case 6: arrow = 6; label = "직진"; break;  // Tmap 11 / 51 (road_speed_limiter, 2026-11-28)
             case 35: label = "좌측 고가 진입"; break;
             case 43: label = "지하차도 우측"; break;
             case 48: label = "휴게소"; break;
@@ -2553,6 +2560,7 @@ void DrawApilot::drawLeadApilot(const UIState* s) {
             case 3: ui_draw_image(s, { bx - icon_size / 2, by - icon_size / 2, icon_size, icon_size }, "ic_lane_change_l", 1.0f); break;
             case 4: ui_draw_image(s, { bx - icon_size / 2, by - icon_size / 2, icon_size, icon_size }, "ic_lane_change_r", 1.0f); break;
             case 5: ui_draw_text(s, bx, by + 20, "U턴", 35, COLOR_WHITE, BOLD, 0.0f, 0.0f); break;
+            case 6: ui_draw_text(s, bx, by + 20, "직진", 35, COLOR_WHITE, BOLD, 0.0f, 0.0f); break;
             case 35: ui_draw_text(s, bx, by + 20, "좌측고가 진입", 35, COLOR_WHITE, BOLD, 0.0f, 0.0f); break;
             case 43: ui_draw_text(s, bx, by + 20, "지하차도 우측", 35, COLOR_WHITE, BOLD, 0.0f, 0.0f); break;
             case 48: ui_draw_text(s, bx, by + 20, "휴게소", 35, COLOR_WHITE, BOLD, 0.0f, 0.0f); break;
