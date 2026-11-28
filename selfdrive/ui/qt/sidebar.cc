@@ -2,6 +2,7 @@
 
 #include <QMouseEvent>
 
+#include "common/params.h"
 #include "common/util.h"
 #include "selfdrive/ui/qt/util.h"
 
@@ -91,8 +92,11 @@ void Sidebar::updateState(const UIState &s) {
   // once a second; current_now is negative while charging
   static const bool has_batt = util::read_file("/sys/class/power_supply/battery/present").rfind("1", 0) == 0;
   if (has_batt && sm.frame % UI_FREQ == 0) {
+    // '배터리리스 사용' (OpkrBattLess, optech-hkg 2026-11-28 Soul EV tester): a C2 with its battery taken out still
+    // reports one -> no battery here
+    const bool batt_less = Params().getBool("OpkrBattLess");
     const int batt = std::atoi(util::read_file("/sys/class/power_supply/battery/capacity").c_str());
-    setProperty("battPercent", batt > 0 && batt <= 100 ? batt : 0);
+    setProperty("battPercent", !batt_less && batt > 0 && batt <= 100 ? batt : 0);
     setProperty("battCharging", std::atoi(util::read_file("/sys/class/power_supply/battery/current_now").c_str()) < 0);
   }
 

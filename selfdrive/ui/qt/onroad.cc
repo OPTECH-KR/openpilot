@@ -600,8 +600,10 @@ void AnnotatedCameraWidget::updateState(const UIState &s) {
     // device battery (optech-hkg 2026-11-27): the kernel's own files, as spst's thermald leaves batteryPercent empty.
     // current_now is negative while charging (as optech-hkg's thermald reads it)
     static const bool has_batt = util::read_file("/sys/class/power_supply/battery/present").rfind("1", 0) == 0;
+    // '배터리리스 사용' (OpkrBattLess, optech-hkg 2026-11-28 Soul EV tester): a C2 with its battery taken out still
+    // reports one -> no battery box, the GPS box moves to the left end
     optech_batt = -1;
-    if (has_batt) {
+    if (has_batt && !op_params.getBool("OpkrBattLess")) {
       const std::string cap = util::read_file("/sys/class/power_supply/battery/capacity");
       if (!cap.empty()) optech_batt = std::atoi(cap.c_str());
       optech_batt_charging = std::atoi(util::read_file("/sys/class/power_supply/battery/current_now").c_str()) < 0;
@@ -915,7 +917,7 @@ static void optech_chevron(QPainter &p, float x, float y, float w, float h, bool
   p.drawPath(path);
 }
 
-// big white turn arrow: 1 left, 2 right, 3 left lane, 4 right lane, 5 U-turn; (x, y) top left of S x S
+// big white turn arrow: 1 left, 2 right, 3 left lane, 4 right lane, 5 U-turn, 6 straight; (x, y) top left of S x S
 static void optech_turn_arrow(QPainter &p, float x, float y, float S, int kind) {
   const bool mirror = kind == 2 || kind == 4;
   auto X = [&](float u) { return x + (mirror ? 1.f - u : u) * S; };
@@ -933,6 +935,10 @@ static void optech_turn_arrow(QPainter &p, float x, float y, float S, int kind) 
     line.cubicTo(X(0.70f), Y(0.56f), X(0.34f), Y(0.56f), X(0.34f), Y(0.36f));
     line.lineTo(X(0.34f), Y(0.30f));
     head.moveTo(X(0.34f), Y(0.0f)); head.lineTo(X(0.62f), Y(0.34f)); head.lineTo(X(0.06f), Y(0.34f));
+  } else if (kind == 6) {  // straight on (optech-hkg 2026-11-28): a shaft up the middle and the head on top
+    line.moveTo(X(0.50f), Y(1.0f));
+    line.lineTo(X(0.50f), Y(0.34f));
+    head.moveTo(X(0.50f), Y(0.0f)); head.lineTo(X(0.80f), Y(0.38f)); head.lineTo(X(0.20f), Y(0.38f));
   } else {
     line.moveTo(X(0.74f), Y(1.0f));
     line.lineTo(X(0.74f), Y(0.42f));
@@ -1497,6 +1503,7 @@ void AnnotatedCameraWidget::drawOptechHud(QPainter &p) {
       case 3: arrow = 3; label = "왼쪽 차로"; break;
       case 4: arrow = 4; label = "오른쪽 차로"; break;
       case 5: arrow = 5; label = "U턴"; break;
+      case 6: arrow = 6; label = "직진"; break;  // Tmap 11 / 51 (road_speed_limiter, optech-hkg 2026-11-28)
       case 35: label = "좌측 고가 진입"; break;
       case 43: label = "지하차도 우측"; break;
       case 48: label = "휴게소"; break;

@@ -664,6 +664,12 @@ def main():
           xTurnInfo = 4  # slight right
         elif nTBTTurnType in [14, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142]:
           xTurnInfo = 5 # speed down
+        elif nTBTTurnType in [11, 51] and 0 < nTBTDist < 9000:
+          # optech (optech-hkg 2026-11-28, Soul EV tester): Tmap 11 '직진' / 51 '직진 방향' were hidden (-1), so after a
+          # turn the screen showed no guidance while Tmap said 'straight on for 3.5 km'. 6 = straight: the screen shows
+          # '직진 <dist>' (onroad.cc); nothing in spst steers or slows by it. 9999 m = no real distance (sent right after a
+          # relink / at the destination)
+          xTurnInfo = 6
         elif nTBTTurnType >= 0:
           xTurnInfo = -1
         if nTBTDist > 0 and xTurnInfo >= 0:

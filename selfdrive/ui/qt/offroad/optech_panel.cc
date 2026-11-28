@@ -883,6 +883,13 @@ OptechPanel::OptechPanel(QWidget *parent) : QWidget(parent) {
   toggle(disp, "ShowGpsInfo", "GPS 상태",
          "주행 화면 왼쪽 위(연결 표시 아래)에 'GPS'와 신호 세기(막대 4칸)를 보여 줍니다. 초록: 잡힘, 빨강: 안 잡힘(막대도 모두 꺼짐). "
          "폰을 기기로 쓰면 그 왼쪽에 같은 크기의 배터리 칸이 함께 나옵니다. GPS는 시동이 켜져 있을 때만 동작합니다.");
+  // OpkrBattLess '배터리리스 사용' (optech-hkg 2026-11-28, OPKR's same param: a value left from OPKR carries over):
+  // only hides the battery boxes (onroad.cc, sidebar.cc)
+  toggle(disp, "OpkrBattLess", "배터리리스 사용",
+         "배터리를 뺀 기기(배터리리스)를 쓸 때 켜 주세요 (OPKR의 '배터리리스 장치 설정'과 같습니다). 배터리를 빼도 기기가 배터리가 "
+         "있다고 알려 주는 경우가 있어서, 맞지 않는 배터리 표시가 보일 수 있습니다. 켜면 주행 화면 왼쪽 위의 배터리 칸과 홈 화면 왼쪽 칸의 "
+         "배터리 표시가 사라지고, GPS 칸이 왼쪽 끝으로 옮겨 갑니다. 홈 화면 왼쪽 칸의 차 배터리 전압은 그대로 나옵니다. "
+         "배터리가 들어 있는 기기는 꺼 두세요. 바로 적용됩니다. 처음 값: 꺼짐");
   toggle(disp, "OptechShowDeviceState", "기기 상태",
          "주행 화면 오른쪽 가운데 칸에 기기의 CPU 온도와 CPU 사용률을 보여 줍니다. 80°C를 넘거나 사용률이 90%를 넘으면 빨갛게 깜빡입니다.");
   toggle(disp, "ShowBlindSpot", "후측방(BSD) 경고",
