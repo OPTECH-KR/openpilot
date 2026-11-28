@@ -97,7 +97,8 @@ void Sidebar::updateState(const UIState &s) {
   static int has_batt = -1;
   if (has_batt < 0) has_batt = util::read_file("/sys/class/power_supply/battery/present").rfind("1", 0) == 0 ? 1 : 0;
   const int batt = deviceState.getBatteryPercent();
-  setProperty("battPercent", has_batt == 1 && batt > 0 && batt <= 100 ? batt : 0);
+  // '배터리리스 사용' (OpkrBattLess, Soul EV tester 2026-11-28): a C2 with its battery taken out still reports one
+  setProperty("battPercent", !s.batt_less && has_batt == 1 && batt > 0 && batt <= 100 ? batt : 0);
   setProperty("battCharging", deviceState.getBatteryCurrent() < 0);  // thermald: negative while charging
 
   // optech (user 2026-11-26, same as optech-spst f8cfca3): the car battery voltage instead of the comma server

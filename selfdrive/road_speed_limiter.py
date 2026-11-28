@@ -655,6 +655,12 @@ def main():
           xTurnInfo = 4  # slight right
         elif nTBTTurnType in [14, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142]:
           xTurnInfo = 5 # speed down
+        elif nTBTTurnType in [11, 51] and 0 < nTBTDist < 9000:
+          # optech (Soul EV tester 2026-11-28): Tmap 11 '직진' / 51 '직진 방향' were hidden (-1), so after a turn the
+          # screen showed no guidance for 17 minutes while Tmap said 'straight on for 3.5 km'. 6 = straight: the screen
+          # shows '직진 <dist>'; desire_helper ignores it (no lane change, no slow down). 9999 m = no real distance
+          # (sent right after a relink / at the destination)
+          xTurnInfo = 6
         elif nTBTTurnType >= 0:
           xTurnInfo = -1
         if nTBTDist > 0 and xTurnInfo >= 0:
@@ -831,8 +837,20 @@ class RoadSpeedLimiter:
 
         self.session_limit = False if cam_limit_speed_left_dist < 50 else self.session_limit
 
-      # optech (user 2026-11-27): the car's own navigation (HDA, CS.speedLimit) is not used any more (interface.py)
+      # the car's own navigation (HDA): CS.speedLimit is 0 unless '순정 내비 사용' is on (interface.py naviCluster)
       hda_limit_active = False
+      if CS.speedLimit>0 and CS.speedLimitDistance>0:
+        #log = "hda_limit={:.1f},{:.1f}".format(float(CS.speedLimit), CS.speedLimitDistance)
+        hda_limit_active = True
+
+      if cam_limit_speed <= 0:
+        if CS.speedLimit>0 and CS.speedLimitDistance>0:
+          cam_limit_speed_left_dist = CS.speedLimitDistance
+          cam_limit_speed = CS.speedLimit
+          self.session_limit = True if cam_limit_speed_left_dist > 3000 else False
+          log = "HDA_limit={:.1f},{:.1f}".format(float(CS.speedLimit), CS.speedLimitDistance)
+          self.session_limit = False if cam_limit_speed_left_dist < 50 else self.session_limit
+          hda_limit_active = True
 
       section_limit_speed = self.roadLimitSpeed.sectionLimitSpeed
       section_left_dist = self.roadLimitSpeed.sectionLeftDist

@@ -109,6 +109,17 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
       "../assets/offroad/icon_warning.png",
     },
     {
+      // OPKR '배터리리스 장치 설정' (OpkrBattLess, the same param: a value left from OPKR carries over). Here it only
+      // hides the battery boxes - controlsd's low battery event is off for every device already
+      "OpkrBattLess",
+      "배터리리스 사용",
+      "배터리를 뺀 기기(배터리리스)를 쓸 때 켜 주세요 (OPKR의 '배터리리스 장치 설정'과 같습니다). "
+      "배터리를 빼도 기기가 배터리가 있다고 알려 주는 경우가 있어서, 화면에 맞지 않는 배터리 표시가 보일 수 있습니다. "
+      "켜면 주행 화면 왼쪽 위의 배터리 칸과 홈 화면 왼쪽 칸(IP 밑)의 배터리 표시가 사라지고, GPS 칸이 왼쪽 끝으로 옮겨 갑니다. "
+      "홈 화면 왼쪽 칸 맨 아래의 차 배터리 전압은 그대로 나옵니다. 배터리가 들어 있는 기기는 꺼 두세요. 바로 적용됩니다.",
+      "../assets/offroad/icon_shell.png",
+    },
+    {
       "IsLdwEnabled",
       tr("Enable Lane Departure Warnings"),
       tr("Receive alerts to steer back into the lane when your vehicle drifts over a detected lane line without a turn signal activated while driving over 31 mph (50 km/h)."),
@@ -1020,7 +1031,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   // shown right under '카메라 감속' while it is on: how it works with the navigation link and with the built-in DB
   QLabel *cam_note = new QLabel("● 과속카메라 앞 '감속 시작'에 정한 시간(처음 값 22초) 전부터 설정 속도를 조금씩 내려서, '감속 끝'(6초 전)까지 '목표 속도'(처음 값: 제한 속도 그대로 100%)에 맞춥니다. "
                                 "구간단속은 구간이 끝날 때까지 제한 속도를 지킵니다.\n"
-                                "● 내비 연동(TmapNda·당근내비): 폰 내비 앱이 보내는 카메라 정보를 먼저 쓰고, 앱 정보가 없을 때는 내장 카메라 DB로 채웁니다.\n"
+                                "● 내비 연동(TmapNda·당근내비): 폰 내비 앱이 보내는 카메라 정보를 먼저 쓰고, 앱 정보가 없을 때는 내장 카메라 DB로 채웁니다 ('순정 내비 사용'을 켜면 차 순정 내비의 카메라 정보도).\n"
                                 "● 내장 카메라 DB만(내비 연동 '사용 안 함'): 내비 앱 없이 기기 GPS와 전국 카메라 위치(약 3만 1천 대)로 찾습니다. "
                                 "이동식·새 카메라는 모르고, 반대 차로의 카메라에도 줄일 수 있습니다.\n"
                                 "● 가감속이 켜져 있을 때만 속도를 줄입니다. GPS가 안 잡히면 동작하지 않습니다.");
@@ -1055,16 +1066,29 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     "사용 안 함: 내비 앱 정보를 받지 않고 내장 카메라 DB만 씁니다.\n"
     "TmapNda(처음 값): 앱의 오픈파일럿 연결이 당근 방식이든 NDA 방식이든 모두 받습니다. 앱에서 NDA 방식으로 두면 주행 화면에 TMAP으로 떠서 당근내비(CARROT)와 구별됩니다.\n"
     "당근내비: 당근 방식으로 받습니다.\n"
-    "TmapNda·당근내비 공통: 폰과 C2가 같은 와이파이(핫스팟)에 붙어 있어야 합니다. 앱 정보가 없을 때는 내장 카메라 DB로 채웁니다.\n"
+    "TmapNda·당근내비 공통: 폰과 C2가 같은 와이파이(핫스팟)에 붙어 있어야 합니다. 앱 정보가 없을 때는 내장 카메라 DB로 채웁니다 ('순정 내비 사용'을 켜면 차 순정 내비의 카메라 정보도).\n"
     "'카메라 감속'이 켜져 있을 때 적용되고, 바꾼 뒤 재부팅해야 적용됩니다.",
     {"사용 안 함", "TmapNda", "당근내비"}, 1, [=](int cam_v) {
       Params cam_params;
       if (std::atoi(cam_params.get("AutoNaviSpeedCtrl").c_str()) > 0) cam_params.put("AutoNaviSpeedCtrl", std::to_string(navi_ctrl(cam_v)));
     });
   ParamControl *cam_db = new ParamControl("SpeedCamDB", "내장 카메라 DB", "내비 앱 없이 기기 GPS로 앞쪽 고정식 단속카메라(과속·신호과속·구간단속)를 찾습니다.\n전국 약 3만 1천 대(공공데이터)의 위치가 기기에 들어 있습니다. 구간단속은 구간이 끝날 때까지 제한속도를 지킵니다.\n\n● 함께 켜야 할 것: '카메라 감속' (끄면 화면에 CAM 표시만 나오고 속도는 줄이지 않습니다)\n● 안 되는 경우: 이동식 카메라, 새로 생긴 카메라 / GPS가 안 잡힐 때 / 스마트 크루즈가 없는 차(조향만 하는 차)\n● 주의: 반대 차로의 카메라에서도 속도를 줄일 수 있습니다. 내비 앱이 카메라 정보를 보내면 앱 정보를 먼저 씁니다.\n\n바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, this);
+  // OptechStockNavi '순정 내비 사용' (2026-11-28, a CAN tester asked for it back; dropped 11-27): the car's own
+  // navigation Navi_HU (interface.py naviCluster -> carstate speedLimit). Off by default; read at start (reboot)
+  ParamControl *stock_navi = new ParamControl("OptechStockNavi", "순정 내비 사용",
+    "차에 순정 내비가 있으면, 순정 내비가 알려 주는 단속카메라 제한속도로도 속도를 줄입니다.\n\n"
+    "● 폰 내비 앱(TmapNda·당근내비), 내장 카메라 DB와 같이 켜 두고 쓸 수 있습니다. 같이 쓰면 TMAP 같은 폰 내비 앱 정보를 먼저 받고, "
+    "앱이 카메라 정보를 보내지 않을 때는 내장 카메라 DB, 그것도 없을 때 순정 내비 정보를 씁니다.\n"
+    "● 순정 내비는 카메라의 제한속도만 알려 주고 거리는 알려 주지 않아서, '속도 × 6m 앞'으로 짐작합니다. "
+    "구간단속·과속방지턱 정보는 없습니다.\n"
+    "● 켜면 주행 화면 왼쪽 위 연결 칸에 보라색 'HDA'가 나옵니다. 폰 내비 연결 표시가 아니라 차 순정 내비 표시입니다.\n"
+    "● 순정 내비가 없는 차는 켜도 아무 변화가 없습니다. CAN FD 차는 optech-hkg-fd의 '순정 내비 (CAN FD)'를 쓰세요.\n\n"
+    "바꾼 뒤 재부팅해야 적용됩니다.", ROAD_ICON, this);
+  stock_navi->setProperty("optechReboot", true);
   QList<QWidget*> cam_group = {cam_note};
   cam_group += cam_tune;
-  cam_group += QList<QWidget*>{cam_haptic, navi_mode, cam_db};
+  // user 2026-11-28: '순정 내비 사용' below '내장 카메라 DB' (it was above '내비 연동 방식' for a while)
+  cam_group += QList<QWidget*>{cam_haptic, navi_mode, cam_db, stock_navi};
   for (auto w : cam_group) w->setProperty("optechShowIf", "AutoNaviSpeedCtrl>0");  // optech web: as below
   cam_note->setProperty("optechNote", true);
   QObject::connect(cam_decel, &ToggleControl::toggleFlipped, [=](bool cam_on) {
@@ -1104,7 +1128,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   speedToggles = new ListWidget(this);
   speedToggles->addItem(carrot_section("크루즈 속도"));
   speedToggles->addItem(new CValueControl("AutoSyncCruiseSpeedMax", "가속페달 속도 맞춤 상한", "크루즈(가감속)가 켜진 상태에서 악셀로 설정 속도보다 빨리 달리면, 설정 속도도 지금 속도로 따라 올라갑니다 (예: 설정 50km/h에서 악셀로 80km/h까지 가면 설정 속도 80km/h). 이 값(km/h)까지만 올립니다. 0:사용 안 함", ROAD_ICON, 0, 200, 10));
-  speedToggles->addItem(new CValueControl("AutoSpeedUptoRoadSpeedLimit", "제한속도까지 자동 올림", "앞차를 따라갈 때 도로 제한속도의 이 비율(%)까지 설정 속도를 자동으로 올립니다. 0:사용 안 함, 100:제한속도까지", ROAD_ICON, 0, 200, 10));
+  speedToggles->addItem(new CValueControl("AutoSpeedUptoRoadSpeedLimit", "제한속도까지 자동 올림", "앞차가 내 설정 속도보다 빨리 갈 때, 앞차를 따라 도로 제한속도의 이 비율(%)까지 설정 속도를 자동으로 올립니다. 앞차가 없으면 올리지 않습니다. 크루즈 −로 설정 속도를 낮추면, +를 누르거나 크루즈가 꺼졌다 켜질 때까지는 자동으로 올리지 않습니다. 0:사용 안 함, 100:제한속도까지", ROAD_ICON, 0, 200, 10));
   speedToggles->addItem(carrot_section("출발·정지 (출발이 굼뜨거나 정지가 거칠 때)"));
   speedToggles->addItem(new CValueControl("JerkStartLimit", "재출발 가속", "멈췄다가 다시 출발할 때 얼마나 빨리 속도를 붙일지 정합니다(0.1 단위). 높이면 빠르게, 낮추면 부드럽게 출발합니다. 출발 전에 기다리는 시간과는 상관없습니다.", ROAD_ICON, 1, 50, 1));
   speedToggles->addItem(new CValueControl("StartAccelApply", "출발 가속", "정차 후 출발할 때 처음 가속을 몇 % 더 줄지 정합니다. 출발이 굼뜨면 올려 보세요. 0:사용 안 함", ROAD_ICON, 0, 100, 10));
@@ -1311,7 +1335,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     optech_web_choice(radar_btn, "ShowRadarInfo", radar_names, optech_index_values(radar_names.size()));
     dispToggles->addItem(radar_btn);
   }
-  dispToggles->addItem(new ParamControl("ShowConnInfo", "연결 상태 표시", "켜 두면(초록색) 주행 화면 왼쪽 위에 연결 상태를 보여 줍니다.\nTMAP: TmapNda가 NDA 방식으로 보내는 중\nCARROT: 당근 방식으로 들어옴 (당근내비, 당근 방식으로 설정한 TmapNda)\n초록은 정보가 들어오는 중, 회색은 연결됐지만 아직 정보가 없음\nSCC2(빨강): SCC 버스2(롱컨) 차량\nRADAR(주황): 레이더 트랙 사용 중", SHELL_ICON, this));
+  dispToggles->addItem(new ParamControl("ShowConnInfo", "연결 상태 표시", "켜 두면(초록색) 주행 화면 왼쪽 위에 연결 상태를 보여 줍니다.\nTMAP: TmapNda가 NDA 방식으로 보내는 중\nCARROT: 당근 방식으로 들어옴 (당근내비, 당근 방식으로 설정한 TmapNda)\n초록은 정보가 들어오는 중, 회색은 연결됐지만 아직 정보가 없음\nHDA(보라): 차 순정 내비의 카메라 정보를 쓰는 중 (과속카메라 > '순정 내비 사용'을 켰을 때만)\n맨 앞 칸 = 누가 가감속을 하는지\n  SCC(남색): 롱컨 안 한 차, 차의 순정 SCC가 가감속\n  SCC2(빨강): 롱컨 한 차, 오픈파일럿이 가감속\n  E2E(청록): 롱컨 차에서 지금 주행 모델이 판단하며 가감속 (실험 모드, E2E 모드)\n  SCC 없는 차(레이 EV, 포터 EV, NO SCC 트림): 페달 없으면 일반(남색) = 차의 일반 크루즈, 코마 페달을 쓰면 SCC2(빨강) = 오픈파일럿이 가감속\nRADAR(주황): 레이더 트랙 사용 중", SHELL_ICON, this));
   // '운전자 모니터링 아이콘' (ShowDmInfo 0 / 1); the mode itself is chosen on the 토글 page (optech_dm_mode)
   dmIcon = new ToggleControl("운전자 모니터링 아이콘",
     "주행 화면 왼쪽 아래에 운전자 모니터링 아이콘(얼굴 모양)을 보여 줍니다. 얼굴을 잘 보고 있으면 선명하게, 아니면 흐리게 보입니다. 토글 화면의 운전자 모니터링이 '기본 사용'일 때만 쓸 수 있습니다.",
@@ -1436,15 +1460,15 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     auto op_long = new ParamControl("ExperimentalLongitudinalEnabled", "openpilot 가감속 제어 (알파)", "CAN FD 현대·기아용 롱컨 스위치입니다. 일반 CAN 현대·기아는 이 스위치 대신 토글의 '롱컨'으로 롱컨을 켜지만, 실험 모드 스위치는 이 값이 켜져 있어야 동작합니다. 켜면 자동 긴급 제동(AEB)이 꺼질 수 있습니다.", SHELL_ICON, this);
     op_long->setConfirmation(true, false);
     advancedToggles->addItem(op_long);
-    auto e2e = new ParamControl("ExperimentalMode", "실험 모드", "가감속을 항상 E2E(주행 모델이 판단하는 가감속)로 고정합니다. 앞차가 없어도 빨간불·정지선 앞에서 서고 커브 앞에서 줄이지만, 앞차를 따라갈 때도 모델이 가감속을 정해서 레이더 방식(ACC)보다 덜 부드러울 수 있습니다. 상황에 따라 바꾸려면 아래 '자동 E2E / ACC 전환'을 쓰세요(켜 두면 그쪽이 먼저 적용됩니다). 롱컨(openpilot 가감속 제어)일 때만 적용됩니다. 알파 단계 기능이라 실수가 있을 수 있습니다.", SHELL_ICON, this);
+    auto e2e = new ParamControl("ExperimentalMode", "실험 모드", "가감속을 항상 E2E(주행 모델이 판단하는 가감속)로 고정합니다. 앞차가 없어도 빨간불·정지선 앞에서 서고 커브 앞에서 줄이지만, 앞차를 따라갈 때도 모델이 가감속을 정해서 레이더로 따라갈 때보다 덜 부드러울 수 있습니다. 상황에 따라 바꾸려면 아래 'E2E 모드'를 쓰세요(켜 두면 그쪽이 먼저 적용됩니다). 롱컨(openpilot 가감속 제어)일 때만 적용됩니다. 알파 단계 기능이라 실수가 있을 수 있습니다.", SHELL_ICON, this);
     e2e->setConfirmation(true, true);
     advancedToggles->addItem(e2e);
     // OptechAutoE2E (longitudinal_planner.update_auto_e2e, spst dp_long_de2e / dragonpilot dynamic e2e)
-    auto auto_e2e = new ParamControl("OptechAutoE2E", "자동 E2E / ACC 전환",
-      "상황에 따라 E2E(주행 모델이 판단하는 가감속)와 ACC(레이더로 앞차를 따라가는 가감속)를 자동으로 바꿉니다(optech-spst와 같은 기능).\n"
-      "앞차를 따라갈 때는 ACC로 부드럽게 따라가고, 앞차가 없을 때 주행 모델이 '앞에서 서야 한다'고 보면(빨간불·정지선·급한 커브), "
+    auto auto_e2e = new ParamControl("OptechAutoE2E", "E2E 모드",
+      "상황에 따라 E2E(주행 모델이 판단하는 가감속)와 앞차 따라가는 가감속(레이더)을 자동으로 바꿉니다(optech-spst와 같은 기능).\n"
+      "앞차를 따라갈 때는 레이더로 부드럽게 따라가고, 앞차가 없을 때 주행 모델이 '앞에서 서야 한다'고 보면(빨간불·정지선·급한 커브), "
       "정차 중일 때, 시속 75km 아래에서 방향지시등을 켰을 때, 앞차가 갑자기 가까워져 세게 서야 할 때는 E2E로 바꿉니다.\n"
-      "켜 두면 '실험 모드'보다 먼저 적용됩니다. 롱컨(openpilot 가감속 제어)일 때만 적용됩니다. 시험 기능이라 항상 주의하세요.",
+      "주행 화면 왼쪽 위 칸이 SCC2(앞차 따라감) / E2E로 바뀌어 지금 방식을 보여 줍니다. 켜 두면 '실험 모드'보다 먼저 적용됩니다. 롱컨(openpilot 가감속 제어)일 때만 적용됩니다. 시험 기능이라 항상 주의하세요.",
       SHELL_ICON, this);
     auto_e2e->setConfirmation(true, false);
     advancedToggles->addItem(auto_e2e);

@@ -159,9 +159,11 @@ def manager_init() -> None:
     ("OptechOffShutdown", "0"),  # 고급 > 시동 끈 뒤 꺼짐 (seconds, 0 off)
     ("OptechSettingsTimeout", "180"),  # 화면 > 화면 유지 시간 (seconds, -1 항상)
     ("OptechDriveDim", "0"),  # 화면 > 주행 중 밝기 (%, 0 off)
-    ("OptechAutoE2E", "0"),  # 고급 > 자동 E2E / ACC 전환 (longitudinal_planner.update_auto_e2e)
+    ("OptechAutoE2E", "0"),  # 고급 > E2E 모드 (자동 E2E 전환) (longitudinal_planner.update_auto_e2e)
     ("OptechShowRecordBtn", "0"),  # 화면 > 녹화 버튼 (0 hidden)
     ("OptechShowGpsSpeed", "0"),  # 화면 > GPS 속도 (설정 속도 칸 아래; 0 hidden since 2026-11-27, testers: shown twice)
+    ("OptechStockNavi", "0"),  # OPTECH > 과속카메라 > 순정 내비 사용 (car navigation Navi_HU, HDA; reboot)
+    ("OpkrBattLess", "0"),  # 토글 > 배터리리스 사용 (OPKR same name: a value left from OPKR carries over)
     ("OptechGitPullOnBoot", "0"),  # 소프트웨어 > 켤 때마다 자동 업데이트 (launch_chffrplus.sh, optech_git.sh bootpull)
     ("OptechWebServer", "1"),  # 고급 > 웹 접속 (selfdrive/optech_web/server.py, port 7000)
     ("OptechLatMethod", "0"),
