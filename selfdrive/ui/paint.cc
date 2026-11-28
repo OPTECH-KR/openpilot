@@ -1204,7 +1204,8 @@ static void drawOptechHud(const UIState* s) {
         const float gps_w = OPTECH_ROW_PAD + OPTECH_GPS_BARS_W + igap + (tb[2] - tb[0]) + OPTECH_ROW_PAD;
         const auto ds = sm["deviceState"].getDeviceState();
         const int batt = ds.getBatteryPercent();
-        if (optech_has_battery() && batt > 0 && batt <= 100) {
+        // Soul EV tester 2026-11-28: a C2 with its battery taken out still reports one -> '배터리리스 사용' (OpkrBattLess) hides it
+        if (!s->batt_less && optech_has_battery() && batt > 0 && batt <= 100) {
             const bool charging = ds.getBatteryCurrent() < 0;  // thermald: negative while charging
             snprintf(str, sizeof(str), "%d%%", batt);
             nvgTextBounds(s->vg, 0, 0, str, NULL, tb);
