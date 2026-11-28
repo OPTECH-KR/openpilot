@@ -96,6 +96,7 @@ class CruiseHelper:
     self.naviSpeedLimitTarget = 30
     self.dRel = 0
     self.vRel = 0
+    self.auto_up_hold = False  # optech: the driver lowered the set speed with '-' -> no '제한속도까지 자동 올림' until '+'
     self.dRelValidCount = 0
     self.trafficState = 0
     self.xState_prev = XState.cruise
@@ -606,6 +607,13 @@ class CruiseHelper:
     self.turnSpeed_prev = turnSpeed
     return turnSpeed
 
+  def auto_up_ok(self, v_cruise_kph):
+    """'제한속도까지 자동 올림' may raise the set speed toward the lead's speed (up to the road limit) only for a real
+    lead (dRel > 0) that is faster than the set speed, and not after the driver lowered it with '-'. Santa Fe TM tester
+    2026-11-28: '-' never got under the road limit - with no lead get_lead_rel() gives vRel 0, so leadCarSpeed was our
+    own speed and every '-' below it was raised straight back (up to the road limit)."""
+    return self.dRel > 0 and self.leadCarSpeed > v_cruise_kph and not self.auto_up_hold
+
   def v_cruise_speed_up(self, v_cruise_kph, roadSpeed):
     if v_cruise_kph < roadSpeed:
       v_cruise_kph = roadSpeed
@@ -820,6 +828,8 @@ class CruiseHelper:
     if buttonLong:
       if button in [ButtonType.accelCruise, ButtonType.decelCruise]:
         v_cruise_kph = buttonSpeed
+        if self.longActiveUser > 0:
+          self.auto_up_hold = button == ButtonType.decelCruise
       elif button == ButtonType.gapAdjustCruise:  ##안먹네.... 나중에 보자~
         pass  # driving mode is fixed to 일반; long-pressing the gap button no longer cycles modes
     else:
@@ -831,6 +841,7 @@ class CruiseHelper:
         if self.longActiveUser <= 0:
           pass
         else:
+          self.auto_up_hold = False
           if self.xState == XState.softHold:
             longActiveUser = 1
           #elif self.xState == XState.e2eStop:
@@ -844,6 +855,7 @@ class CruiseHelper:
         if self.longActiveUser <= 0:
           pass
         else:
+          self.auto_up_hold = True
           if self.xState == XState.softHold:
             longActiveUser = 1
           if CS.gasPressed and v_cruise_kph < self.v_ego_kph_set:
@@ -1087,8 +1099,10 @@ class CruiseHelper:
       ###### leadCar 관련 속도처리
       roadSpeed1 = self.roadSpeed * self.autoSpeedUptoRoadSpeedLimit
       #if v_cruise_kph < roadSpeed1 and 50 > self.dRel > 0 and self.vRel > 0 and self.autoSpeedUptoRoadSpeedLimit > 0:
+      if self.longActiveUser <= 0:  # speed control off / paused: the driver's '-' no longer holds it
+        self.auto_up_hold = False
       if v_cruise_kph < roadSpeed1 and self.autoSpeedUptoRoadSpeedLimit > 0:
-        if self.leadCarSpeed > v_cruise_kph:
+        if self.auto_up_ok(v_cruise_kph):
           v_cruise_kph = max(v_cruise_kph, min(self.leadCarSpeed, roadSpeed1))
           self.v_cruise_kph_apply = v_cruise_kph
       elif self.autoSpeedAdjustWithLeadCar > 0.0 and self.dRel > 0:
