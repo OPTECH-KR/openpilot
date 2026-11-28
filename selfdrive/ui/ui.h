@@ -220,6 +220,7 @@ public:
   int drive_dim = 0;             // optech '주행 중 밝기' (OptechDriveDim %, 0: off, -1: screen off)
   bool show_record_btn = false;  // optech '녹화 버튼' (OptechShowRecordBtn)
   bool show_gps_speed = true;    // optech 'GPS 속도' (OptechShowGpsSpeed), the box under the set speed
+  bool batt_less = false;        // '배터리리스 사용' (OpkrBattLess, as OPKR): no battery boxes
   bool radar_tracks = false;     // EnableRadarTracks (badge)
   int path_offset = 0;           // PathOffset cm (optech wheel panel)
   bool optech_tune_open = false; // optech wheel panel shown

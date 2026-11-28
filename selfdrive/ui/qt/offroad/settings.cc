@@ -100,6 +100,17 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
       "../assets/offroad/icon_warning.png",
     },
     {
+      // OPKR '배터리리스 장치 설정' (OpkrBattLess, the same param: a value left from OPKR carries over). Here it only
+      // hides the battery boxes - controlsd's low battery event is off for every device already
+      "OpkrBattLess",
+      "배터리리스 사용",
+      "배터리를 뺀 기기(배터리리스)를 쓸 때 켜 주세요 (OPKR의 '배터리리스 장치 설정'과 같습니다). "
+      "배터리를 빼도 기기가 배터리가 있다고 알려 주는 경우가 있어서, 화면에 맞지 않는 배터리 표시가 보일 수 있습니다. "
+      "켜면 주행 화면 왼쪽 위의 배터리 칸과 홈 화면 왼쪽 칸(IP 밑)의 배터리 표시가 사라지고, GPS 칸이 왼쪽 끝으로 옮겨 갑니다. "
+      "홈 화면 왼쪽 칸 맨 아래의 차 배터리 전압은 그대로 나옵니다. 배터리가 들어 있는 기기는 꺼 두세요. 바로 적용됩니다.",
+      "../assets/offroad/icon_shell.png",
+    },
+    {
       "IsLdwEnabled",
       tr("Enable Lane Departure Warnings"),
       tr("Receive alerts to steer back into the lane when your vehicle drifts over a detected lane line without a turn signal activated while driving over 31 mph (50 km/h)."),
