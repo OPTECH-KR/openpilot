@@ -1086,7 +1086,8 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   stock_navi->setProperty("optechReboot", true);
   QList<QWidget*> cam_group = {cam_note};
   cam_group += cam_tune;
-  cam_group += QList<QWidget*>{cam_haptic, navi_mode, cam_db, stock_navi};
+  // user 2026-11-28: '순정 내비 사용' right above '내비 연동 방식'
+  cam_group += QList<QWidget*>{cam_haptic, stock_navi, navi_mode, cam_db};
   for (auto w : cam_group) w->setProperty("optechShowIf", "AutoNaviSpeedCtrl>0");  // optech web: as below
   cam_note->setProperty("optechNote", true);
   QObject::connect(cam_decel, &ToggleControl::toggleFlipped, [=](bool cam_on) {
