@@ -100,6 +100,17 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
       "../assets/offroad/icon_warning.png",
     },
     {
+      // OPKR '배터리리스 장치 설정' (OpkrBattLess, the same param: a value left from OPKR carries over). Here it only
+      // hides the battery boxes - controlsd's low battery event is off for every device already
+      "OpkrBattLess",
+      "배터리리스 사용",
+      "배터리를 뺀 기기(배터리리스)를 쓸 때 켜 주세요 (OPKR의 '배터리리스 장치 설정'과 같습니다). "
+      "배터리를 빼도 기기가 배터리가 있다고 알려 주는 경우가 있어서, 화면에 맞지 않는 배터리 표시가 보일 수 있습니다. "
+      "켜면 주행 화면 왼쪽 위의 배터리 칸과 홈 화면 왼쪽 칸(IP 밑)의 배터리 표시가 사라지고, GPS 칸이 왼쪽 끝으로 옮겨 갑니다. "
+      "홈 화면 왼쪽 칸 맨 아래의 차 배터리 전압은 그대로 나옵니다. 배터리가 들어 있는 기기는 꺼 두세요. 바로 적용됩니다.",
+      "../assets/offroad/icon_shell.png",
+    },
+    {
       "IsLdwEnabled",
       tr("Enable Lane Departure Warnings"),
       tr("Receive alerts to steer back into the lane when your vehicle drifts over a detected lane line without a turn signal activated while driving over 31 mph (50 km/h)."),
@@ -1134,6 +1145,43 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   const bool cam_shown = std::atoi(Params().get("AutoNaviSpeedCtrl").c_str()) > 0;
   for (auto w : cam_group) w->setVisible(cam_shown);
 
+  // optech-hkg-fd 2026-11-28 (user: "fd관련 내용만 fd쪽으로 가져와줘", 꺼 둔 채 배포): the CAN FD stock navigation from
+  // carrot-wip befd99656 (selfdrive/car/hyundai/vehicle_navi.py). All off by default; the car-side reading starts only
+  // after a reboot with one of them on.
+  cruiseToggles->addItem(carrot_section("순정 내비 (CAN FD)"));
+  const QString vn_common = "\n\n● 차의 순정 내비 정보로만 동작합니다. 폰 내비 앱(TmapNda·당근내비)이 연결돼 있으면 앱 정보를 씁니다.\n"
+    "● 당근(carrot) 11월 27일 기능을 옮긴 것으로, 아직 실제 차에서 확인하지 않았습니다. 이상하면 끄고 알려 주세요.\n"
+    "● 바꾼 뒤 재부팅해야 적용됩니다.";
+  ButtonControl *vn_mode = choice("VehicleNaviCanControl", "순정 내비 감속",
+    "차의 순정 내비가 알려 주는 단속카메라·구간단속·과속방지턱으로 속도를 줄입니다. '카메라 감속'이 켜져 있어야 합니다.\n"
+    "사용 안 함(처음 값): 순정 내비 정보를 쓰지 않습니다.\n"
+    "모든 예고: 순정 내비가 알려 주는 앞쪽 카메라·방지턱을 모두 씁니다.\n"
+    "방지턱은 안내 경로만: 방지턱은 길안내 중인 경로에 있는 것만 씁니다.\n"
+    "카메라·방지턱 안내 경로만: 카메라와 방지턱 모두 길안내 중인 경로에 있는 것만 씁니다." + vn_common,
+    {"사용 안 함", "모든 예고", "방지턱은 안내 경로만", "카메라·방지턱 안내 경로만"});
+  vn_mode->setProperty("optechReboot", true);
+  cruiseToggles->addItem(vn_mode);
+  auto vn_school = new ParamControl("VehicleNaviSchoolZoneControl", "어린이보호구역 30",
+    "순정 내비가 어린이보호구역(30km/h)을 알려 주면 그 안에서 30km/h를 지킵니다. 자동차 전용도로에서는 쓰지 않습니다." + vn_common,
+    ROAD_ICON, this);
+  vn_school->setProperty("optechReboot", true);
+  cruiseToggles->addItem(vn_school);
+  cruiseToggles->addItem(new ParamControl("VehicleNaviSectionAvgControl", "구간단속 구간 안에서 제한 속도 지키기",
+    "켜면(처음 값) 순정 내비가 구간단속 구간이라고 알려 주는 동안 계속 제한 속도에 맞춥니다. "
+    "끄면 구간 안에서도 앞에 실제 카메라가 있을 때만 줄입니다. '순정 내비 감속'이 켜져 있을 때 적용됩니다.", ROAD_ICON, this));
+  auto vn_curve = new ParamControl("VehicleNaviCurveControl", "순정 내비 커브 감속",
+    "고속도로·나들목에서 순정 내비 지도의 커브 정보로 커브 앞에서 미리 속도를 줄입니다. "
+    "진출 램프 커브는 깜빡이를 램프 쪽으로 켰을 때만 줄입니다." + vn_common, ROAD_ICON, this);
+  vn_curve->setProperty("optechReboot", true);
+  cruiseToggles->addItem(vn_curve);
+  cruiseToggles->addItem(new CValueControl("VehicleNaviCurveSpeedFactor", "커브 목표 속도 (%)",
+    "순정 내비 커브에서 맞출 속도의 배율입니다. 낮추면 더 천천히 돕니다. 50~200, 처음 값 100.", ROAD_ICON, 50, 200, 5));
+  auto vn_junction = new ParamControl("VehicleNaviJunctionAssist", "분기·합류 가속 완화",
+    "순정 내비가 알려 주는 갈림길·합류 300m 안에서는 시속 36km를 넘으면 가속을 부드럽게(최대 0.8m/s²) 묶습니다. "
+    "가속 페달을 밟으면 풀립니다. 오픈파일럿이 가감속하는 차(롱컨)에서만 쓰입니다." + vn_common, ROAD_ICON, this);
+  vn_junction->setProperty("optechReboot", true);
+  cruiseToggles->addItem(vn_junction);
+
   // OptechSignalEnable '신호등 사용' (long_mpc -> controls/lib/optech_signal.py, StarPilot's stop light detector): the
   // HUD traffic light; OptechGreenAlert (cruise_helper: StarPilot's green light alert) is shown only while it is on
   cruiseToggles->addItem(carrot_section("신호등"));
@@ -1158,7 +1206,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   speedToggles = new ListWidget(this);
   speedToggles->addItem(carrot_section("크루즈 속도"));
   speedToggles->addItem(new CValueControl("AutoSyncCruiseSpeedMax", "가속페달 속도 맞춤 상한", "크루즈(가감속)가 켜진 상태에서 악셀로 설정 속도보다 빨리 달리면, 설정 속도도 지금 속도로 따라 올라갑니다 (예: 설정 50km/h에서 악셀로 80km/h까지 가면 설정 속도 80km/h). 이 값(km/h)까지만 올립니다. 0:사용 안 함", ROAD_ICON, 0, 200, 10));
-  speedToggles->addItem(new CValueControl("AutoSpeedUptoRoadSpeedLimit", "제한속도까지 자동 올림", "앞차를 따라갈 때 도로 제한속도의 이 비율(%)까지 설정 속도를 자동으로 올립니다. 0:사용 안 함, 100:제한속도까지", ROAD_ICON, 0, 200, 10));
+  speedToggles->addItem(new CValueControl("AutoSpeedUptoRoadSpeedLimit", "제한속도까지 자동 올림", "앞차가 내 설정 속도보다 빨리 갈 때, 앞차를 따라 도로 제한속도의 이 비율(%)까지 설정 속도를 자동으로 올립니다. 앞차가 없으면 올리지 않습니다. 크루즈 −로 설정 속도를 낮추면, +를 누르거나 크루즈가 꺼졌다 켜질 때까지는 자동으로 올리지 않습니다. 0:사용 안 함, 100:제한속도까지", ROAD_ICON, 0, 200, 10));
   speedToggles->addItem(carrot_section("출발·정지 (출발이 굼뜨거나 정지가 거칠 때)"));
   speedToggles->addItem(new CValueControl("JerkStartLimit", "재출발 가속", "멈췄다가 다시 출발할 때 얼마나 빨리 속도를 붙일지 정합니다(0.1 단위). 높이면 빠르게, 낮추면 부드럽게 출발합니다. 출발 전에 기다리는 시간과는 상관없습니다.", ROAD_ICON, 1, 50, 1));
   speedToggles->addItem(new CValueControl("StartAccelApply", "출발 가속", "정차 후 출발할 때 처음 가속을 몇 % 더 줄지 정합니다. 출발이 굼뜨면 올려 보세요. 0:사용 안 함", ROAD_ICON, 0, 100, 10));
@@ -1365,7 +1413,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     optech_web_choice(radar_btn, "ShowRadarInfo", radar_names, optech_index_values(radar_names.size()));
     dispToggles->addItem(radar_btn);
   }
-  dispToggles->addItem(new ParamControl("ShowConnInfo", "연결 상태 표시", "켜 두면(초록색) 주행 화면 왼쪽 위에 연결 상태를 보여 줍니다.\nTMAP: TmapNda가 NDA 방식으로 보내는 중\nCARROT: 당근 방식으로 들어옴 (당근내비, 당근 방식으로 설정한 TmapNda)\n초록은 정보가 들어오는 중, 회색은 연결됐지만 아직 정보가 없음\nSCC2(빨강): SCC 버스2(롱컨) 차량\nRADAR(주황): 레이더 트랙 사용 중", SHELL_ICON, this));
+  dispToggles->addItem(new ParamControl("ShowConnInfo", "연결 상태 표시", "켜 두면(초록색) 주행 화면 왼쪽 위에 연결 상태를 보여 줍니다.\nTMAP: TmapNda가 NDA 방식으로 보내는 중\nCARROT: 당근 방식으로 들어옴 (당근내비, 당근 방식으로 설정한 TmapNda)\n초록은 정보가 들어오는 중, 회색은 연결됐지만 아직 정보가 없음\n맨 앞 칸 = 누가 가감속을 하는지\n  SCC(남색): 롱컨 안 한 차, 차의 순정 SCC가 가감속\n  SCC2(빨강): 롱컨 한 차, 오픈파일럿이 가감속\n  E2E(청록): 롱컨 차에서 지금 주행 모델이 판단하며 가감속 (실험 모드, E2E 모드)\n  SCC 없는 차(레이 EV, 포터 EV, NO SCC 트림): 페달 없으면 일반(남색) = 차의 일반 크루즈, 코마 페달을 쓰면 SCC2(빨강) = 오픈파일럿이 가감속\nRADAR(주황): 레이더 트랙 사용 중", SHELL_ICON, this));
   // '운전자 모니터링 아이콘' (ShowDmInfo 0 / 1); the mode itself is chosen on the 토글 page (optech_dm_mode)
   dmIcon = new ToggleControl("운전자 모니터링 아이콘",
     "주행 화면 왼쪽 아래에 운전자 모니터링 아이콘(얼굴 모양)을 보여 줍니다. 얼굴을 잘 보고 있으면 선명하게, 아니면 흐리게 보입니다. 토글 화면의 운전자 모니터링이 '기본 사용'일 때만 쓸 수 있습니다.",
@@ -1384,6 +1432,16 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     "기기 상태와 지금 화면을 보고, 주행 기록·녹화 영상을 받고, OPTECH 설정을 바꾸고, 업데이트·다시 켜기를 할 수 있습니다. "
     "기기 IP는 홈 화면 왼쪽에 있습니다. 같은 와이파이의 누구나 들어올 수 있으니 공용 와이파이에서는 끄세요. "
     "바꾼 뒤 다시 켜야 적용됩니다. 처음 값: 켜짐", SHELL_ICON, this));
+  // OptechFdSignalFix (vehicle_navi.py FdSignalFix, carrot PR #589, 2026-11-28): off by default, not car-tested yet
+  {
+    auto fd_fix = new ParamControl("OptechFdSignalFix", "CAN FD 신호 보강",
+      "당근(carrot) 11월 27일 CAN FD 신호 수정을 씁니다: 브레이크등(0x412), 차 관성 센서의 회전 속도(요레이트), "
+      "핸들 돌리는 속도의 방향(그동안 방향 없이 크기만 읽었음), 앞쪽 모서리 후측방 경고.\n"
+      "핸들 돌리는 속도는 토크 조향의 NNFF 계산에 쓰여 조향 느낌이 조금 달라질 수 있습니다.\n"
+      "아직 실제 차에서 확인하지 않았습니다. 처음 값: 꺼짐. 바꾼 뒤 재부팅해야 적용됩니다.", SHELL_ICON, this);
+    fd_fix->setProperty("optechReboot", true);
+    advancedToggles->addItem(fd_fix);
+  }
   // OptechOffShutdown (autoshutdownd): after a drive, turn the device off this long after the car is off (tester feedback)
   {
     auto off_btn = new ButtonControl("", "선택",
@@ -1490,15 +1548,15 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     auto op_long = new ParamControl("ExperimentalLongitudinalEnabled", "openpilot 가감속 제어 (알파)", "CAN FD 현대·기아용 롱컨 스위치입니다. 일반 CAN 현대·기아는 이 스위치 대신 토글의 '롱컨'으로 롱컨을 켜지만, 실험 모드 스위치는 이 값이 켜져 있어야 동작합니다. 켜면 자동 긴급 제동(AEB)이 꺼질 수 있습니다.", SHELL_ICON, this);
     op_long->setConfirmation(true, false);
     advancedToggles->addItem(op_long);
-    auto e2e = new ParamControl("ExperimentalMode", "실험 모드", "가감속을 항상 E2E(주행 모델이 판단하는 가감속)로 고정합니다. 앞차가 없어도 빨간불·정지선 앞에서 서고 커브 앞에서 줄이지만, 앞차를 따라갈 때도 모델이 가감속을 정해서 레이더 방식(ACC)보다 덜 부드러울 수 있습니다. 상황에 따라 바꾸려면 아래 '자동 E2E / ACC 전환'을 쓰세요(켜 두면 그쪽이 먼저 적용됩니다). 롱컨(openpilot 가감속 제어)일 때만 적용됩니다. 알파 단계 기능이라 실수가 있을 수 있습니다.", SHELL_ICON, this);
+    auto e2e = new ParamControl("ExperimentalMode", "실험 모드", "가감속을 항상 E2E(주행 모델이 판단하는 가감속)로 고정합니다. 앞차가 없어도 빨간불·정지선 앞에서 서고 커브 앞에서 줄이지만, 앞차를 따라갈 때도 모델이 가감속을 정해서 레이더로 따라갈 때보다 덜 부드러울 수 있습니다. 상황에 따라 바꾸려면 아래 'E2E 모드'를 쓰세요(켜 두면 그쪽이 먼저 적용됩니다). 롱컨(openpilot 가감속 제어)일 때만 적용됩니다. 알파 단계 기능이라 실수가 있을 수 있습니다.", SHELL_ICON, this);
     e2e->setConfirmation(true, true);
     advancedToggles->addItem(e2e);
     // OptechAutoE2E (longitudinal_planner.update_auto_e2e, spst dp_long_de2e / dragonpilot dynamic e2e)
-    auto auto_e2e = new ParamControl("OptechAutoE2E", "자동 E2E / ACC 전환",
-      "상황에 따라 E2E(주행 모델이 판단하는 가감속)와 ACC(레이더로 앞차를 따라가는 가감속)를 자동으로 바꿉니다(optech-spst와 같은 기능).\n"
-      "앞차를 따라갈 때는 ACC로 부드럽게 따라가고, 앞차가 없을 때 주행 모델이 '앞에서 서야 한다'고 보면(빨간불·정지선·급한 커브), "
+    auto auto_e2e = new ParamControl("OptechAutoE2E", "E2E 모드",
+      "상황에 따라 E2E(주행 모델이 판단하는 가감속)와 앞차 따라가는 가감속(레이더)을 자동으로 바꿉니다(optech-spst와 같은 기능).\n"
+      "앞차를 따라갈 때는 레이더로 부드럽게 따라가고, 앞차가 없을 때 주행 모델이 '앞에서 서야 한다'고 보면(빨간불·정지선·급한 커브), "
       "정차 중일 때, 시속 75km 아래에서 방향지시등을 켰을 때, 앞차가 갑자기 가까워져 세게 서야 할 때는 E2E로 바꿉니다.\n"
-      "켜 두면 '실험 모드'보다 먼저 적용됩니다. 롱컨(openpilot 가감속 제어)일 때만 적용됩니다. 시험 기능이라 항상 주의하세요.",
+      "주행 화면 왼쪽 위 칸이 SCC2(앞차 따라감) / E2E로 바뀌어 지금 방식을 보여 줍니다. 켜 두면 '실험 모드'보다 먼저 적용됩니다. 롱컨(openpilot 가감속 제어)일 때만 적용됩니다. 시험 기능이라 항상 주의하세요.",
       SHELL_ICON, this);
     auto_e2e->setConfirmation(true, false);
     advancedToggles->addItem(auto_e2e);

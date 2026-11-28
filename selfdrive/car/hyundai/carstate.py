@@ -8,7 +8,10 @@ from opendbc.can.parser import CANParser
 from opendbc.can.can_define import CANDefine
 from selfdrive.car.hyundai.values import HyundaiFlags, DBC, FEATURES, CAMERA_SCC_CAR, CANFD_CAR, EV_CAR, HYBRID_CAR, Buttons, CarControllerParams, CAR, canfd_bus, canfd_hybrid
 from selfdrive.car.interfaces import CarStateBase
+from selfdrive.car.hyundai.vehicle_navi import (VehicleNaviMixin, FdSignalFix, vehicle_navi_enabled, signal_fix_enabled,
+                                                navi_parser_entries, signal_fix_parser_entries)
 from common.realtime import DT_CTRL
+from selfdrive.swaglog import cloudlog
 
 PREV_BUTTON_SAMPLES = 8
 CLUSTER_SAMPLE_RATE = 20  # frames
@@ -34,7 +37,7 @@ def canfd_gear_msg(CP):
          "GEAR_SHIFTER"
 
 
-class CarState(CarStateBase):
+class CarState(CarStateBase, VehicleNaviMixin):
   def __init__(self, CP):
     super().__init__(CP)
     can_define = CANDefine(DBC[CP.carFingerprint]["pt"])
@@ -76,6 +79,14 @@ class CarState(CarStateBase):
 
     self.totalDistance = 0.0
     self.speedLimitDistance = 0
+
+    # optech 2026-11-28, CAN FD only and only while their OPTECH switches were on at start (vehicle_navi.py):
+    # stock navigation (carrot PR #590/#591) and the PR #589 signals. Both off: nothing here changes.
+    canfd = CP.carFingerprint in CANFD_CAR
+    self.vehicle_navi_on = canfd and vehicle_navi_enabled()
+    if self.vehicle_navi_on:
+      self.vehicle_navi_init(CP)
+    self.signal_fix = FdSignalFix() if canfd and signal_fix_enabled() else None
 
   def update(self, cp, cp_cam):
     if self.CP.carFingerprint in CANFD_CAR:
@@ -390,6 +401,24 @@ class CarState(CarStateBase):
       self.cam_0x362 = copy.copy(cp_cam.vl["CAM_0x362"])
     elif self.CP.flags & HyundaiFlags.CANFD_HDA2:
       self.cam_0x2a4 = copy.copy(cp_cam.vl["CAM_0x2a4"])
+
+    # optech 2026-11-28 (vehicle_navi.py, both off by default and not tested in a car yet): an error in this new
+    # code switches that part off for the drive instead of stopping openpilot
+    if self.signal_fix is not None:
+      try:
+        self.signal_fix.update(cp, cp_cam, ret, self.CP.enableBsm)
+      except Exception:
+        cloudlog.exception("optech FD signal fix failed, switched off for this drive")
+        self.signal_fix = None
+    if self.vehicle_navi_on:
+      try:
+        self.vehicle_navi_update(cp, ret)
+      except Exception:
+        cloudlog.exception("optech FD stock navigation failed, switched off for this drive")
+        self.vehicle_navi_on = False
+        ret.speedLimit = 0
+        ret.speedLimitDistance = 0.
+        ret.vehicleNaviActive = False
 
     return ret
 
@@ -826,6 +855,17 @@ class CarState(CarStateBase):
         ("ACCELERATOR_BRAKE_ALT", 100),
       ]
 
+    # optech 2026-11-28 (vehicle_navi.py): optional messages with check frequency 0, only while their switch was on at
+    # start - a car that never sends them keeps a valid parser
+    if vehicle_navi_enabled():
+      navi_signals, navi_checks = navi_parser_entries(CP)
+      signals += navi_signals
+      checks += navi_checks
+    if signal_fix_enabled():
+      fix_signals, fix_checks = signal_fix_parser_entries()
+      signals += fix_signals
+      checks += fix_checks
+
     bus = canfd_bus(CP, 1 if CP.flags & HyundaiFlags.CANFD_HDA2 else 0)
     return CANParser(DBC[CP.carFingerprint]["pt"], signals, checks, bus)
 
@@ -855,5 +895,11 @@ class CarState(CarStateBase):
       checks += [
         ("SCC_CONTROL", 50),
       ]
+
+    # optech 2026-11-28 (OptechFdSignalFix): the front corner blind-spot frame may come on the camera bus (carrot looks
+    # on both); optional, check frequency 0
+    if CP.enableBsm and signal_fix_enabled():
+      signals += [("INDICATOR_LEFT", "BLINDSPOTS_FRONT_CORNER_1"), ("INDICATOR_RIGHT", "BLINDSPOTS_FRONT_CORNER_1")]
+      checks += [("BLINDSPOTS_FRONT_CORNER_1", 0)]
 
     return CANParser(DBC[CP.carFingerprint]["pt"], signals, checks, canfd_bus(CP, 2))

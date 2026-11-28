@@ -96,6 +96,7 @@ class CruiseHelper:
     self.naviSpeedLimitTarget = 30
     self.dRel = 0
     self.vRel = 0
+    self.auto_up_hold = False  # optech: the driver lowered the set speed with '-' -> no '제한속도까지 자동 올림' until '+'
     self.dRelValidCount = 0
     self.trafficState = 0
     self.xState_prev = XState.cruise
@@ -380,6 +381,43 @@ class CruiseHelper:
     apply_speed = max(apply_speed, min_speed)
     return apply_speed
 
+  def vehicle_navi_curve_speed(self, CS, controls):
+    """carrot_serv _vehicle_navi_curve_speed: the current speed to reach the CAN FD stock-navigation curve target
+    (vehicle_navi.py fields), 250 when off / not available / a phone navigation is linked."""
+    try:
+      if self.update_params_count == 3 or not hasattr(self, "vn_curve_control"):
+        p = Params()
+        def pint(key, default):
+          try:
+            raw = p.get(key)
+            return int(raw) if raw not in (None, b"") else default
+          except Exception:
+            return default
+        self.vn_curve_control = pint("VehicleNaviCurveControl", 0) > 0
+        self.vn_curve_mpp = pint("VehicleNaviCurveMppControl", 1) > 0
+        self.vn_curve_ramp = pint("VehicleNaviRampCurveControl", 1) > 0
+        self.vn_curve_factor = min(2.0, max(0.5, pint("VehicleNaviCurveSpeedFactor", 100) * 0.01))
+        self.vn_curve_end = max(0.0, float(pint("VehicleNaviCurveCtrlEnd", 3)))
+      if not self.vn_curve_control or controls.sm['roadLimitSpeed'].active > 0:
+        return 250.
+      route_active = CS.vehicleNaviCurveRouteActive
+      route_state = CS.vehicleNaviCurveRouteState
+      if not (CS.vehicleNaviCurveRoadAllowed and (route_active or route_state in (0, 1)) and
+              CS.vehicleNaviCurveSpeed > 0. and abs(CS.vehicleNaviCurveCurvature) >= 1e-7):
+        return 250.
+      if CS.vehicleNaviCurveIsRamp and not self.vn_curve_ramp:
+        return 250.
+      if not (route_active or (self.vn_curve_mpp and route_state == 0)):
+        return 250.
+      target_kph = max(30., CS.vehicleNaviCurveSpeed * self.vn_curve_factor)
+      safe_speed = target_kph / 3.6
+      decel_dist = CS.vehicleNaviCurveDistance - safe_speed * self.vn_curve_end
+      if decel_dist <= 0:
+        return target_kph
+      return min(250., math.sqrt(safe_speed ** 2 + 2 * self.autoNaviSpeedDecelRate * decel_dist) * 3.6)
+    except Exception:
+      return 250.
+
   def update_speed_apilot(self, CS, controls):
     v_ego = CS.vEgoCluster
     msg = self.roadLimitSpeed = controls.sm['roadLimitSpeed']
@@ -415,7 +453,18 @@ class CruiseHelper:
       isSectionLimit = True if leftDist > 3000 or camType == 4 else False
       isSectionLimit = False if leftDist < 50 else isSectionLimit
       speedLimitType = 2 if not isSectionLimit else 3
-    # (optech 2026-11-27: the car's own navigation HDA, CS.speedLimit, is not used any more - interface.py)
+    # (optech 2026-11-27: the CAN car's own navigation HDA Navi_HU is not used any more - interface.py)
+    # optech-hkg-fd 2026-11-28: the CAN FD stock navigation (vehicle_navi.py), same rule as
+    # road_speed_limiter.get_max_speed - only without a phone navigation and without a camera from above
+    if safeSpeed <= 0 and not (active > 0):
+      if CS.schoolZoneActive:
+        safeSpeed, leftDist, isSectionLimit, speedLimitType = 30, 1, True, 3
+      elif CS.vehicleNaviSectionActive and CS.vehicleNaviSpeed > 0:
+        safeSpeed, leftDist, isSectionLimit, speedLimitType = CS.vehicleNaviSpeed, 1, True, 3
+      elif CS.speedLimit > 0 and CS.speedLimitDistance > 0:
+        safeSpeed, leftDist, speedLimitType = CS.speedLimit, CS.speedLimitDistance, 2
+      elif CS.vehicleNaviActive and CS.speedBumpDistance > 0:
+        safeSpeed, leftDist, isSpeedBump = self.autoNaviSpeedBumpSpeed, CS.speedBumpDistance, True
 
     if isSpeedBump:
       speedLimitType = 1 
@@ -557,6 +606,13 @@ class CruiseHelper:
     #controls.debugText1 = 'CURVE={:5.1f},curvature={:5.4f}'.format(turnSpeed, curvature)
     self.turnSpeed_prev = turnSpeed
     return turnSpeed
+
+  def auto_up_ok(self, v_cruise_kph):
+    """'제한속도까지 자동 올림' may raise the set speed toward the lead's speed (up to the road limit) only for a real
+    lead (dRel > 0) that is faster than the set speed, and not after the driver lowered it with '-'. Santa Fe TM tester
+    2026-11-28: '-' never got under the road limit - with no lead get_lead_rel() gives vRel 0, so leadCarSpeed was our
+    own speed and every '-' below it was raised straight back (up to the road limit)."""
+    return self.dRel > 0 and self.leadCarSpeed > v_cruise_kph and not self.auto_up_hold
 
   def v_cruise_speed_up(self, v_cruise_kph, roadSpeed):
     if v_cruise_kph < roadSpeed:
@@ -772,6 +828,8 @@ class CruiseHelper:
     if buttonLong:
       if button in [ButtonType.accelCruise, ButtonType.decelCruise]:
         v_cruise_kph = buttonSpeed
+        if self.longActiveUser > 0:
+          self.auto_up_hold = button == ButtonType.decelCruise
       elif button == ButtonType.gapAdjustCruise:  ##안먹네.... 나중에 보자~
         pass  # driving mode is fixed to 일반; long-pressing the gap button no longer cycles modes
     else:
@@ -783,6 +841,7 @@ class CruiseHelper:
         if self.longActiveUser <= 0:
           pass
         else:
+          self.auto_up_hold = False
           if self.xState == XState.softHold:
             longActiveUser = 1
           #elif self.xState == XState.e2eStop:
@@ -796,6 +855,7 @@ class CruiseHelper:
         if self.longActiveUser <= 0:
           pass
         else:
+          self.auto_up_hold = True
           if self.xState == XState.softHold:
             longActiveUser = 1
           if CS.gasPressed and v_cruise_kph < self.v_ego_kph_set:
@@ -1039,8 +1099,10 @@ class CruiseHelper:
       ###### leadCar 관련 속도처리
       roadSpeed1 = self.roadSpeed * self.autoSpeedUptoRoadSpeedLimit
       #if v_cruise_kph < roadSpeed1 and 50 > self.dRel > 0 and self.vRel > 0 and self.autoSpeedUptoRoadSpeedLimit > 0:
+      if self.longActiveUser <= 0:  # speed control off / paused: the driver's '-' no longer holds it
+        self.auto_up_hold = False
       if v_cruise_kph < roadSpeed1 and self.autoSpeedUptoRoadSpeedLimit > 0:
-        if self.leadCarSpeed > v_cruise_kph:
+        if self.auto_up_ok(v_cruise_kph):
           v_cruise_kph = max(v_cruise_kph, min(self.leadCarSpeed, roadSpeed1))
           self.v_cruise_kph_apply = v_cruise_kph
       elif self.autoSpeedAdjustWithLeadCar > 0.0 and self.dRel > 0:
@@ -1073,6 +1135,10 @@ class CruiseHelper:
           pass
         else:
           self.v_cruise_kph_apply = min(self.v_cruise_kph_apply, self.curveSpeed)
+      # optech-hkg-fd 2026-11-28: CAN FD stock-navigation curve (VehicleNaviCurveControl, its own switch)
+      vn_curve_speed = self.vehicle_navi_curve_speed(CS, controls)
+      if vn_curve_speed < 250.:
+        self.v_cruise_kph_apply = min(self.v_cruise_kph_apply, vn_curve_speed)
 
     if not controls.enabled:
       self.brake_paused = False

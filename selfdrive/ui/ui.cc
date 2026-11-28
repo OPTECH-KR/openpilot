@@ -752,6 +752,7 @@ void UIState::update() {
     if (!dim.empty()) drive_dim = std::atoi(dim.c_str());
     show_record_btn = params.getBool("OptechShowRecordBtn");
     show_gps_speed = params.getBool("OptechShowGpsSpeed");
+    batt_less = params.getBool("OpkrBattLess");
     radar_tracks = params.getBool("EnableRadarTracks");
     path_offset = std::atoi(params.get("PathOffset").c_str());
   }
