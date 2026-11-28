@@ -1076,8 +1076,9 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   // OptechStockNavi '순정 내비 사용' (2026-11-28, a CAN tester asked for it back; dropped 11-27): the car's own
   // navigation Navi_HU (interface.py naviCluster -> carstate speedLimit). Off by default; read at start (reboot)
   ParamControl *stock_navi = new ParamControl("OptechStockNavi", "순정 내비 사용",
-    "차에 순정 내비가 있으면, 순정 내비가 알려 주는 단속카메라 제한속도로도 속도를 줄입니다. "
-    "폰 내비 앱(TmapNda·당근내비)이 카메라 정보를 보내면 앱 정보를 먼저 씁니다.\n\n"
+    "차에 순정 내비가 있으면, 순정 내비가 알려 주는 단속카메라 제한속도로도 속도를 줄입니다.\n\n"
+    "● 폰 내비 앱(TmapNda·당근내비), 내장 카메라 DB와 같이 켜 두고 쓸 수 있습니다. 같이 쓰면 TMAP 같은 폰 내비 앱 정보를 먼저 받고, "
+    "앱이 카메라 정보를 보내지 않을 때는 내장 카메라 DB, 그것도 없을 때 순정 내비 정보를 씁니다.\n"
     "● 순정 내비는 카메라의 제한속도만 알려 주고 거리는 알려 주지 않아서, '속도 × 6m 앞'으로 짐작합니다. "
     "구간단속·과속방지턱 정보는 없습니다.\n"
     "● 켜면 주행 화면 왼쪽 위 연결 칸에 보라색 'HDA'가 나옵니다. 폰 내비 연결 표시가 아니라 차 순정 내비 표시입니다.\n"
