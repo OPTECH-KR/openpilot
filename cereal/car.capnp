@@ -239,6 +239,27 @@ struct CarState {
   speedLimit @54 : Int32;
   speedLimitDistance @55 : Float32;
 
+  # optech-hkg-fd 2026-11-28: CAN FD stock navigation (carrot-wip befd99656 fields, selfdrive/car/hyundai/vehicle_navi.py)
+  speedBumpDistance @56 :Float32; # distance to a speed bump from the stock navigation CAN, meters
+  schoolZoneActive @57 :Bool; # stock-navigation 30 km/h school zone
+  vehicleNaviActive @58 :Bool; # a valid stock-navigation CAN profile is currently relevant
+  vehicleNaviSectionActive @59 :Bool; # stock navigation reports a section-camera zone
+  vehicleNaviSpeed @60 :Float32; # speed from the active stock-navigation profile, kph
+  vehicleNaviAvailable @61 :Bool; # stock-navigation profile messages seen during this drive
+  vehicleNaviCurveDistance @62 :Float32; # distance to the controlling stock-navigation curvature spot, m
+  vehicleNaviCurveSpeed @63 :Float32; # 100% reference speed from radius-decoded curvature, kph
+  vehicleNaviCurveCurvature @64 :Float32; # decoded signed curvature (+left / -right), 1/m
+  vehicleNaviCurveRouteActive @65 :Bool; # calculated route active
+  vehicleNaviCurveRouteState @66 :UInt8; # 0 MPP, 1 calculated route, 2 recalculating, 3 invalid
+  vehicleNaviCurveTargetSpeed @67 :Float32; # factor-adjusted apex target speed, kph
+  vehicleNaviCurveIsRamp @68 :Bool; # controlling spot comes from a branch ramp profile
+  vehicleNaviCurveRoadAllowed @69 :Bool; # fresh HDA LinkClass is freeway or IC/JC ramp
+  vehicleNaviJunctionType @70 :UInt8; # 0 none, 1 diverge/exit fork, 2 merge/on-ramp
+  vehicleNaviJunctionSide @71 :UInt8; # 0 unknown, 1 left, 2 right
+  vehicleNaviJunctionDistance @72 :Float32; # meters to upcoming junction (0 while inside active taper)
+  vehicleNaviJunctionLane @73 :UInt8; # 1-indexed lane number (0 unknown)
+  vehicleNaviFrwInfo @74 :UInt8; # fresh HDA Frwinfo (0 none, 1..4 fork within ~500 m)
+
   struct Tpms {
     fl @0 :Float32;
     fr @1 :Float32;

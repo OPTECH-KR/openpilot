@@ -109,6 +109,8 @@ class LongitudinalPlanner:
     self.carrotCutOutRelief = self.read_int_param("CarrotCutOutRelief", 0)
     self.carrotStoppingLead = self.read_int_param("CarrotStoppingLead", 0)
     self.optechAutoE2E = self.read_int_param("OptechAutoE2E", 0) == 1
+    # optech-hkg-fd 2026-11-28: CAN FD stock navigation junction assist (vehicle_navi.py fields)
+    self.vehicleNaviJunctionAssist = self.read_int_param("VehicleNaviJunctionAssist", 0) == 1
 
   def update_auto_e2e(self, sm):
     """optech '자동 E2E / ACC 전환' (spst / dragonpilot dynamic e2e): with openpilot long, choose 'acc' (follow the
@@ -219,6 +221,17 @@ class LongitudinalPlanner:
       else:
         myMaxAccel = self.get_max_accel(v_ego)
       accel_limits = [A_CRUISE_MIN, myMaxAccel]
+      # optech-hkg-fd 2026-11-28 (carrot carrot_functions get_carrot_accel, VehicleNaviJunctionAssist): at most
+      # 0.8 m/s² within 300 m of a stock-navigation fork / merge above 36 km/h while the gas is not pressed, and only
+      # without a phone navigation (carrot's external-navigation priority)
+      if getattr(self, "vehicleNaviJunctionAssist", False):
+        try:
+          cs = sm['carState']
+          if (cs.vehicleNaviJunctionType in (1, 2) and 0.0 <= cs.vehicleNaviJunctionDistance <= 300.0 and
+              cs.vEgo > 10.0 and not cs.gasPressed and not sm['roadLimitSpeed'].active > 0):
+            accel_limits[1] = min(accel_limits[1], 0.8)
+        except Exception:
+          pass
       if self.carrotTurnAccel == 1:
         # carrot: cap acceleration using model path curvature up to 3 s / reachable distance ahead
         curvature_future = get_future_curvature(sm['modelV2'], sm['controlsState'].curvature)

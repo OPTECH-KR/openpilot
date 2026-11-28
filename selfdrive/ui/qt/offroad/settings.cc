@@ -1134,6 +1134,43 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   const bool cam_shown = std::atoi(Params().get("AutoNaviSpeedCtrl").c_str()) > 0;
   for (auto w : cam_group) w->setVisible(cam_shown);
 
+  // optech-hkg-fd 2026-11-28 (user: "fd관련 내용만 fd쪽으로 가져와줘", 꺼 둔 채 배포): the CAN FD stock navigation from
+  // carrot-wip befd99656 (selfdrive/car/hyundai/vehicle_navi.py). All off by default; the car-side reading starts only
+  // after a reboot with one of them on.
+  cruiseToggles->addItem(carrot_section("순정 내비 (CAN FD)"));
+  const QString vn_common = "\n\n● 차의 순정 내비 정보로만 동작합니다. 폰 내비 앱(TmapNda·당근내비)이 연결돼 있으면 앱 정보를 씁니다.\n"
+    "● 당근(carrot) 11월 27일 기능을 옮긴 것으로, 아직 실제 차에서 확인하지 않았습니다. 이상하면 끄고 알려 주세요.\n"
+    "● 바꾼 뒤 재부팅해야 적용됩니다.";
+  ButtonControl *vn_mode = choice("VehicleNaviCanControl", "순정 내비 감속",
+    "차의 순정 내비가 알려 주는 단속카메라·구간단속·과속방지턱으로 속도를 줄입니다. '카메라 감속'이 켜져 있어야 합니다.\n"
+    "사용 안 함(처음 값): 순정 내비 정보를 쓰지 않습니다.\n"
+    "모든 예고: 순정 내비가 알려 주는 앞쪽 카메라·방지턱을 모두 씁니다.\n"
+    "방지턱은 안내 경로만: 방지턱은 길안내 중인 경로에 있는 것만 씁니다.\n"
+    "카메라·방지턱 안내 경로만: 카메라와 방지턱 모두 길안내 중인 경로에 있는 것만 씁니다." + vn_common,
+    {"사용 안 함", "모든 예고", "방지턱은 안내 경로만", "카메라·방지턱 안내 경로만"});
+  vn_mode->setProperty("optechReboot", true);
+  cruiseToggles->addItem(vn_mode);
+  auto vn_school = new ParamControl("VehicleNaviSchoolZoneControl", "어린이보호구역 30",
+    "순정 내비가 어린이보호구역(30km/h)을 알려 주면 그 안에서 30km/h를 지킵니다. 자동차 전용도로에서는 쓰지 않습니다." + vn_common,
+    ROAD_ICON, this);
+  vn_school->setProperty("optechReboot", true);
+  cruiseToggles->addItem(vn_school);
+  cruiseToggles->addItem(new ParamControl("VehicleNaviSectionAvgControl", "구간단속 구간 안에서 제한 속도 지키기",
+    "켜면(처음 값) 순정 내비가 구간단속 구간이라고 알려 주는 동안 계속 제한 속도에 맞춥니다. "
+    "끄면 구간 안에서도 앞에 실제 카메라가 있을 때만 줄입니다. '순정 내비 감속'이 켜져 있을 때 적용됩니다.", ROAD_ICON, this));
+  auto vn_curve = new ParamControl("VehicleNaviCurveControl", "순정 내비 커브 감속",
+    "고속도로·나들목에서 순정 내비 지도의 커브 정보로 커브 앞에서 미리 속도를 줄입니다. "
+    "진출 램프 커브는 깜빡이를 램프 쪽으로 켰을 때만 줄입니다." + vn_common, ROAD_ICON, this);
+  vn_curve->setProperty("optechReboot", true);
+  cruiseToggles->addItem(vn_curve);
+  cruiseToggles->addItem(new CValueControl("VehicleNaviCurveSpeedFactor", "커브 목표 속도 (%)",
+    "순정 내비 커브에서 맞출 속도의 배율입니다. 낮추면 더 천천히 돕니다. 50~200, 처음 값 100.", ROAD_ICON, 50, 200, 5));
+  auto vn_junction = new ParamControl("VehicleNaviJunctionAssist", "분기·합류 가속 완화",
+    "순정 내비가 알려 주는 갈림길·합류 300m 안에서는 시속 36km를 넘으면 가속을 부드럽게(최대 0.8m/s²) 묶습니다. "
+    "가속 페달을 밟으면 풀립니다. 오픈파일럿이 가감속하는 차(롱컨)에서만 쓰입니다." + vn_common, ROAD_ICON, this);
+  vn_junction->setProperty("optechReboot", true);
+  cruiseToggles->addItem(vn_junction);
+
   // OptechSignalEnable '신호등 사용' (long_mpc -> controls/lib/optech_signal.py, StarPilot's stop light detector): the
   // HUD traffic light; OptechGreenAlert (cruise_helper: StarPilot's green light alert) is shown only while it is on
   cruiseToggles->addItem(carrot_section("신호등"));
@@ -1384,6 +1421,16 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
     "기기 상태와 지금 화면을 보고, 주행 기록·녹화 영상을 받고, OPTECH 설정을 바꾸고, 업데이트·다시 켜기를 할 수 있습니다. "
     "기기 IP는 홈 화면 왼쪽에 있습니다. 같은 와이파이의 누구나 들어올 수 있으니 공용 와이파이에서는 끄세요. "
     "바꾼 뒤 다시 켜야 적용됩니다. 처음 값: 켜짐", SHELL_ICON, this));
+  // OptechFdSignalFix (vehicle_navi.py FdSignalFix, carrot PR #589, 2026-11-28): off by default, not car-tested yet
+  {
+    auto fd_fix = new ParamControl("OptechFdSignalFix", "CAN FD 신호 보강",
+      "당근(carrot) 11월 27일 CAN FD 신호 수정을 씁니다: 브레이크등(0x412), 차 관성 센서의 회전 속도(요레이트), "
+      "핸들 돌리는 속도의 방향(그동안 방향 없이 크기만 읽었음), 앞쪽 모서리 후측방 경고.\n"
+      "핸들 돌리는 속도는 토크 조향의 NNFF 계산에 쓰여 조향 느낌이 조금 달라질 수 있습니다.\n"
+      "아직 실제 차에서 확인하지 않았습니다. 처음 값: 꺼짐. 바꾼 뒤 재부팅해야 적용됩니다.", SHELL_ICON, this);
+    fd_fix->setProperty("optechReboot", true);
+    advancedToggles->addItem(fd_fix);
+  }
   // OptechOffShutdown (autoshutdownd): after a drive, turn the device off this long after the car is off (tester feedback)
   {
     auto off_btn = new ButtonControl("", "선택",

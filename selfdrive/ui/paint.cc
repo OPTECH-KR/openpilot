@@ -1122,7 +1122,7 @@ static void drawOptechHud(const UIState* s) {
     const int camType = road.getCamType();
     const int xSignType = road.getXSignType();
     int limit_speed = 0, left_dist = 0;
-    bool section = false;
+    bool section = false, school = false, vbump = false;
     if (road.getCamLimitSpeed() > 0 && road.getCamLimitSpeedLeftDist() > 0) {
         limit_speed = road.getCamLimitSpeed(); left_dist = road.getCamLimitSpeedLeftDist();
     } else if (road.getSectionLimitSpeed() > 0 && road.getSectionLeftDist() > 0) {
@@ -1132,11 +1132,28 @@ static void drawOptechHud(const UIState* s) {
         // user 2026-11-27: the built-in camera DB (road_speed_limiter) marks an average-speed section it is driving
         // through with camType 4 / xSignType 165 and sends the length left -> '구간' like a navigation section
         section = camType == 4 || xSignType == 165;
+    } else if (activeNDA <= 0 && (car_state.getVehicleNaviActive() || car_state.getSchoolZoneActive() ||
+                                  (car_state.getSpeedLimit() > 0 && car_state.getSpeedLimitDistance() > 0))) {
+        // optech-hkg-fd 2026-11-28: the CAN FD stock navigation (vehicle_navi.py, its OPTECH switches) while no phone
+        // navigation is linked - school zone 30, section, camera, speed bump (the order the slowdown uses)
+        if (car_state.getSchoolZoneActive()) {
+            limit_speed = 30; school = true;
+        } else if (car_state.getVehicleNaviSectionActive() && car_state.getVehicleNaviSpeed() > 0) {
+            limit_speed = (int)(car_state.getVehicleNaviSpeed() + 0.5f); section = true;
+        } else if (car_state.getSpeedLimit() > 0 && car_state.getSpeedLimitDistance() > 0) {
+            limit_speed = car_state.getSpeedLimit();
+            left_dist = car_state.getSpeedLimitDistance() > 1 ? (int)car_state.getSpeedLimitDistance() : 0;
+        } else if (car_state.getSpeedBumpDistance() > 0) {
+            limit_speed = 30; left_dist = (int)car_state.getSpeedBumpDistance(); vbump = true;
+        }
     }
-    // (the car's own navigation HDA is not used any more: user 2026-11-27, interface.py)
-    const bool bump = limit_speed > 0 && (xSignType == 124 || camType == 22);
+    // (the CAN car's own navigation HDA Navi_HU is not used any more: user 2026-11-27, interface.py)
+    const bool bump = limit_speed > 0 && (vbump || xSignType == 124 || camType == 22);
     const int cam_limit = (limit_speed > 0 && !bump) ? limit_speed : 0;
-    const int road_limit = (roadLimitSpeed > 0 && roadLimitSpeed < 200) ? roadLimitSpeed : 0;
+    int road_limit = (roadLimitSpeed > 0 && roadLimitSpeed < 200) ? roadLimitSpeed : 0;
+    // the CAN FD stock navigation's road limit when no phone navigation is linked (carrot uses it the same way)
+    if (road_limit == 0 && activeNDA <= 0 && car_state.getVehicleNaviAvailable() &&
+        car_state.getSpeedLimit() > 0 && car_state.getSpeedLimit() < 200) road_limit = car_state.getSpeedLimit();
 
     // ======================= top left =======================
     // user 2026-11-25: every item of the left column has a fixed place and is a bit bigger. Top down: the badge row
@@ -1384,6 +1401,10 @@ static void drawOptechHud(const UIState* s) {
                 else if (bump) snprintf(str, sizeof(str), "%s %s", "방지턱", d);
                 else snprintf(str, sizeof(str), "%s", d);
                 draw_under(ccx, ccy, str, left_dist < 200 ? red : dark);
+            } else if (school) {
+                draw_under(ccx, ccy, "어린이 보호", dark);  // CAN FD stock navigation school zone (2026-11-28)
+            } else if (section) {
+                draw_under(ccx, ccy, "구간", dark);  // CAN FD stock navigation section (no length left)
             }
         } else if (road_limit > 0) {  // no camera: the road limit, steady
             draw_sign(ccx, ccy, road_limit, false, false);

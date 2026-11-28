@@ -144,6 +144,17 @@ def manager_init() -> None:
     ("OptechShowGpsSpeed", "0"),  # 화면 > GPS 속도 (설정 속도 칸 아래; 0 hidden since 2026-11-27, testers: shown twice)
     ("OptechGitPullOnBoot", "0"),  # 소프트웨어 > 켤 때마다 자동 업데이트 (launch_chffrplus.sh, optech_git.sh bootpull)
     ("OptechWebServer", "1"),  # 고급 > 웹 접속 (selfdrive/optech_web/server.py, port 7000)
+    ("VehicleNaviCanControl", "0"),  # 주행 > 순정 내비 감속 (CAN FD, vehicle_navi.py) 0 끔 1 모든 예고 2 방지턱은 경로만 3 카메라·방지턱 경로만
+    ("VehicleNaviSchoolZoneControl", "0"),  # 주행 > 순정 내비 어린이보호구역 30
+    ("VehicleNaviSectionAvgControl", "1"),  # 주행 > 순정 내비 구간단속 구간 내내 제한 속도
+    ("VehicleSpeedCameraDistanceTime", "60"),  # 순정 내비 카메라 거리가 없을 때 가상 거리 (0.1초 단위)
+    ("VehicleNaviCurveControl", "0"),  # 주행 > 순정 내비 커브 감속
+    ("VehicleNaviCurveMppControl", "1"),  # 순정 내비 커브: 목적지 없는 예상 경로도
+    ("VehicleNaviRampCurveControl", "1"),  # 순정 내비 커브: 진출 램프 (깜빡이 방향이 맞을 때)
+    ("VehicleNaviCurveSpeedFactor", "100"),  # 순정 내비 커브 목표 속도 배율 %
+    ("VehicleNaviCurveCtrlEnd", "3"),  # 순정 내비 커브 감속 완료 여유 초
+    ("VehicleNaviJunctionAssist", "0"),  # 주행 > 순정 내비 분기·합류 가속 완화
+    ("OptechFdSignalFix", "0"),  # 고급 > CAN FD 신호 보강 (당근 PR #589)
     ("OptechLatMethod", "0"),
     ("OptechPidKp", "25"),
     ("OptechPidKi", "40"),

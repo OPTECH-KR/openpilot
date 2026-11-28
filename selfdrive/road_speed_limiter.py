@@ -831,8 +831,33 @@ class RoadSpeedLimiter:
 
         self.session_limit = False if cam_limit_speed_left_dist < 50 else self.session_limit
 
-      # optech (user 2026-11-27): the car's own navigation (HDA, CS.speedLimit) is not used any more (interface.py)
+      # optech (user 2026-11-27): the CAN car's own navigation (HDA Navi_HU, interface.py) is not used any more.
       hda_limit_active = False
+      # optech-hkg-fd 2026-11-28: the CAN FD stock navigation (selfdrive/car/hyundai/vehicle_navi.py, its OPTECH
+      # switches) only while no phone navigation is linked and nothing above gave a camera - school zone, section,
+      # camera, speed bump, the order carrot_serv uses. Its 1 m distance means "at / inside it: hold the limit".
+      vn_cam = cam_limit_speed is not None and cam_limit_speed > 0 and cam_limit_speed_left_dist is not None and cam_limit_speed_left_dist > 0
+      if not vn_cam and not (self.roadLimitSpeed.active > 0):
+        if getattr(CS, "schoolZoneActive", False):
+          cam_limit_speed, cam_limit_speed_left_dist, cam_type = 30, 1, 4
+          hda_limit_active = True
+        elif getattr(CS, "vehicleNaviSectionActive", False) and getattr(CS, "vehicleNaviSpeed", 0) > 0:
+          cam_limit_speed = int(round(CS.vehicleNaviSpeed))
+          cam_limit_speed_left_dist = CS.speedLimitDistance if CS.speedLimitDistance > 1 else 1
+          cam_type = 4
+          hda_limit_active = True
+        elif CS.speedLimit > 0 and CS.speedLimitDistance > 0:
+          cam_limit_speed = CS.speedLimit
+          cam_limit_speed_left_dist = CS.speedLimitDistance
+          hda_limit_active = True
+        elif getattr(CS, "vehicleNaviActive", False) and getattr(CS, "speedBumpDistance", 0) > 0:
+          cam_limit_speed = self.autoNaviSpeedBumpSpeed
+          cam_limit_speed_left_dist = CS.speedBumpDistance
+          cam_type = 22
+          hda_limit_active = True
+        if hda_limit_active:
+          self.session_limit = cam_type == 4
+          log = "VNAVI={:.0f},{:.0f},type={}".format(float(cam_limit_speed), float(cam_limit_speed_left_dist), cam_type)
 
       section_limit_speed = self.roadLimitSpeed.sectionLimitSpeed
       section_left_dist = self.roadLimitSpeed.sectionLeftDist
