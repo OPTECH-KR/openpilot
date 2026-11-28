@@ -276,7 +276,18 @@ def file_drivelog_zip():
   buf = io.BytesIO()
   with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
     for f in list_dir(DRIVELOG_DIR, '.txt'):
-      z.write(os.path.join(DRIVELOG_DIR, f['name']), f['name'])
+      # a zip can't hold a time before 1980: z.write() of a file last written while the clock was at 1970 raised
+      # ValueError -> 'Internal Server Error' for the whole download (2026-11-28, Soul EV tester; logserver.py had
+      # this fix since 11-24). Such a file goes in dated 1980-01-01; one file that can't be read is skipped.
+      p = os.path.join(DRIVELOG_DIR, f['name'])
+      try:
+        t = time.localtime(os.path.getmtime(p))
+        info = zipfile.ZipInfo(f['name'], date_time=tuple(t[:6]) if t.tm_year >= 1980 else (1980, 1, 1, 0, 0, 0))
+        info.compress_type = zipfile.ZIP_DEFLATED
+        with open(p, 'rb') as fh:
+          z.writestr(info, fh.read())
+      except (OSError, ValueError):
+        pass
   buf.seek(0)
   return send_file(buf, mimetype='application/zip', as_attachment=True,
                    download_name=time.strftime('drivelog_%Y%m%d_%H%M.zip'))
