@@ -415,7 +415,11 @@ class CruiseHelper:
       isSectionLimit = True if leftDist > 3000 or camType == 4 else False
       isSectionLimit = False if leftDist < 50 else isSectionLimit
       speedLimitType = 2 if not isSectionLimit else 3
-    # (optech 2026-11-27: the car's own navigation HDA, CS.speedLimit, is not used any more - interface.py)
+    # the car's own navigation (HDA): CS.speedLimit is 0 unless '순정 내비 사용' is on (interface.py naviCluster)
+    elif CS.speedLimit > 0 and CS.speedLimitDistance > 0 and self.autoNaviSpeedCtrl >= 2:
+      safeSpeed = CS.speedLimit
+      leftDist = CS.speedLimitDistance
+      speedLimitType = 2 if leftDist > 1 else 3
 
     if isSpeedBump:
       speedLimitType = 1 

@@ -281,6 +281,7 @@ std::unordered_map<std::string, uint32_t> keys = {
     { "OptechShowRecordBtn", PERSISTENT },
     { "OptechShowGpsSpeed", PERSISTENT },
     { "OpkrBattLess", PERSISTENT },
+    { "OptechStockNavi", PERSISTENT },
     { "OptechGitPullOnBoot", PERSISTENT },
     { "OptechWebServer", PERSISTENT },
     { "OptechHud7Set", PERSISTENT },
