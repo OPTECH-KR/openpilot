@@ -631,7 +631,11 @@ class CarState(CarStateBase):
     checks = [
       ("LKAS11", 100)
     ]
-    if CP.sccBus == 2:
+    # optech 2026-11-29 (all-car check on the phone): the camera-SCC cars (Kona / Kona EV 2022, Casper / Casper EV) have
+    # their SCC on the camera side (bus 2) like a long-modded car, and update() reads it from here (cp_cruise = cp_cam).
+    # These messages were added only with '롱컨' (sccBus 2) on, so without the switch every update stopped on
+    # SCC11 'TauGapSet' (KeyError) and openpilot could not run. comma adds SCC11 / SCC12 here for CAMERA_SCC too.
+    if CP.sccBus == 2 or CP.carFingerprint in CAMERA_SCC_CAR:
       signals += [
         ("MainMode_ACC", "SCC11"),
         ("SCCInfoDisplay", "SCC11"),
